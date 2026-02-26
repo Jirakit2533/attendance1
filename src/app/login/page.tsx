@@ -49,9 +49,8 @@ export default function LoginPage() {
           <header className="text-center mb-8">
             {/* LOGO SPACE: ใส่ path โลโก้ของคุณที่นี่ */}
             <div className="flex justify-center mb-4">
-              <div className="w-20 h-20 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
-                <ShieldCheck size={40} color="white" />
-                {/* <img src="/your-logo-path.png" alt="Logo" className="w-full h-full object-contain" /> */}
+              <div className="w-20 h-20 bg-gradient-to-tr from-white-200 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+                <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
               </div>
             </div>
             <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">
