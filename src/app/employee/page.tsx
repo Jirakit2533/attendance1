@@ -171,10 +171,7 @@ export default function EmployeePage() {
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4 group">
             <div className="relative">
-              <div className="absolute inset-0 bg-blue-600 blur-md opacity-20 group-hover:opacity-40 transition-opacity"></div>
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl flex items-center justify-center shadow-lg relative border border-white/20">
-                <span className="text-white font-black text-2xl tracking-tighter">S</span>
-              </div>
+              <Image src="/logo.png" alt="SRS Logo" width={40} height={40} className="w-10 h-10" />
             </div>
             <div className="flex flex-col border-l-2 border-gray-100 pl-4">
               <h1 className="font-black text-gray-900 tracking-tighter text-xl leading-none">
@@ -254,7 +251,7 @@ export default function EmployeePage() {
               onClick={() => setShowLeaveForm(true)}
               className="w-full bg-white border-2 border-gray-100 hover:border-blue-600 hover:text-blue-600 text-gray-500 font-black px-8 py-5 rounded-[1.5rem] transition-all active:scale-95 flex items-center justify-center gap-3"
             >
-              ทำเรื่องลางาน
+              ขอลางาน
             </button>
           </div>
         </div>

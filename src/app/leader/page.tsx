@@ -14,8 +14,8 @@ type RecordItem = {
 };
 
 type LeaveItem = {
-  id: number; // เพิ่ม ID เพื่อให้ง่ายต่อการอ้างอิงตอน Approve/Reject
-  employeeName: string; // เพิ่มชื่อพนักงานเพื่อให้หัวหน้าทราบว่าเป็นของใคร
+  id: number;
+  employeeName: string;
   type: string;
   start: string;
   end: string;
@@ -28,7 +28,6 @@ export default function LeaderPage() {
   const router = useRouter();
 
   const [records, setRecords] = useState<RecordItem[]>([]);
-  // ตัวอย่างข้อมูลพนักงานที่ส่งมา (Mock data เพื่อให้เห็นตารางตอนเริ่มต้น)
   const [leaves, setLeaves] = useState<LeaveItem[]>([
     { id: 1, employeeName: "สมหมาย รักดี", type: "ลาพักร้อน", start: "2026-03-01", end: "2026-03-03", reason: "ไปธุระครอบครัว", days: 3, status: "รออนุมัติ" }
   ]);
@@ -36,7 +35,6 @@ export default function LeaderPage() {
   const [checkedIn, setCheckedIn] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
-
   const [readyToCapture, setReadyToCapture] = useState(false);
 
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -59,7 +57,7 @@ export default function LeaderPage() {
     setLeaves(prev => prev.map(item => item.id === id ? { ...item, status: "ปฏิเสธ" } : item));
   };
 
-  /* ---------------- CHECK IN ---------------- */
+  /* ---------------- CHECK IN LOGIC ---------------- */
   const handleCheckIn = async () => {
     try {
       setCheckingIn(true);
@@ -75,7 +73,7 @@ export default function LeaderPage() {
       await videoRef.current.play();
       setReadyToCapture(true);
     } catch (err) {
-      alert("ไม่สามารถเข้าถึงกล้องได้: " + err);
+      alert("ไม่สามารถเข้าถึงกล้องได้ กรุณาตรวจสอบสิทธิ์การใช้งาน");
     } finally {
       setCheckingIn(false);
     }
@@ -90,6 +88,7 @@ export default function LeaderPage() {
     streamRef.current.getTracks().forEach(t => t.stop());
     setShowCamera(false);
     setReadyToCapture(false);
+    
     try {
       const pos = await new Promise<GeolocationPosition>((res, rej) =>
         navigator.geolocation.getCurrentPosition(res, rej)
@@ -97,18 +96,18 @@ export default function LeaderPage() {
       const now = new Date();
       setRecords(prev => [
         {
-          date: now.toLocaleDateString(),
-          checkIn: now.toLocaleTimeString(),
+          date: now.toLocaleDateString('th-TH'),
+          checkIn: now.toLocaleTimeString('th-TH'),
           checkOut: "-",
           location: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
           imageUrl: canvas.toDataURL("image/png"),
-          position: "IT / Development",
+          position: "ฝ่ายบริหาร / หัวหน้าแผนก",
         },
         ...prev,
       ]);
       setCheckedIn(true);
     } catch (err) {
-      alert("กรุณาเปิดการแชร์ตำแหน่งพิกัด (GPS)");
+      alert("กรุณาเปิด GPS เพื่อยืนยันตำแหน่งการเข้างาน");
     }
   };
 
@@ -117,16 +116,12 @@ export default function LeaderPage() {
     setCheckedIn(false);
     setRecords(prev =>
       prev.map((r, i) =>
-        i === 0 ? { ...r, checkOut: now.toLocaleTimeString() } : r
+        i === 0 ? { ...r, checkOut: now.toLocaleTimeString('th-TH') } : r
       )
     );
   };
 
-  /* ---------------- LOGOUT ---------------- */
   const handleLogout = () => {
-    setCheckedIn(false);
-    setRecords([]);
-    setLeaves([]);
     router.push("/login");
   };
 
@@ -141,18 +136,14 @@ export default function LeaderPage() {
 
   const submitLeave = () => {
     setLeaveError("");
-    if (!leaveType || !leaveStart || !leaveEnd) {
-      setLeaveError("กรุณากรอกข้อมูลให้ครบ");
-      return;
-    }
-    if (new Date(leaveEnd) < new Date(leaveStart)) {
-      setLeaveError("วันสิ้นสุดต้องไม่ก่อนวันเริ่มลา");
+    if (!leaveType || !leaveStart || !leaveEnd || !leaveReason) {
+      setLeaveError("กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง");
       return;
     }
     setLeaves(prev => [
       {
         id: Date.now(),
-        employeeName: "นายสมชาย ใจดี", // ในที่นี้คือส่งในนามตัวเอง
+        employeeName: "นายสมชาย ใจดี", // ในที่นี้สมมติว่าเป็นชื่อ Leader ลาเอง
         type: leaveType,
         start: leaveStart,
         end: leaveEnd,
@@ -170,195 +161,332 @@ export default function LeaderPage() {
       setLeaveStart("");
       setLeaveEnd("");
       setLeaveReason("");
-      setLeaveError("");
     }, 2000);
   };
 
-  const cancelLeaveForm = () => {
-    setShowLeaveForm(false);
-    setLeaveType("");
-    setLeaveStart("");
-    setLeaveEnd("");
-    setLeaveReason("");
-    setLeaveError("");
-    setLeaveSuccess(false);
-  };
-
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-6 space-y-6">
+    <div className="min-h-screen bg-[#f8fafc] transition-all duration-300">
       
-      {/* 1. PROFILE SECTION */}
-      <div className="max-w-5xl mx-auto bg-white p-6 rounded-2xl shadow flex flex-col md:flex-row items-center md:items-start gap-6">
-        <Image src="/profile.png" alt="Profile" width={120} height={120} className="rounded-full border-4 border-blue-500 shadow-sm" />
-        <div className="flex-1 text-center md:text-left">
-          <h1 className="text-2xl font-bold text-gray-800">นายสมชาย ใจดี (Leader)</h1>
-          <p className="text-blue-600 font-medium text-lg">Siam Royal System</p>
-          <p className="text-gray-500 font-mono">EMP-00123 · IT / Development</p>
-        </div>
-        <div className="flex flex-wrap justify-center gap-2 w-full md:w-auto">
-          {!checkedIn ? (
-            <button onClick={handleCheckIn} disabled={checkingIn} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-xl transition-colors font-bold shadow-lg shadow-green-100">
-              {checkingIn ? "กำลังเปิดกล้อง..." : "ลงชื่อเข้าทำงาน"}
+      {/* 🟢 TOP NAVIGATION & BRAND LOGO */}
+      <nav className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur-xl border-b border-gray-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-4 group">
+            <div className="relative">
+              <Image src="/logo.png" alt="SRS Logo" width={40} height={40} className="w-10 h-10" />
+            </div>
+            <div className="flex flex-col border-l-2 border-gray-100 pl-4">
+              <h1 className="font-black text-gray-900 tracking-tighter text-xl leading-none uppercase">
+                SRS <span className="text-blue-600">Leader</span> Panel
+              </h1>
+              <span className="text-[10px] text-gray-400 font-bold tracking-[0.2em] uppercase mt-1">ระบบบริหารจัดการระดับสูง</span>
+            </div>
+          </div> 
+          <div className="flex items-center gap-6">
+            <div className="hidden md:flex flex-col items-end">
+              <span className="text-sm font-black text-gray-800 uppercase tracking-tight">Management Mode</span>
+              <span className="text-[10px] text-blue-500 font-black uppercase flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span> แอดมินล็อกอินอยู่
+              </span>
+            </div>
+            <button onClick={handleLogout} className="p-3 bg-red-50 hover:bg-red-500 text-red-500 hover:text-white rounded-2xl transition-all duration-300 group">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
             </button>
-          ) : (
-            <button onClick={handleCheckOut} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl transition-colors font-bold shadow-lg shadow-red-100">
-              ลงชื่อเลิกงาน
-            </button>
-          )}
-          <button onClick={() => setShowLeaveForm(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl transition-colors font-bold shadow-lg shadow-blue-100">
-            ขอลางาน
-          </button>
-          <button onClick={handleLogout} className="bg-gray-700 hover:bg-gray-800 text-white px-6 py-2 rounded-xl transition-colors font-bold">
-            ออกจากระบบ
-          </button>
+          </div>
         </div>
-      </div>
+      </nav>
 
-      {/* 2. MAIN CONTENT AREA */}
-      <div className="max-w-5xl mx-auto space-y-8">
+      <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-10">
+        
+        {/* 👤 LEADER PROFILE CARD */}
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-[0_20px_50px_-15px_rgba(0,0,0,0.03)] mb-10 flex flex-col md:flex-row items-center md:items-start gap-8 relative border border-white">
+          <div className="relative">
+            <div className="absolute inset-0 bg-indigo-500 rounded-full blur-2xl opacity-10"></div>
+            <Image
+              src="/profile.png"
+              alt="Profile"
+              width={140}
+              height={140}
+              className="rounded-[2.5rem] border-4 border-white shadow-2xl w-32 h-32 md:w-36 md:h-36 object-cover relative z-10"
+            />
+            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center z-20">
+              <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+
+          <div className="flex-1 text-center md:text-left pt-2">
+            <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
+              Leader / Head of Dept
+            </div>
+            <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-1">นายสมชาย ใจดี</h2>
+            <p className="text-gray-500 font-bold text-lg mb-6 tracking-tight">หัวหน้าแผนกพัฒนาซอฟต์แวร์</p>
+            <div className="flex flex-wrap justify-center md:justify-start gap-2">
+              <span className="bg-gray-50 text-gray-400 text-[10px] px-4 py-2 rounded-xl font-black border border-gray-100">ID: EMP-00123</span>
+              <span className="bg-blue-50 text-blue-500 text-[10px] px-4 py-2 rounded-xl font-black border border-blue-100 uppercase">IT INFRASTRUCTURE</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 w-full md:w-auto min-w-[240px]">
+            {!checkedIn ? (
+              <button
+                onClick={handleCheckIn}
+                disabled={checkingIn}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-[0_15px_30px_-5px_rgba(37,99,235,0.3)] active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 group"
+              >
+                <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                </svg>
+                {checkingIn ? "กำลังเรียกกล้อง..." : "ลงชื่อเข้างาน"}
+              </button>
+            ) : (
+              <button
+                onClick={handleCheckOut}
+                className="w-full bg-slate-900 hover:bg-black text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
+              >
+                ลงชื่อเลิกงาน
+              </button>
+            )}
+            <button
+              onClick={() => setShowLeaveForm(true)}
+              className="w-full bg-white border-2 border-gray-100 hover:border-indigo-600 hover:text-indigo-600 text-gray-500 font-black px-8 py-5 rounded-[1.5rem] transition-all active:scale-95 flex items-center justify-center gap-3"
+            >
+              ขอลางาน (ส่วนตัว)
+            </button>
+          </div>
+        </div>
+
+        {/* 📊 DASHBOARD CONTENT */}
         {!showLeaveForm && (
-          <>
-            {/* ATTENDANCE TABLE SECTION */}
-            <div className="bg-white p-6 rounded-2xl shadow overflow-hidden border border-gray-100">
-              <h2 className="font-black text-gray-700 text-lg mb-4 border-l-4 border-blue-600 pl-3">ประวัติการลงชื่อทำงาน</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-gray-600 uppercase">
-                    <tr>
-                      <th className="p-3 text-left">วันที่</th>
-                      <th className="p-3">เข้างาน</th>
-                      <th className="p-3">เลิกงาน</th>
-                      <th className="p-3">ตำแหน่งงาน</th>
-                      <th className="p-3">พิกัด</th>
-                      <th className="p-3">รูปภาพ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {records.length === 0 && (
-                      <tr><td colSpan={6} className="p-8 text-center text-gray-400">ยังไม่มีข้อมูลการเข้างาน</td></tr>
-                    )}
-                    {records.map((r, i) => (
-                      <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="p-3 font-medium text-gray-700">{r.date}</td>
-                        <td className="p-3 text-center text-green-600 font-bold">{r.checkIn}</td>
-                        <td className="p-3 text-center text-red-600 font-bold">{r.checkOut}</td>
-                        <td className="p-3 text-center text-gray-500">{r.position}</td>
-                        <td className="p-3 text-center"><span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-md text-[10px] font-mono">{r.location}</span></td>
-                        <td className="p-3 text-center"><div className="relative w-12 h-12 mx-auto"><Image src={r.imageUrl} alt="" fill className="rounded-lg object-cover border border-gray-200" unoptimized /></div></td>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* LEFT: ATTENDANCE HISTORY (2 Cols) */}
+            <div className="lg:col-span-2 space-y-8">
+              <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-50">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
+                    <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">การเข้างาน <span className="text-gray-300">ของฉัน</span></h2>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-[2rem] border border-gray-50">
+                  <table className="w-full text-sm min-w-[500px]">
+                    <thead className="bg-gray-50/50 text-gray-400 uppercase text-[10px] font-black tracking-widest">
+                      <tr>
+                        <th className="p-6 text-left">วันที่</th>
+                        <th className="p-6 text-center">ลงเวลา</th>
+                        <th className="p-6 text-center">พิกัด</th>
+                        <th className="p-6 text-center">หลักฐาน</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {records.length === 0 ? (
+                        <tr><td colSpan={4} className="p-16 text-center text-gray-300 font-bold italic">ไม่พบข้อมูลในวันนี้</td></tr>
+                      ) : (
+                        records.map((r, i) => (
+                          <tr key={i} className="hover:bg-blue-50/10 transition-colors group">
+                            <td className="p-6 font-bold text-gray-800">{r.date}</td>
+                            <td className="p-6 text-center">
+                              <div className="flex flex-col">
+                                <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl">{r.checkIn}</span>
+                                <span className="text-[10px] text-gray-300 font-bold mt-1 uppercase">ถึง {r.checkOut}</span>
+                              </div>
+                            </td>
+                            <td className="p-6 text-center">
+                              <span className="text-[10px] font-mono text-gray-400 block bg-gray-50 py-1 rounded-lg">📍 {r.location}</span>
+                            </td>
+                            <td className="p-6 text-center">
+                              <Image src={r.imageUrl} alt="Attendance" width={44} height={44} className="rounded-xl border-2 border-white shadow-md mx-auto unoptimized" unoptimized />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
-            {/* LEAVE MANAGEMENT SECTION (FOR LEADER) */}
-            <div className="bg-white p-6 rounded-2xl shadow overflow-hidden border border-gray-100">
-              <h2 className="font-black text-gray-700 text-lg mb-4 border-l-4 border-purple-600 pl-3">จัดการคำขอลางาน (พนักงาน)</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-gray-600 uppercase">
-                    <tr>
-                      <th className="p-3 text-left">ชื่อพนักงาน</th>
-                      <th className="p-3 text-left">ประเภท</th>
-                      <th className="p-3">วันที่เริ่ม - สิ้นสุด</th>
-                      <th className="p-3">รวมวันลา</th>
-                      <th className="p-3 text-left">เหตุผล</th>
-                      <th className="p-3 text-center">สถานะ / การจัดการ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {leaves.length === 0 && (
-                      <tr><td colSpan={6} className="p-8 text-center text-gray-400 italic">ยังไม่มีคำขอลางานส่งมา</td></tr>
-                    )}
-                    {leaves.map((l) => (
-                      <tr key={l.id} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="p-3 font-bold text-gray-700">{l.employeeName}</td>
-                        <td className="p-3 text-gray-800">{l.type}</td>
-                        <td className="p-3 text-center text-gray-600">{l.start} ถึง {l.end}</td>
-                        <td className="p-3 text-center font-bold text-purple-600">{l.days} วัน</td>
-                        <td className="p-3 text-left text-gray-500 max-w-[150px] truncate">{l.reason}</td>
-                        <td className="p-3 text-center">
+            {/* RIGHT: PENDING APPROVALS (1 Col) */}
+            <div className="lg:col-span-1 space-y-8">
+              <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-50">
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="w-2 h-8 bg-indigo-600 rounded-full"></div>
+                  <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">คำขอ <span className="text-gray-300">อนุมัติ</span></h2>
+                </div>
+
+                <div className="space-y-4">
+                  {leaves.length === 0 ? (
+                    <div className="bg-gray-50/50 p-10 rounded-[2rem] border-2 border-dashed border-gray-100 text-center">
+                      <p className="text-gray-300 font-black text-xs uppercase">ไม่มีรายการรอดำเนินการ</p>
+                    </div>
+                  ) : (
+                    leaves.map((l) => (
+                      <div key={l.id} className="p-6 border border-gray-100 rounded-[2rem] bg-white hover:shadow-xl transition-all relative overflow-hidden group">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <p className="font-black text-gray-900 text-base uppercase tracking-tight">{l.employeeName}</p>
+                            <span className="text-[10px] font-bold text-indigo-500 uppercase">{l.type} ({l.days} วัน)</span>
+                          </div>
+                          {l.status === "รออนุมัติ" && <span className="w-2 h-2 bg-amber-400 rounded-full animate-ping"></span>}
+                        </div>
+                        
+                        <p className="text-xs text-gray-500 font-medium italic mb-6 line-clamp-2">"{l.reason}"</p>
+                        
+                        <div className="flex flex-col gap-2">
+                          <div className="flex justify-between items-center text-[10px] font-mono text-gray-400 mb-2">
+                            <span>{l.start}</span>
+                            <span>→</span>
+                            <span>{l.end}</span>
+                          </div>
+                          
                           {l.status === "รออนุมัติ" ? (
-                            <div className="flex justify-center gap-2">
-                              <button onClick={() => handleApprove(l.id)} className="bg-green-100 text-green-700 px-3 py-1 rounded-lg font-bold hover:bg-green-600 hover:text-white transition-all text-[10px]">อนุมัติ</button>
-                              <button onClick={() => handleReject(l.id)} className="bg-red-100 text-red-700 px-3 py-1 rounded-lg font-bold hover:bg-red-600 hover:text-white transition-all text-[10px]">ปฏิเสธ</button>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button onClick={() => handleApprove(l.id)} className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black py-2.5 rounded-xl transition-all uppercase tracking-widest">Approve</button>
+                              <button onClick={() => handleReject(l.id)} className="bg-gray-100 hover:bg-rose-50 hover:text-rose-500 text-gray-400 text-[10px] font-black py-2.5 rounded-xl transition-all uppercase">Reject</button>
                             </div>
                           ) : (
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
-                              l.status === 'อนุมัติแล้ว' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                            }`}>
+                            <div className={`text-center py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${l.status === "อนุมัติแล้ว" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
                               {l.status}
-                            </span>
+                            </div>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
-          </>
+          </div>
         )}
 
-        {/* 3. LEAVE FORM SECTION */}
+        {/* 📝 LEAVE FORM SECTION (Consistent Theme) */}
         {showLeaveForm && (
-          <div className="max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-xl border-t-4 border-blue-600 space-y-6 animate-in fade-in zoom-in duration-300">
-            <h2 className="text-2xl font-black text-gray-800">แบบฟอร์มคำขอลางาน</h2>
-            {leaveSuccess && (<div className="p-4 bg-green-100 border border-green-200 text-green-700 rounded-xl text-center font-bold">✓ ส่งคำขอลางานสำเร็จ ระบบกำลังอัปเดต...</div>)}
-            {!leaveSuccess && (
-              <>
-                {leaveError && (<div className="p-3 bg-red-100 border border-red-200 text-red-700 rounded-xl text-sm font-bold">⚠️ {leaveError}</div>)}
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">ประเภทการลา</label>
-                    <select className="w-full border-2 border-gray-100 p-3 rounded-xl focus:border-blue-500 outline-none transition-all" value={leaveType} onChange={e => setLeaveType(e.target.value)}>
-                      <option value="">กรุณาเลือกประเภท...</option>
-                      <option>ลาป่วย (Sick Leave)</option>
-                      <option>ลากิจ (Personal Leave)</option>
-                      <option>ลาพักร้อน (Vacation Leave)</option>
-                    </select>
+          <div className="max-w-2xl mx-auto py-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-2">ยื่นเรื่อง <span className="text-indigo-600">ลางาน</span></h2>
+              <div className="w-12 h-1.5 bg-indigo-600 mx-auto rounded-full"></div>
+            </div>
+
+            {leaveSuccess ? (
+              <div className="p-12 bg-green-50 border border-green-100 text-green-700 rounded-[3rem] text-center space-y-4 shadow-xl">
+                <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-4xl">✓</div>
+                <p className="font-black text-2xl tracking-tighter uppercase">ส่งคำขอลาสำเร็จ</p>
+              </div>
+            ) : (
+              <div className="space-y-6 bg-gray-50/50 p-10 rounded-[3rem] border border-gray-100 shadow-inner">
+                {leaveError && (
+                  <div className="p-5 bg-red-50 text-red-600 border border-red-100 rounded-[1.5rem] text-xs font-black flex items-center gap-3">
+                    <div className="w-2 h-2 bg-red-600 rounded-full animate-ping"></div> {leaveError}
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">เริ่มวันที่</label>
-                      <input type="date" className="w-full border-2 border-gray-100 p-3 rounded-xl focus:border-blue-500 outline-none" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">ถึงวันที่</label>
-                      <input type="date" className="w-full border-2 border-gray-100 p-3 rounded-xl focus:border-blue-500 outline-none" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} />
-                    </div>
+                )}
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">ประเภทการลา</label>
+                  <select
+                    className="w-full bg-white border-2 border-transparent p-5 rounded-[1.5rem] font-black text-gray-700 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                    value={leaveType}
+                    onChange={e => setLeaveType(e.target.value)}
+                  >
+                    <option value="">โปรดระบุประเภท</option>
+                    <option value="ลาป่วย">ลาป่วย (SICK)</option>
+                    <option value="ลากิจ">ลากิจ (PERSONAL)</option>
+                    <option value="ลาพักร้อน">ลาพักร้อน (ANNUAL)</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">เริ่มต้น</label>
+                    <input type="date" className="w-full bg-white border-2 border-transparent p-5 rounded-[1.5rem] font-bold text-gray-700 focus:border-indigo-500 outline-none shadow-sm" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} />
                   </div>
-                  {leaveDays > 0 && (<div className="bg-blue-50 p-3 rounded-xl flex justify-between items-center"><span className="text-blue-700 font-bold">คำนวณวันลาทั้งหมด:</span><span className="text-2xl font-black text-blue-800">{leaveDays} <span className="text-sm">วัน</span></span></div>)}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">ระบุเหตุผลการลา</label>
-                    <textarea className="w-full border-2 border-gray-100 p-3 rounded-xl focus:border-blue-500 outline-none h-32" placeholder="เขียนรายละเอียดเพิ่มเติม..." value={leaveReason} onChange={e => setLeaveReason(e.target.value)} />
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">สิ้นสุด</label>
+                    <input type="date" className="w-full bg-white border-2 border-transparent p-5 rounded-[1.5rem] font-bold text-gray-700 focus:border-indigo-500 outline-none shadow-sm" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} />
                   </div>
                 </div>
-                <div className="flex gap-4 pt-4">
-                  <button onClick={submitLeave} className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-black transition-transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-green-100">ส่งคำขอลา</button>
-                  <button onClick={cancelLeaveForm} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-3 rounded-xl font-bold transition-colors">ยกเลิก</button>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">เหตุผลความจำเป็น</label>
+                  <textarea
+                    className="w-full bg-white border-2 border-transparent p-5 rounded-[1.5rem] font-medium text-gray-700 focus:border-indigo-500 outline-none shadow-sm min-h-[140px] resize-none"
+                    placeholder="กรุณาระบุรายละเอียด..."
+                    value={leaveReason}
+                    onChange={e => setLeaveReason(e.target.value)}
+                  />
                 </div>
-              </>
+
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  <button onClick={submitLeave} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 py-6 rounded-[1.5rem] transition-all shadow-xl active:scale-95 uppercase tracking-tighter">ยืนยันการลา</button>
+                  <button onClick={() => setShowLeaveForm(false)} className="flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black px-8 py-6 rounded-[1.5rem] transition-all hover:bg-gray-50 active:scale-95 uppercase tracking-tighter">ยกเลิก</button>
+                </div>
+              </div>
             )}
           </div>
         )}
-      </div>
 
-      {/* 4. CAMERA OVERLAY */}
+      </main>
+
+      {/* 📸 MODAL CAMERA (Biometric Style) */}
       {showCamera && (
-        <div className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[100] p-4 backdrop-blur-md">
-          <div className="relative w-full max-w-sm aspect-video sm:aspect-square bg-gray-800 rounded-3xl overflow-hidden border-4 border-white shadow-2xl">
-            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-            <div className="absolute inset-0 border-[40px] border-black/20 pointer-events-none flex items-center justify-center"><div className="w-64 h-64 border-2 border-white/50 border-dashed rounded-full"></div></div>
+        <div className="fixed inset-0 bg-slate-900/98 flex flex-col items-center justify-center z-[999] p-6 backdrop-blur-2xl">
+          <div className="w-full max-w-sm relative">
+            <div className="absolute -top-12 left-0 w-full flex justify-between px-2">
+              <span className="text-blue-400 text-[10px] font-black tracking-widest uppercase animate-pulse">Scanning Admin Identity</span>
+              <span className="text-white/20 text-[10px] font-mono tracking-tighter">ID_VERIFY_SECURE_99</span>
+            </div>
+            
+            <div className="relative rounded-[3.5rem] overflow-hidden border-[10px] border-white/5 shadow-2xl bg-black aspect-[3/4]">
+              <video ref={videoRef} playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="w-full h-full border-[30px] border-black/20 rounded-[3rem]">
+                   <div className="w-full h-full border-2 border-white/10 rounded-[2rem] relative">
+                      <div className="absolute top-0 left-0 w-full h-[2px] bg-blue-400 shadow-[0_0_20px_#60a5fa] animate-scan"></div>
+                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-16 flex flex-col items-center gap-10">
+              {readyToCapture && (
+                <button
+                  onClick={handleCapture}
+                  className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(255,255,255,0.2)] active:scale-75 transition-all group"
+                >
+                  <div className="w-20 h-20 border-4 border-blue-600 rounded-full flex items-center justify-center">
+                    <div className="w-14 h-14 bg-slate-900 rounded-full"></div>
+                  </div>
+                </button>
+              )}
+              <button 
+                onClick={() => { streamRef.current?.getTracks().forEach(t => t.stop()); setShowCamera(false); }}
+                className="text-white/30 hover:text-red-400 font-black text-[10px] tracking-[0.4em] uppercase transition-all"
+              >
+                Abort Scanning
+              </button>
+            </div>
           </div>
-          <div className="flex gap-6 mt-8">
-            <button onClick={() => { streamRef.current?.getTracks().forEach(t => t.stop()); setShowCamera(false); }} className="bg-white/10 hover:bg-white/20 text-white w-16 h-16 rounded-full flex items-center justify-center transition-colors">✕</button>
-            {readyToCapture && (<button onClick={handleCapture} className="bg-white text-blue-600 w-20 h-20 rounded-full flex items-center justify-center text-xl font-black shadow-2xl hover:scale-110 active:scale-90 transition-transform">SNAP</button>)}
-          </div>
-          <p className="text-white/60 text-sm mt-4">กรุณาวางใบหน้าให้ตรงกับกรอบ</p>
         </div>
       )}
+
+      {/* 🏁 FOOTER */}
+      <footer className="max-w-7xl mx-auto p-10 opacity-20 text-center">
+        <div className="flex items-center justify-center gap-2">
+            <div className="bg-gray-800 text-white w-6 h-6 rounded flex items-center justify-center text-[10px] font-black">S</div>
+            <span className="text-[10px] font-black tracking-[0.3em] text-gray-900 uppercase">Siam Royal System © 2026</span>
+        </div>
+      </footer>
+
+      <style jsx global>{`
+        @keyframes scan {
+          0% { top: 10%; opacity: 0; }
+          20% { opacity: 1; }
+          80% { opacity: 1; }
+          100% { top: 90%; opacity: 0; }
+        }
+        .animate-scan { animation: scan 3s ease-in-out infinite; }
+      `}</style>
     </div>
   );
 }
