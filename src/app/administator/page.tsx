@@ -14,8 +14,8 @@ type Employee = {
   position: string;
   site: string;
   avatar: string;
-  username: string; // ✅ เพิ่มเพื่อจัดการ User
-  password: string; // ✅ เพิ่มเพื่อจัดการ Pass
+  username: string;
+  password: string;
 };
 
 type Attendance = {
@@ -52,6 +52,45 @@ function buildGoogleMapLink(text: string) {
   return `https://www.google.com/maps?q=${lat},${lng}`;
 }
 
+/* ================== COMPONENTS ================== */
+function Logo() {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
+        <span className="text-white font-black text-xl italic">S</span>
+      </div>
+      <div className="leading-tight">
+        <h2 className="text-lg font-black text-gray-800 tracking-tighter uppercase italic">Siam Royal</h2>
+        <p className="text-[10px] font-bold text-blue-600 tracking-[0.2em] uppercase -mt-1">System Management</p>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ title, value, iconColor = "bg-blue-500" }: { title: string; value: number | string; iconColor?: string }) {
+  return (
+    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-24 h-24 ${iconColor} opacity-[0.03] -mr-8 -mt-8 rounded-full group-hover:scale-150 transition-transform duration-500`}></div>
+      <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.15em] mb-2">{title}</p>
+      <p className="text-4xl font-black text-gray-900 tracking-tight">{value}</p>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-gray-50/50 px-8 py-5 border-b border-gray-100 flex items-center justify-between">
+        <h2 className="text-lg font-black text-gray-800 tracking-tight flex items-center gap-2">
+          <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
+          {title}
+        </h2>
+      </div>
+      <div className="p-4 sm:p-8">{children}</div>
+    </div>
+  );
+}
+
 /* ================== PAGE ================== */
 export default function AdminPage() {
   const router = useRouter();
@@ -63,22 +102,17 @@ export default function AdminPage() {
     avatar: "/profile.png",
   };
 
-  /* ================== MASTER DATA STATES ================== */
   const [sites, setSites] = useState<string[]>(["สำนักงานใหญ่", "ไซต์งาน A (กรุงเทพ)", "ไซต์งาน B (นนทบุรี)"]);
   const [positions, setPositions] = useState<string[]>(["Manager", "IT Support", "Technician", "HR"]);
-
-  /* ================== UI STATES ================== */
   const [showRegister, setShowRegister] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [viewImage, setViewImage] = useState<string | null>(null);
-  
-  // ✅ เพิ่มสถานะสำหรับระบบ Report
   const [showReport, setShowReport] = useState(false);
+
   const reportDate = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
   const reportTime = new Date().toLocaleTimeString('th-TH');
 
-  /* ================== DATA STATES ================== */
   const [employees, setEmployees] = useState<Employee[]>([
     {
       id: "EMP-001",
@@ -117,7 +151,6 @@ export default function AdminPage() {
     },
   ]);
 
-  /* ================== HANDLERS ================== */
   const handleLogout = () => router.push("/login");
 
   const updateLeaveStatus = (id: number, status: LeaveRequest["status"]) => {
@@ -184,31 +217,55 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-3 sm:p-6 space-y-6 font-sans print:p-0 print:bg-white">
+    <div className="min-h-screen bg-[#F8FAFC] p-3 sm:p-8 space-y-8 font-sans print:p-0 print:bg-white text-slate-900">
       
       {/* 1. ADMIN HEADER */}
-      <div className="bg-white rounded-xl shadow p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 print:hidden">
-        <Image src={admin.avatar} alt="admin" width={100} height={100} className="rounded-full border-4 border-blue-600 shadow-md" />
-        <div className="flex-1">
-          <h1 className="text-xl font-bold text-gray-800">{admin.name}</h1>
-          <p className="text-blue-600 font-medium">{admin.role}</p>
-          <p className="text-gray-500 text-sm">{admin.company}</p>
+      <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 p-6 sm:p-8 flex flex-col lg:flex-row items-center gap-8 print:hidden relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-8 opacity-5">
+           <Logo />
         </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          {/* ✅ เพิ่มปุ่มทำรายงาน */}
-          <button onClick={() => setShowReport(true)} className="flex-1 sm:flex-none bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 font-bold transition-all shadow-lg shadow-indigo-100 italic tracking-wide">ทำรายงานสรุป</button>
-          <button onClick={() => { setEditingEmployee(null); setPreviewImage(null); setShowRegister(true); }} className="flex-1 sm:flex-none bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors">+ ลงทะเบียนพนักงาน</button>
-          <button onClick={handleAddSite} className="flex-1 sm:flex-none bg-green-600 text-white px-4 py-2 rounded-xl hover:bg-green-700 transition-colors">+ เพิ่มไซต์งานหรือสาขา</button>
-          <button onClick={handleAddPosition} className="flex-1 sm:flex-none bg-purple-600 text-white px-4 py-2 rounded-xl hover:bg-purple-700 transition-colors">+ เพิ่มตำแหน่งพนักงาน</button>
-          <button onClick={handleLogout} className="flex-1 sm:flex-none bg-gray-700 text-white px-4 py-2 rounded-xl hover:bg-gray-800 transition-colors">ลงชื่อออก</button>
+        
+        <div className="relative">
+          <div className="absolute inset-0 bg-blue-500 rounded-full blur-2xl opacity-20 animate-pulse"></div>
+          <Image src={admin.avatar} alt="admin" width={110} height={110} className="relative rounded-full border-4 border-white shadow-2xl" />
+        </div>
+
+        <div className="flex-1 text-center lg:text-left z-10">
+          <div className="mb-4">
+            <Logo />
+          </div>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight">{admin.name}</h1>
+          <p className="text-blue-600 font-bold text-sm uppercase tracking-widest">{admin.role}</p>
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-3 w-full lg:w-auto z-10">
+          <button onClick={() => setShowReport(true)} className="px-6 py-3 rounded-2xl bg-slate-900 text-white hover:bg-black font-bold transition-all shadow-lg shadow-slate-200 flex items-center gap-2">
+            <span>ทำรายงานสรุป</span>
+          </button>
+          <button onClick={() => { setEditingEmployee(null); setPreviewImage(null); setShowRegister(true); }} className="px-6 py-3 rounded-2xl bg-blue-600 text-white hover:bg-blue-700 font-bold transition-all shadow-lg shadow-blue-200">
+            + ลงทะเบียนพนักงาน
+          </button>
+          <button onClick={handleLogout} className="px-6 py-3 rounded-2xl bg-white border border-gray-200 text-red-500 hover:bg-red-50 font-bold transition-all">
+            ลงชื่อออก
+          </button>
         </div>
       </div>
 
+      {/* Quick Actions Bar */}
+      <div className="flex flex-wrap gap-4 print:hidden">
+        <button onClick={handleAddSite} className="bg-white border border-dashed border-gray-300 px-5 py-3 rounded-2xl text-gray-600 font-bold hover:border-blue-500 hover:text-blue-500 transition-all flex items-center gap-2 text-sm">
+          <span className="text-xl">+</span> เพิ่มไซต์งานหรือสาขา
+        </button>
+        <button onClick={handleAddPosition} className="bg-white border border-dashed border-gray-300 px-5 py-3 rounded-2xl text-gray-600 font-bold hover:border-purple-500 hover:text-purple-500 transition-all flex items-center gap-2 text-sm">
+          <span className="text-xl">+</span> เพิ่มตำแหน่งพนักงาน
+        </button>
+      </div>
+
       {/* 2. DASHBOARD STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
-        <Stat title="พนักงานทั้งหมด" value={employees.length} />
-        <Stat title="เช็คอินวันนี้" value={attendance.length} />
-        <Stat title="คำขอลารออนุมัติ" value={leaves.filter(l => l.status === "pending").length} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print:hidden">
+        <Stat title="พนักงานทั้งหมด" value={employees.length} iconColor="bg-blue-600" />
+        <Stat title="เช็คอินวันนี้" value={attendance.length} iconColor="bg-green-600" />
+        <Stat title="คำขอลารออนุมัติ" value={leaves.filter(l => l.status === "pending").length} iconColor="bg-orange-600" />
       </div>
 
       {/* 3. EMPLOYEE MANAGEMENT TABLE */}
@@ -216,38 +273,40 @@ export default function AdminPage() {
         <Section title="จัดการข้อมูลพนักงาน">
           <div className="overflow-x-auto">
             <table className="min-w-[1000px] w-full text-sm">
-              <thead className="bg-gray-200 text-gray-700 uppercase">
-                <tr>
-                  <th className="p-3 text-left">รูป</th>
-                  <th className="p-3 text-left">ID / Username</th>
-                  <th className="p-3 text-left">ชื่อ-นามสกุล</th>
-                  <th className="p-3 text-left">แผนก / ตำแหน่ง</th>
-                  <th className="p-3 text-left">ไซท์งาน</th>
-                  <th className="p-3 text-center">จัดการ</th>
+              <thead>
+                <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
+                  <th className="pb-4 px-3 text-left w-20">รูป</th>
+                  <th className="pb-4 px-3 text-left">พนักงาน</th>
+                  <th className="pb-4 px-3 text-left">สังกัด</th>
+                  <th className="pb-4 px-3 text-left">ตำแหน่ง</th>
+                  <th className="pb-4 px-3 text-left">สถานที่</th>
+                  <th className="pb-4 px-3 text-center">จัดการ</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-50">
                 {employees.map(e => (
-                  <tr key={e.id} className="border-t hover:bg-gray-50">
-                    <td className="p-3">
-                      <Image src={e.avatar} alt="" width={40} height={40} className="rounded-full border" />
+                  <tr key={e.id} className="group hover:bg-blue-50/30 transition-colors">
+                    <td className="py-4 px-3">
+                      <Image src={e.avatar} alt="" width={48} height={48} className="rounded-2xl border-2 border-white shadow-sm group-hover:scale-110 transition-transform" />
                     </td>
-                    <td className="p-3">
-                      <div className="font-mono text-[10px] text-gray-400">{e.id}</div>
-                      <div className="font-bold text-blue-600">@{e.username}</div>
+                    <td className="py-4 px-3">
+                      <div className="font-black text-gray-800">{e.name}</div>
+                      <div className="text-blue-500 font-mono text-[11px]">@{e.username}</div>
                     </td>
-                    <td className="p-3 font-semibold">{e.name}</td>
-                    <td className="p-3">
-                      <div>{e.department}</div>
-                      <div className="text-purple-600 text-xs font-bold">{e.position}</div>
+                    <td className="py-4 px-3 font-bold text-gray-600">{e.department}</td>
+                    <td className="py-4 px-3">
+                      <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-full font-bold text-[11px] uppercase tracking-wider">{e.position}</span>
                     </td>
-                    <td className="p-3 text-xs font-bold text-gray-600 uppercase">
-                      {e.site}
+                    <td className="py-4 px-3">
+                       <div className="text-gray-500 flex items-center gap-1">
+                          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                          {e.site}
+                       </div>
                     </td>
-                    <td className="p-3 text-center">
+                    <td className="py-4 px-3">
                       <div className="flex justify-center gap-2">
-                        <button onClick={() => handleEditEmployee(e)} className="bg-amber-100 text-amber-600 px-3 py-1 rounded-lg hover:bg-amber-200 font-bold transition-colors">แก้ไข</button>
-                        <button onClick={() => handleDeleteEmployee(e.id)} className="bg-red-100 text-red-600 px-3 py-1 rounded-lg hover:bg-red-200 font-bold transition-colors">ลบ</button>
+                        <button onClick={() => handleEditEmployee(e)} className="w-10 h-10 flex items-center justify-center bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-all">✏️</button>
+                        <button onClick={() => handleDeleteEmployee(e.id)} className="w-10 h-10 flex items-center justify-center bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all">🗑️</button>
                       </div>
                     </td>
                   </tr>
@@ -263,34 +322,38 @@ export default function AdminPage() {
         <Section title="รายละเอียดการลงชื่อทำงาน">
           <div className="overflow-x-auto">
             <table className="min-w-[900px] w-full text-sm">
-              <thead className="bg-gray-200">
-                <tr>
-                  <th className="p-2">วันที่</th>
-                  <th className="p-2 text-left">พนักงาน</th>
-                  <th className="p-2">เข้า</th>
-                  <th className="p-2">ออก</th>
-                  <th className="p-2">พิกัด</th>
-                  <th className="p-2">รูป</th>
+              <thead className="bg-gray-50/50 rounded-xl">
+                <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
+                  <th className="p-4 text-left">วันที่</th>
+                  <th className="p-4 text-left">พนักงาน</th>
+                  <th className="p-4 text-center">เวลาเข้า</th>
+                  <th className="p-4 text-center">เวลาออก</th>
+                  <th className="p-4 text-left">พิกัด GPS</th>
+                  <th className="p-4 text-center">รูปถ่าย</th>
                 </tr>
               </thead>
-              <tbody className="text-center">
+              <tbody>
                 {attendance.map(a => (
-                  <tr key={a.id} className="border-t hover:bg-gray-50">
-                    <td className="p-2 whitespace-nowrap">{a.date}</td>
-                    <td className="p-2 text-left font-medium">{a.employee}</td>
-                    <td className="p-2 text-green-600 font-bold">{a.checkIn}</td>
-                    <td className="p-2 text-red-600 font-bold">{a.checkOut}</td>
-                    <td className="p-2">
+                  <tr key={a.id} className="border-b border-gray-50 hover:bg-green-50/20 transition-colors">
+                    <td className="p-4 font-bold text-gray-600">{a.date}</td>
+                    <td className="p-4 font-black text-gray-800">{a.employee}</td>
+                    <td className="p-4 text-center">
+                        <span className="bg-green-100 text-green-700 px-3 py-1 rounded-lg font-black">{a.checkIn}</span>
+                    </td>
+                    <td className="p-4 text-center">
+                        <span className="bg-red-50 text-red-600 px-3 py-1 rounded-lg font-black">{a.checkOut}</span>
+                    </td>
+                    <td className="p-4">
                       {isValidLatLng(a.location) ? (
-                        <a href={buildGoogleMapLink(a.location)} target="_blank" className="text-blue-600 underline text-xs">
-                          {a.location}
+                        <a href={buildGoogleMapLink(a.location)} target="_blank" className="text-blue-500 hover:underline font-mono text-xs flex items-center gap-1">
+                          📍 {a.location}
                         </a>
                       ) : ( a.location )}
                     </td>
-                    <td className="p-2">
+                    <td className="p-4">
                       <Image
-                        src={a.image} alt="checkin" width={48} height={48}
-                        className="rounded-lg cursor-pointer mx-auto shadow-sm hover:scale-110 transition-transform"
+                        src={a.image} alt="checkin" width={50} height={50}
+                        className="rounded-xl cursor-pointer mx-auto shadow-md hover:ring-4 ring-blue-100 transition-all"
                         onClick={() => setViewImage(a.image)}
                       />
                     </td>
@@ -307,34 +370,36 @@ export default function AdminPage() {
         <Section title="คำขอลางาน">
           <div className="overflow-x-auto">
             <table className="min-w-[800px] w-full text-sm">
-              <thead className="bg-gray-200">
-                <tr>
-                  <th className="p-2">พนักงาน</th>
-                  <th className="p-2">ประเภท</th>
-                  <th className="p-2">วันที่</th>
-                  <th className="p-2 text-left">เหตุผล</th>
-                  <th className="p-2">สถานะ</th>
-                  <th className="p-2">จัดการ</th>
+              <thead>
+                <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
+                  <th className="pb-4 px-4 text-left">พนักงาน</th>
+                  <th className="pb-4 px-4 text-center">ประเภท</th>
+                  <th className="pb-4 px-4 text-center">วันที่</th>
+                  <th className="pb-4 px-4 text-left">เหตุผล</th>
+                  <th className="pb-4 px-4 text-center">สถานะ</th>
+                  <th className="pb-4 px-4 text-center">จัดการ</th>
                 </tr>
               </thead>
-              <tbody className="text-center">
+              <tbody className="divide-y divide-gray-50">
                 {leaves.map(l => (
-                  <tr key={l.id} className="border-t hover:bg-gray-50">
-                    <td className="p-2 font-medium">{l.employee}</td>
-                    <td className="p-2">{l.type}</td>
-                    <td className="p-2 text-xs">{l.date}</td>
-                    <td className="p-2 text-left text-gray-600">{l.reason}</td>
-                    <td className="p-2">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                  <tr key={l.id} className="hover:bg-gray-50/50">
+                    <td className="py-4 px-4 font-black text-gray-800">{l.employee}</td>
+                    <td className="py-4 px-4 text-center font-bold text-blue-600">{l.type}</td>
+                    <td className="py-4 px-4 text-center text-gray-500 text-xs">{l.date}</td>
+                    <td className="py-4 px-4 text-gray-600 italic">"{l.reason}"</td>
+                    <td className="py-4 px-4 text-center">
+                      <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${
                         l.status === 'pending' ? 'bg-orange-100 text-orange-600' :
                         l.status === 'approved' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
                       }`}>
                         {l.status}
                       </span>
                     </td>
-                    <td className="p-2 space-x-2">
-                      <button onClick={() => updateLeaveStatus(l.id, "approved")} className="bg-green-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-green-600 transition-colors">อนุมัติ</button>
-                      <button onClick={() => updateLeaveStatus(l.id, "rejected")} className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-red-600 transition-colors">ปฏิเสธ</button>
+                    <td className="py-4 px-4">
+                      <div className="flex justify-center gap-2">
+                        <button onClick={() => updateLeaveStatus(l.id, "approved")} className="bg-green-600 text-white px-4 py-1.5 rounded-xl text-xs font-bold hover:shadow-lg hover:shadow-green-100 transition-all">อนุมัติ</button>
+                        <button onClick={() => updateLeaveStatus(l.id, "rejected")} className="bg-white border border-red-200 text-red-500 px-4 py-1.5 rounded-xl text-xs font-bold hover:bg-red-50 transition-all">ปฏิเสธ</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -344,110 +409,119 @@ export default function AdminPage() {
         </Section>
       </div>
 
-      {/* ✅ 8. REPORT PREVIEW MODAL (เพิ่มส่วนนี้) */}
+      {/* 8. REPORT PREVIEW MODAL */}
       {showReport && (
-        <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-[200] p-0 sm:p-4 overflow-y-auto backdrop-blur-sm">
-          <div className="bg-white w-full max-w-5xl my-0 sm:my-8 rounded-none sm:rounded-3xl shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-300 print:shadow-none print:my-0">
-            {/* Modal Toolbar - Hidden when printing */}
-            <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-3xl print:hidden sticky top-0 z-10">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-400 rounded-full"></div>
-                <h3 className="font-bold text-gray-700">Preview รายงานสรุปการทำงาน</h3>
+        <div className="fixed inset-0 bg-slate-900/90 flex items-start justify-center z-[200] p-0 sm:p-4 overflow-y-auto backdrop-blur-md">
+          <div className="bg-white w-full max-w-5xl my-0 sm:my-8 rounded-none sm:rounded-[3rem] shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-500 print:shadow-none print:my-0 print:rounded-none">
+            {/* Modal Toolbar */}
+            <div className="p-6 border-b flex justify-between items-center bg-gray-50/50 rounded-t-[3rem] print:hidden sticky top-0 z-10 backdrop-blur-md">
+              <div className="flex items-center gap-4">
+                <Logo />
+                <div className="w-[1px] h-8 bg-gray-200"></div>
+                <h3 className="font-black text-gray-700 uppercase tracking-tighter">Report Preview</h3>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => window.print()} className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all">ปริ้น / บันทึก PDF</button>
-                <button onClick={() => setShowReport(false)} className="bg-white border border-gray-300 text-gray-600 px-5 py-2 rounded-xl text-sm font-bold hover:bg-gray-50 transition-all">ยกเลิก</button>
+              <div className="flex gap-3">
+                <button onClick={() => window.print()} className="bg-blue-600 text-white px-8 py-3 rounded-2xl text-sm font-black shadow-xl shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all">ปริ้นรายงาน (PDF)</button>
+                <button onClick={() => setShowReport(false)} className="bg-white border border-gray-200 text-gray-500 px-6 py-3 rounded-2xl text-sm font-bold hover:bg-gray-100 transition-all">ปิดหน้าต่าง</button>
               </div>
             </div>
 
             {/* A4 Content Area */}
-            <div className="flex-1 p-8 sm:p-12 bg-white print:p-0">
+            <div className="flex-1 p-10 sm:p-20 bg-white print:p-0">
               {/* Report Header */}
-              <div className="flex justify-between items-start border-b-4 border-gray-800 pb-8 mb-8">
-                <div>
-                  <h2 className="text-3xl font-black text-gray-900 tracking-tighter uppercase">{admin.company}</h2>
-                  <p className="text-gray-500 font-bold mt-1">รายงานสรุปการลงเวลาเข้า-ออกงานพนักงานประจำเดือน</p>
-                  <div className="mt-4 grid grid-cols-1 gap-1 text-sm">
-                    <p><span className="font-bold text-gray-400 uppercase text-[10px] tracking-widest block">ผู้ออกรายงาน (ADMIN)</span> <span className="text-lg font-bold">{admin.name}</span></p>
-                    <p><span className="font-bold text-gray-400 uppercase text-[10px] tracking-widest block">แผนกดูแล</span> <span className="font-medium">{admin.role}</span></p>
+              <div className="flex justify-between items-start border-b-[6px] border-slate-900 pb-10 mb-10">
+                <div className="space-y-4">
+                  <Logo />
+                  <div>
+                    <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none">{admin.company}</h2>
+                    <p className="text-blue-600 font-black mt-2 text-lg italic tracking-tight">Monthly Attendance Summary Report</p>
+                  </div>
+                  <div className="pt-4 grid grid-cols-1 gap-2">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded font-black uppercase text-slate-400">Issuer</span>
+                        <span className="text-lg font-bold text-slate-800">{admin.name} ({admin.role})</span>
+                    </div>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="bg-gray-100 p-4 rounded-2xl inline-block border border-gray-200">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 text-center">พิมพ์เมื่อวันที่ / เวลา</p>
-                    <p className="text-lg font-black text-gray-800">{reportDate}</p>
-                    <p className="text-xs font-bold text-blue-600">{reportTime}</p>
+                  <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 inline-block min-w-[200px]">
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-2 text-center">Timestamp</p>
+                    <p className="text-2xl font-black text-slate-900 leading-none">{reportDate}</p>
+                    <p className="text-sm font-bold text-blue-600 mt-1">{reportTime}</p>
                   </div>
                 </div>
               </div>
 
               {/* Summary Stats in Report */}
-              <div className="grid grid-cols-4 gap-4 mb-8">
-                <div className="border-2 border-gray-100 p-4 rounded-2xl">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">จำนวนพนักงาน</p>
-                  <p className="text-2xl font-black text-gray-800">{employees.length} <span className="text-sm font-normal text-gray-400">คน</span></p>
-                </div>
-                <div className="border-2 border-gray-100 p-4 rounded-2xl">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">การลงชื่อทั้งหมด</p>
-                  <p className="text-2xl font-black text-gray-800">{attendance.length} <span className="text-sm font-normal text-gray-400">ครั้ง</span></p>
-                </div>
-                <div className="border-2 border-gray-100 p-4 rounded-2xl">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">ลากิจ/ลาป่วย</p>
-                  <p className="text-2xl font-black text-gray-800">{leaves.length} <span className="text-sm font-normal text-gray-400">รายการ</span></p>
-                </div>
-                <div className="border-2 border-gray-100 p-4 rounded-2xl bg-indigo-50 border-indigo-100">
-                  <p className="text-[10px] text-indigo-400 font-bold uppercase mb-1 italic">สถานะระบบ</p>
-                  <p className="text-lg font-black text-indigo-700">สมบูรณ์ 100%</p>
-                </div>
+              <div className="grid grid-cols-4 gap-6 mb-12">
+                {[
+                  { label: "Total Staff", val: employees.length, unit: "Person" },
+                  { label: "Check-in Log", val: attendance.length, unit: "Times" },
+                  { label: "Leave Requests", val: leaves.length, unit: "Items" },
+                  { label: "System Health", val: "100%", unit: "Stable" }
+                ].map((s, i) => (
+                  <div key={i} className="bg-white border-2 border-slate-50 p-5 rounded-3xl">
+                    <p className="text-[10px] text-slate-400 font-black uppercase mb-2 tracking-widest">{s.label}</p>
+                    <p className="text-3xl font-black text-slate-900">{s.val} <span className="text-[10px] font-bold text-slate-300 uppercase">{s.unit}</span></p>
+                  </div>
+                ))}
               </div>
 
               {/* Data Table for Report */}
-              <h4 className="font-black text-gray-800 mb-4 text-sm uppercase tracking-[0.2em] border-l-4 border-blue-600 pl-3">รายละเอียดการเข้างาน (ATTENDANCE LOG)</h4>
-              <table className="w-full text-[12px] border-collapse mb-10">
+              <div className="mb-6 flex items-center gap-3">
+                 <div className="h-8 w-2 bg-blue-600 rounded-full"></div>
+                 <h4 className="font-black text-slate-900 text-lg uppercase tracking-tighter">Attendance Log Details</h4>
+              </div>
+              
+              <table className="w-full text-[13px] border-collapse mb-16">
                 <thead>
-                  <tr className="bg-gray-900 text-white">
-                    <th className="p-3 border border-gray-800 text-left">วันที่</th>
-                    <th className="p-3 border border-gray-800 text-left">รายชื่อพนักงาน</th>
-                    <th className="p-3 border border-gray-800 text-center">เข้า</th>
-                    <th className="p-3 border border-gray-800 text-center">ออก</th>
-                    <th className="p-3 border border-gray-800 text-left">พิกัด GPS (LAT, LNG)</th>
+                  <tr className="bg-slate-900 text-white">
+                    <th className="p-4 text-left font-black uppercase tracking-widest text-[10px]">Date</th>
+                    <th className="p-4 text-left font-black uppercase tracking-widest text-[10px]">Employee Name</th>
+                    <th className="p-4 text-center font-black uppercase tracking-widest text-[10px]">Time In</th>
+                    <th className="p-4 text-center font-black uppercase tracking-widest text-[10px]">Time Out</th>
+                    <th className="p-4 text-left font-black uppercase tracking-widest text-[10px]">GPS Location</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {attendance.map((a, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="p-3 border border-gray-200 font-bold">{a.date}</td>
-                      <td className="p-3 border border-gray-200 font-medium text-gray-700 italic">{a.employee}</td>
-                      <td className="p-3 border border-gray-200 text-center font-bold text-green-600">{a.checkIn}</td>
-                      <td className="p-3 border border-gray-200 text-center font-bold text-red-600">{a.checkOut}</td>
-                      <td className="p-3 border border-gray-200 font-mono text-xs text-gray-500 tracking-tighter">{a.location}</td>
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-4 font-black text-slate-900">{a.date}</td>
+                      <td className="p-4 font-bold text-slate-600 italic">{a.employee}</td>
+                      <td className="p-4 text-center"><span className="text-green-600 font-black">{a.checkIn}</span></td>
+                      <td className="p-4 text-center"><span className="text-red-500 font-black">{a.checkOut}</span></td>
+                      <td className="p-4 font-mono text-[11px] text-slate-400">{a.location}</td>
                     </tr>
                   ))}
-                  {attendance.length === 0 && (<tr><td colSpan={5} className="p-10 text-center italic text-gray-300">ไม่พบข้อมูลการบันทึกเวลา</td></tr>)}
                 </tbody>
               </table>
 
               {/* Signature Section */}
-              <div className="mt-20 flex justify-between px-10 gap-20">
-                <div className="text-center flex-1 border-t-2 border-gray-200 pt-4">
-                  <div className="h-16 flex items-end justify-center mb-2">
-                    {/* Placeholder for Signature Image */}
+              <div className="mt-24 grid grid-cols-2 gap-20 px-10">
+                <div className="text-center">
+                  <div className="h-24 border-b-2 border-slate-100 flex items-end justify-center pb-2 mb-4">
+                    {/* Placeholder for Signature */}
                   </div>
-                  <p className="text-xs font-bold text-gray-800 font-mono italic">( ............................................................ )</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">ผู้ตรวจทานข้อมูล</p>
+                  <p className="text-xs font-black text-slate-800 italic uppercase tracking-widest">Reviewer Signature</p>
+                  <p className="text-[10px] text-slate-400 font-bold mt-1">HR & Operations Manager</p>
                 </div>
-                <div className="text-center flex-1 border-t-2 border-gray-200 pt-4">
-                   <div className="h-16 flex items-end justify-center mb-2">
-                    <p className="text-xl font-serif text-blue-900 font-black italic select-none opacity-40">{admin.name}</p>
+                <div className="text-center">
+                  <div className="h-24 border-b-2 border-slate-100 flex items-end justify-center pb-2 mb-4 relative">
+                    <p className="text-3xl font-serif text-blue-900/10 font-black italic absolute top-0 animate-pulse select-none uppercase tracking-tighter">{admin.name}</p>
+                    <p className="text-xl font-serif text-blue-800 font-black italic select-none">{admin.name}</p>
                   </div>
-                  <p className="text-xs font-bold text-gray-800 font-mono italic">( {admin.name} )</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">ผู้อนุมัติรายงาน (ADMIN)</p>
+                  <p className="text-xs font-black text-slate-800 italic uppercase tracking-widest">Authorized By (Admin)</p>
+                  <p className="text-[10px] text-slate-400 font-bold mt-1">System Administrator Official Stamp</p>
                 </div>
               </div>
               
               {/* Report Footer */}
-              <div className="mt-16 text-center text-[10px] text-gray-300 font-bold tracking-[0.5em] border-t pt-8">
-                THIS IS A COMPUTER GENERATED DOCUMENT - NO SIGNATURE REQUIRED
+              <div className="mt-20 text-center">
+                <div className="inline-block px-10 py-2 border-y border-slate-100">
+                   <p className="text-[9px] text-slate-300 font-black tracking-[0.8em] uppercase">
+                     This is a computer-generated document - Verification code: SR-{Math.random().toString(36).substr(2, 9).toUpperCase()}
+                   </p>
+                </div>
               </div>
             </div>
           </div>
@@ -456,70 +530,82 @@ export default function AdminPage() {
 
       {/* 6. REGISTER / EDIT MODAL */}
       {showRegister && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 backdrop-blur-sm">
-          <form onSubmit={handleSaveEmployee} className="bg-white p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
-            <h2 className="font-bold text-2xl text-gray-800 border-b pb-2">
-              {editingEmployee ? `แก้ไขข้อมูล: ${editingEmployee.id}` : "ลงทะเบียนพนักงานใหม่"}
-            </h2>
+        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-50 p-4 backdrop-blur-md">
+          <form onSubmit={handleSaveEmployee} className="bg-white p-8 rounded-[3rem] w-full max-w-2xl space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="flex items-center gap-4 border-b pb-6">
+               <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold">
+                 {editingEmployee ? "✏️" : "👤"}
+               </div>
+               <h2 className="font-black text-2xl text-slate-900 tracking-tighter">
+                {editingEmployee ? `Edit Employee: ${editingEmployee.id}` : "Registration"}
+              </h2>
+            </div>
 
-            <div className="flex items-center gap-6 bg-gray-50 p-4 rounded-xl border border-dashed border-gray-300">
-              <div className="relative w-20 h-20">
-                <Image src={previewImage || "/profile.png"} alt="preview" fill className="rounded-full object-cover border-2 border-white shadow-md" />
+            <div className="flex flex-col sm:flex-row items-center gap-8 bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                <div className="relative w-24 h-24">
+                   <Image src={previewImage || "/profile.png"} alt="preview" fill className="rounded-full object-cover border-4 border-white shadow-xl" />
+                </div>
               </div>
-              <label className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors text-sm font-semibold">
-                อัปโหลดรูปโปรไฟล์
-                <input type="file" accept="image/*" hidden onChange={handleImageChange} />
-              </label>
+              <div className="space-y-2 text-center sm:text-left">
+                 <h4 className="font-black text-slate-800">Profile Picture</h4>
+                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Recommend size: 500x500 px</p>
+                 <label className="inline-block bg-white border border-slate-200 text-slate-600 px-6 py-2 rounded-xl cursor-pointer hover:bg-slate-50 transition-all text-sm font-black shadow-sm">
+                   Choose Image
+                   <input type="file" accept="image/*" hidden onChange={handleImageChange} />
+                 </label>
+              </div>
             </div>
 
             {/* Auth Fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-blue-50 p-4 rounded-xl border border-blue-100">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Username</label>
-                <input name="username" defaultValue={editingEmployee?.username} placeholder="Username สำหรับ Login" required className="w-full border border-blue-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Login Username</label>
+                <input name="username" defaultValue={editingEmployee?.username} placeholder="Username" required className="w-full bg-slate-50 border-none p-4 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold" />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Password</label>
-                <input name="password" defaultValue={editingEmployee?.password} placeholder="กำหนดรหัสผ่าน" required className="w-full border border-blue-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Security Password</label>
+                <input name="password" defaultValue={editingEmployee?.password} placeholder="••••••••" required className="w-full bg-slate-50 border-none p-4 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">ชื่อ</label>
-                <input name="firstName" defaultValue={editingEmployee?.firstName} placeholder="ระบุชื่อภาษาไทย" required className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">First Name (Thai)</label>
+                <input name="firstName" defaultValue={editingEmployee?.firstName} placeholder="ชื่อพนักงาน" required className="w-full border border-slate-100 p-4 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold" />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">นามสกุล</label>
-                <input name="lastName" defaultValue={editingEmployee?.lastName} placeholder="ระบุนามสกุลภาษาไทย" required className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Last Name (Thai)</label>
+                <input name="lastName" defaultValue={editingEmployee?.lastName} placeholder="นามสกุล" required className="w-full border border-slate-100 p-4 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">แผนก</label>
-                <input name="department" defaultValue={editingEmployee?.department} placeholder="เช่น IT, HR" required className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Department</label>
+                <input name="department" defaultValue={editingEmployee?.department} placeholder="IT, HR, Sales" required className="w-full border border-slate-100 p-4 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm" />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">ตำแหน่งงาน</label>
-                <select name="position" defaultValue={editingEmployee?.position} required className="w-full border p-2.5 rounded-lg bg-white">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Job Position</label>
+                <select name="position" defaultValue={editingEmployee?.position} required className="w-full border border-slate-100 p-4 rounded-2xl bg-white font-bold text-sm">
                   {positions.map((p, idx) => <option key={idx} value={p}>{p}</option>)}
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">ไซท์งาน</label>
-                <select name="site" defaultValue={editingEmployee?.site} required className="w-full border p-2.5 rounded-lg bg-white">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Working Site</label>
+                <select name="site" defaultValue={editingEmployee?.site} required className="w-full border border-slate-100 p-4 rounded-2xl bg-white font-bold text-sm">
                   {sites.map((s, idx) => <option key={idx} value={s}>{s}</option>)}
                 </select>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <button type="button" onClick={() => { setShowRegister(false); setEditingEmployee(null); }} className="px-6 py-2 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors font-medium">
-                ยกเลิก
+            <div className="flex justify-end gap-3 pt-6 border-t">
+              <button type="button" onClick={() => { setShowRegister(false); setEditingEmployee(null); }} className="px-8 py-4 rounded-2xl text-slate-400 hover:text-slate-600 transition-colors font-bold uppercase tracking-widest text-xs">
+                Cancel
               </button>
-              <button type="submit" className="px-8 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-shadow shadow-lg shadow-blue-200 font-bold">
-                {editingEmployee ? "บันทึกการแก้ไข" : "บันทึกพนักงาน"}
+              <button type="submit" className="px-10 py-4 rounded-2xl bg-slate-900 text-white hover:bg-black transition-all shadow-xl shadow-slate-200 font-black uppercase tracking-widest text-xs">
+                {editingEmployee ? "Update Data" : "Confirm Register"}
               </button>
             </div>
           </form>
@@ -528,34 +614,15 @@ export default function AdminPage() {
 
       {/* 7. IMAGE VIEWER */}
       {viewImage && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[300] p-4" onClick={() => setViewImage(null)}>
-          <div className="relative w-full max-w-3xl aspect-square sm:aspect-video">
-            <Image src={viewImage} alt="large view" fill className="object-contain rounded-lg shadow-2xl" />
-            <button className="absolute -top-10 right-0 text-white font-bold text-xl uppercase tracking-widest">ปิดหน้าต่าง [X]</button>
+        <div className="fixed inset-0 bg-slate-900/95 flex items-center justify-center z-[300] p-4 backdrop-blur-xl" onClick={() => setViewImage(null)}>
+          <div className="relative w-full max-w-4xl aspect-video animate-in zoom-in duration-300">
+            <Image src={viewImage} alt="large view" fill className="object-contain rounded-[2rem]" />
+            <div className="absolute top-0 right-0 p-8">
+               <button className="w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md flex items-center justify-center font-black transition-all">✕</button>
+            </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-/* ================== COMPONENTS ================== */
-function Stat({ title, value }: { title: string; value: number }) {
-  return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group">
-      <p className="text-gray-400 text-xs font-bold uppercase tracking-widest group-hover:text-blue-500 transition-colors">{title}</p>
-      <p className="text-3xl font-black text-gray-800 mt-1">{value}</p>
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="bg-gray-50/50 px-6 py-4 border-b">
-        <h2 className="text-lg font-black text-gray-700 tracking-tight">{title}</h2>
-      </div>
-      <div className="p-4 sm:p-6">{children}</div>
     </div>
   );
 }

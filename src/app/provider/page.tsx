@@ -3,30 +3,20 @@
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { 
+  Building2, 
+  Users, 
+  ShieldCheck, 
+  LogOut, 
+  Plus, 
+  MoreVertical,
+  CircleCheck,
+  CircleAlert
+} from "lucide-react"; // แนะนำให้ลง lucide-react เพื่อความสวยงามครับ
 
-/* ================== TYPES ================== */
-
-// บริษัทลูกค้า (Tenant)
-type Company = {
-  id: string;
-  name: string;
-  code: string;
-  status: "active" | "suspended";
-  createdAt: string;
-};
-
-// Admin ของบริษัทลูกค้า
-type CompanyAdmin = {
-  id: string;
-  companyId: string;
-  name: string;
-  username: string;
-  email?: string;
-  status: "active" | "suspended";
-  createdAt: string;
-};
-
-/* ================== PAGE ================== */
+/* ================== TYPES (เหมือนเดิม) ================== */
+type Company = { id: string; name: string; code: string; status: "active" | "suspended"; createdAt: string; };
+type CompanyAdmin = { id: string; companyId: string; name: string; username: string; email?: string; status: "active" | "suspended"; createdAt: string; };
 
 export default function ProviderPage() {
   const router = useRouter();
@@ -36,270 +26,204 @@ export default function ProviderPage() {
     name: "นายสมพงษ์ ร่ำรวย",
     role: "System Provider",
     company: "Siam Royal System Co., Ltd.",
-    avatar: "/profile.png",
+    avatar: "/profile.png", // อย่าลืมใส่ไฟล์ใน public/ หรือเปลี่ยน path นะครับ
   };
 
   /* ---------- STATE ---------- */
-
   const [companies, setCompanies] = useState<Company[]>([
-    {
-      id: "COMP-001",
-      name: "Thai Smart Factory",
-      code: "TSF",
-      status: "active",
-      createdAt: new Date().toISOString(),
-    },
+    { id: "COMP-001", name: "Thai Smart Factory", code: "TSF", status: "active", createdAt: new Date().toISOString() },
   ]);
 
   const [admins, setAdmins] = useState<CompanyAdmin[]>([
-    {
-      id: "ADM-001",
-      companyId: "COMP-001",
-      name: "สมชาย ร่ำรวย",
-      username: "tsf_admin",
-      email: "admin@tsf.co.th",
-      status: "active",
-      createdAt: new Date().toISOString(),
-    },
+    { id: "ADM-001", companyId: "COMP-001", name: "สมชาย ร่ำรวย", username: "tsf_admin", email: "admin@tsf.co.th", status: "active", createdAt: new Date().toISOString() },
   ]);
 
   const [showCompanyForm, setShowCompanyForm] = useState(false);
   const [showAdminForm, setShowAdminForm] = useState(false);
 
-  /* ---------- LOGOUT ---------- */
-  const handleLogout = () => {
-    router.push("/login");
-  };
-
-  /* ---------- COMPANY ACTIONS ---------- */
-
-  const handleAddCompany = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-
-    setCompanies(prev => [
-      ...prev,
-      {
-        id: `COMP-${String(prev.length + 1).padStart(3, "0")}`,
-        name: String(f.get("name")),
-        code: String(f.get("code")),
-        status: "active",
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-
-    setShowCompanyForm(false);
-  };
-
-  const toggleCompanyStatus = (id: string) => {
-    setCompanies(prev =>
-      prev.map(c =>
-        c.id === id
-          ? { ...c, status: c.status === "active" ? "suspended" : "active" }
-          : c
-      )
-    );
-  };
-
-  /* ---------- ADMIN ACTIONS ---------- */
-
-  const handleAddAdmin = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-
-    setAdmins(prev => [
-      ...prev,
-      {
-        id: `ADM-${String(prev.length + 1).padStart(3, "0")}`,
-        companyId: String(f.get("companyId")),
-        name: String(f.get("name")),
-        username: String(f.get("username")),
-        email: String(f.get("email")) || undefined,
-        status: "active",
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-
-    setShowAdminForm(false);
-  };
-
-  const toggleAdminStatus = (id: string) => {
-    setAdmins(prev =>
-      prev.map(a =>
-        a.id === id
-          ? { ...a, status: a.status === "active" ? "suspended" : "active" }
-          : a
-      )
-    );
-  };
-
-  /* ================== UI ================== */
+  const handleLogout = () => router.push("/login");
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 sm:p-6 space-y-6">
-
-      {/* PROVIDER INFO */}
-      <div className="bg-white rounded-xl shadow p-5 flex flex-col sm:flex-row gap-4 items-center">
-        <Image src={provider.avatar} alt="" width={96} height={96} className="rounded-full border-4 border-blue-600" />
-        <div className="flex-1">
-          <h1 className="text-xl font-bold">{provider.name}</h1>
-          <p className="text-gray-600">{provider.role}</p>
-          <p className="text-gray-500 text-sm">{provider.company}</p>
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans">
+      
+      {/* TOP NAV / LOGO SECTION */}
+      <nav className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-40 shadow-sm">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-100">
+               {/* ใส่โลโก้ของคุณตรงนี้ */}
+               <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain invert brightness-0" 
+                    onError={(e) => e.currentTarget.style.display = 'none'} />
+               <ShieldCheck className="text-white absolute" size={24} />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold leading-none text-slate-900">Siam Royal</h1>
+              <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-blue-600">Provider Console</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex flex-col items-end mr-2">
+              <p className="text-sm font-bold text-slate-900">{provider.name}</p>
+              <p className="text-[11px] text-slate-500">{provider.role}</p>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
         </div>
-        <button onClick={handleLogout} className="bg-gray-800 text-white px-4 py-2 rounded-xl">
-          ลงชื่อออก
-        </button>
-      </div>
+      </nav>
 
-      {/* DASHBOARD */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Stat title="บริษัททั้งหมด" value={companies.length} />
-        <Stat title="Admin ทั้งหมด" value={admins.length} />
-        <Stat title="บริษัทที่ใช้งานอยู่" value={companies.filter(c => c.status === "active").length} />
-      </div>
+      <main className="max-w-7xl mx-auto p-6 space-y-8">
+        
+        {/* WELCOME SECTION */}
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">แดชบอร์ดภาพรวม</h2>
+            <p className="text-slate-500 text-sm">จัดการข้อมูลบริษัทลูกค้าและสิทธิ์การเข้าถึงระบบ</p>
+          </div>
+          <div className="flex gap-2">
+             <button onClick={() => setShowCompanyForm(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-md shadow-blue-100">
+                <Plus size={18} /> เพิ่มบริษัทใหม่
+             </button>
+          </div>
+        </header>
 
-      {/* COMPANY SECTION */}
-      <Section title="บริษัทลูกค้า (Tenants)">
-        <button onClick={() => setShowCompanyForm(true)} className="mb-3 bg-blue-600 text-white px-4 py-2 rounded">
-          + เพิ่มบริษัท
-        </button>
+        {/* STATS CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <StatCard title="บริษัททั้งหมด" value={companies.length} icon={<Building2 className="text-blue-600" />} color="blue" />
+          <StatCard title="Admin ทั้งหมด" value={admins.length} icon={<Users className="text-purple-600" />} color="purple" />
+          <StatCard title="เปิดใช้งานอยู่" value={companies.filter(c => c.status === "active").length} icon={<CircleCheck className="text-emerald-600" />} color="emerald" />
+        </div>
 
-        <table className="w-full text-sm">
-          <thead className="bg-gray-200">
-            <tr>
-              <th className="p-2">รหัส</th>
-              <th className="p-2">ชื่อบริษัท</th>
-              <th className="p-2">สถานะ</th>
-              <th className="p-2">จัดการ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {companies.map(c => (
-              <tr key={c.id} className="border-t">
-                <td className="p-2">{c.code}</td>
-                <td className="p-2">{c.name}</td>
-                <td className="p-2">{c.status}</td>
-                <td className="p-2">
-                  <button
-                    onClick={() => toggleCompanyStatus(c.id)}
-                    className="text-blue-600 text-sm"
-                  >
-                    {c.status === "active" ? "ระงับ" : "เปิดใช้งาน"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Section>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          
+          {/* COMPANY TABLE */}
+          <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">บริษัทลูกค้า (Tenants)</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 text-[11px] uppercase font-bold text-slate-500">
+                  <tr>
+                    <th className="px-6 py-4">บริษัท</th>
+                    <th className="px-6 py-4 text-center">สถานะ</th>
+                    <th className="px-6 py-4 text-right">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {companies.map(c => (
+                    <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-slate-900">{c.name}</p>
+                        <p className="text-xs text-slate-400">Code: {c.code}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <StatusBadge status={c.status} />
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={() => {}} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400"><MoreVertical size={16}/></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-      {/* ADMIN SECTION */}
-      <Section title="Admin ของบริษัทลูกค้า">
-        <button onClick={() => setShowAdminForm(true)} className="mb-3 bg-green-600 text-white px-4 py-2 rounded">
-          + เพิ่ม Admin
-        </button>
+          {/* ADMIN TABLE */}
+          <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">ผู้ดูแลระบบ (Admins)</h3>
+              <button onClick={() => setShowAdminForm(true)} className="text-blue-600 text-sm font-bold flex items-center gap-1">
+                <Plus size={16} /> เพิ่ม
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 text-[11px] uppercase font-bold text-slate-500">
+                  <tr>
+                    <th className="px-6 py-4">ชื่อผู้ใช้</th>
+                    <th className="px-6 py-4">สังกัดบริษัท</th>
+                    <th className="px-6 py-4 text-right">สถานะ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {admins.map(a => (
+                    <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4 font-medium">
+                        <p className="text-slate-900">{a.name}</p>
+                        <p className="text-xs text-slate-400">@{a.username}</p>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {companies.find(c => c.id === a.companyId)?.name}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <StatusBadge status={a.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </main>
 
-        <table className="w-full text-sm">
-          <thead className="bg-gray-200">
-            <tr>
-              <th className="p-2">ชื่อ</th>
-              <th className="p-2">Username</th>
-              <th className="p-2">บริษัท</th>
-              <th className="p-2">สถานะ</th>
-              <th className="p-2">จัดการ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {admins.map(a => (
-              <tr key={a.id} className="border-t">
-                <td className="p-2">{a.name}</td>
-                <td className="p-2">{a.username}</td>
-                <td className="p-2">
-                  {companies.find(c => c.id === a.companyId)?.name}
-                </td>
-                <td className="p-2">{a.status}</td>
-                <td className="p-2">
-                  <button
-                    onClick={() => toggleAdminStatus(a.id)}
-                    className="text-red-600 text-sm"
-                  >
-                    {a.status === "active" ? "Suspend" : "Activate"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Section>
-
-      {/* MODALS */}
+      {/* MODAL (ตัวอย่างการปรับ Modal ให้มนและดูนุ่มขึ้น) */}
       {showCompanyForm && (
-        <Modal title="เพิ่มบริษัท" onClose={() => setShowCompanyForm(false)}>
-          <form onSubmit={handleAddCompany} className="space-y-3">
-            <input name="name" placeholder="ชื่อบริษัท" required className="border p-2 rounded w-full" />
-            <input name="code" placeholder="รหัสบริษัท" required className="border p-2 rounded w-full" />
-            <button className="bg-blue-600 text-white px-4 py-2 rounded w-full">บันทึก</button>
-          </form>
-        </Modal>
-      )}
-
-      {showAdminForm && (
-        <Modal title="เพิ่ม Admin" onClose={() => setShowAdminForm(false)}>
-          <form onSubmit={handleAddAdmin} className="space-y-3">
-            <input name="name" placeholder="ชื่อ-นามสกุล" required className="border p-2 rounded w-full" />
-            <input name="username" placeholder="Username (ใช้เข้าสู่ระบบ)" required className="border p-2 rounded w-full" />
-            <input name="email" placeholder="อีเมล (ไม่บังคับ)" className="border p-2 rounded w-full" />
-            <select name="companyId" required className="border p-2 rounded w-full">
-              {companies.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <button className="bg-green-600 text-white px-4 py-2 rounded w-full">บันทึก</button>
-          </form>
-        </Modal>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200">
+             <h3 className="text-xl font-bold mb-6">สร้างบริษัทลูกค้าใหม่</h3>
+             <form onSubmit={(e) => { e.preventDefault(); setShowCompanyForm(false); }} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase ml-1">ชื่อบริษัท</label>
+                  <input name="name" placeholder="Thai Smart Factory" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase ml-1">รหัสย่อบริษัท (Code)</label>
+                  <input name="code" placeholder="TSF" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all" />
+                </div>
+                <div className="flex gap-3 pt-4">
+                   <button type="button" onClick={() => setShowCompanyForm(false)} className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-all">ยกเลิก</button>
+                   <button type="submit" className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all">บันทึกข้อมูล</button>
+                </div>
+             </form>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-/* ================== UI HELPERS ================== */
+/* ================== UI COMPONENTS ================== */
 
-function Stat({ title, value }: { title: string; value: number }) {
+function StatCard({ title, value, icon, color }: { title: string; value: number; icon: React.ReactNode; color: string }) {
   return (
-    <div className="bg-white p-4 rounded-xl shadow">
-      <p className="text-gray-500 text-sm">{title}</p>
-      <p className="text-2xl font-bold">{value}</p>
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white p-5 rounded-xl shadow">
-      <h2 className="text-lg font-bold mb-3">{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-function Modal({
-  title,
-  children,
-  onClose,
-}: {
-  title: string;
-  children: React.ReactNode;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white p-5 rounded-xl w-full max-w-md space-y-4">
-        <h3 className="font-bold text-lg">{title}</h3>
-        {children}
-        <button onClick={onClose} className="text-gray-500 text-sm w-full">
-          ยกเลิก
-        </button>
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-5">
+      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-${color}-50`}>
+        {icon}
+      </div>
+      <div>
+        <p className="text-sm font-medium text-slate-500">{title}</p>
+        <p className="text-2xl font-black text-slate-900">{value}</p>
       </div>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const isActive = status === "active";
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${
+      isActive ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+    }`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-500" : "bg-red-500"}`} />
+      {isActive ? "ปกติ" : "ระงับ"}
+    </span>
   );
 }
