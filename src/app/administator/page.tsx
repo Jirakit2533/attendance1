@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { access } from "fs";
 
 /* ================== TYPES ================== */
 type Employee = {
@@ -104,6 +105,7 @@ export default function AdminPage() {
 
   const [sites, setSites] = useState<string[]>(["สำนักงานใหญ่", "ไซต์งาน A (กรุงเทพ)", "ไซต์งาน B (นนทบุรี)"]);
   const [positions, setPositions] = useState<string[]>(["Manager", "IT Support", "Technician", "HR"]);
+  const [leaderAccess, setLeaderAccess] = useState<string[]>([""]);
   const [showRegister, setShowRegister] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -122,6 +124,7 @@ export default function AdminPage() {
       department: "IT",
       position: "IT Support",
       site: "สำนักงานใหญ่",
+      leaderAccess: "หัวหน้า",
       avatar: "/profile.png",
       username: "somchai.j",
       password: "password123",
@@ -166,13 +169,18 @@ export default function AdminPage() {
   };
 
   const handleAddSite = () => {
-    const name = prompt("ระบุชื่อไซด์งาน หรือ บริษัทใหม่:");
+    const name = prompt("ระบุชื่อไซด์งาน หรือ สาขา:");
     if (name?.trim()) setSites(prev => [...prev, name.trim()]);
   };
 
   const handleAddPosition = () => {
     const name = prompt("ระบุชื่อตำแหน่งงานใหม่:");
     if (name?.trim()) setPositions(prev => [...prev, name.trim()]);
+  };
+
+  const handleLeaderAccessByPosition = () => {
+    const name = prompt("เลือกตำแหน่งที่จะเข้าสู่ระบบในฐานะหัวหน้า:");
+    if (name?.trim()) setLeaderAccess(prev => [...prev, name.trim()]);
   };
 
   const handleDeleteEmployee = (id: string) => {
@@ -192,7 +200,6 @@ export default function AdminPage() {
     const f = new FormData(e.currentTarget);
     const firstName = String(f.get("firstName"));
     const lastName = String(f.get("lastName"));
-
     const newEmpData = {
       firstName,
       lastName,
@@ -200,6 +207,7 @@ export default function AdminPage() {
       department: String(f.get("department")),
       position: String(f.get("position")),
       site: String(f.get("site")),
+      accessLevel: leaderAccess.includes(String(f.get("position"))) ? "หัวหน้า" : "พนักงาน",
       username: String(f.get("username")),
       password: String(f.get("password")),
       avatar: previewImage || "/profile.png",
@@ -210,7 +218,6 @@ export default function AdminPage() {
     } else {
       setEmployees(prev => [...prev, { id: `EMP-${String(prev.length + 1).padStart(3, "0")}`, ...newEmpData }]);
     }
-
     setEditingEmployee(null);
     setPreviewImage(null);
     setShowRegister(false);
@@ -218,18 +225,15 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-3 sm:p-8 space-y-8 font-sans print:p-0 print:bg-white text-slate-900">
-      
       {/* 1. ADMIN HEADER */}
       <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 p-6 sm:p-8 flex flex-col lg:flex-row items-center gap-8 print:hidden relative overflow-hidden">
         <div className="absolute top-0 right-0 p-8 opacity-5">
            <Logo />
         </div>
-        
         <div className="relative">
           <div className="absolute inset-0 bg-blue-500 rounded-full blur-2xl opacity-20 animate-pulse"></div>
           <Image src={admin.avatar} alt="admin" width={110} height={110} className="relative rounded-full border-4 border-white shadow-2xl" />
         </div>
-
         <div className="flex-1 text-center lg:text-left z-10">
           <div className="mb-4">
             <Logo />
@@ -237,7 +241,6 @@ export default function AdminPage() {
           <h1 className="text-2xl font-black text-gray-900 tracking-tight">{admin.name}</h1>
           <p className="text-blue-600 font-bold text-sm uppercase tracking-widest">{admin.role}</p>
         </div>
-
         <div className="flex flex-wrap justify-center gap-3 w-full lg:w-auto z-10">
           <button onClick={() => setShowReport(true)} className="px-6 py-3 rounded-2xl bg-slate-900 text-white hover:bg-black font-bold transition-all shadow-lg shadow-slate-200 flex items-center gap-2">
             <span>ทำรายงานสรุป</span>
@@ -250,7 +253,6 @@ export default function AdminPage() {
           </button>
         </div>
       </div>
-
       {/* Quick Actions Bar */}
       <div className="flex flex-wrap gap-4 print:hidden">
         <button onClick={handleAddSite} className="bg-white border border-dashed border-gray-300 px-5 py-3 rounded-2xl text-gray-600 font-bold hover:border-blue-500 hover:text-blue-500 transition-all flex items-center gap-2 text-sm">
@@ -260,14 +262,12 @@ export default function AdminPage() {
           <span className="text-xl">+</span> เพิ่มตำแหน่งพนักงาน
         </button>
       </div>
-
       {/* 2. DASHBOARD STATS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print:hidden">
         <Stat title="พนักงานทั้งหมด" value={employees.length} iconColor="bg-blue-600" />
         <Stat title="เช็คอินวันนี้" value={attendance.length} iconColor="bg-green-600" />
         <Stat title="คำขอลารออนุมัติ" value={leaves.filter(l => l.status === "pending").length} iconColor="bg-orange-600" />
       </div>
-
       {/* 3. EMPLOYEE MANAGEMENT TABLE */}
       <div className="print:hidden">
         <Section title="จัดการข้อมูลพนักงาน">
@@ -280,6 +280,7 @@ export default function AdminPage() {
                   <th className="pb-4 px-3 text-left">สังกัด</th>
                   <th className="pb-4 px-3 text-left">ตำแหน่ง</th>
                   <th className="pb-4 px-3 text-left">สถานที่</th>
+                  <th className="pb-4 px-3 text-left">สถานะหัวหน้า</th>
                   <th className="pb-4 px-3 text-center">จัดการ</th>
                 </tr>
               </thead>
@@ -304,6 +305,12 @@ export default function AdminPage() {
                        </div>
                     </td>
                     <td className="py-4 px-3">
+                       <div className="text-gray-500 flex items-center gap-1">
+                          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                          {e.leaderAccess} 
+                       </div>
+                    </td>
+                    <td className="py-4 px-3">
                       <div className="flex justify-center gap-2">
                         <button onClick={() => handleEditEmployee(e)} className="w-10 h-10 flex items-center justify-center bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-all">✏️</button>
                         <button onClick={() => handleDeleteEmployee(e.id)} className="w-10 h-10 flex items-center justify-center bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all">🗑️</button>
@@ -316,7 +323,6 @@ export default function AdminPage() {
           </div>
         </Section>
       </div>
-
       {/* 4. ATTENDANCE TABLE */}
       <div className="print:hidden">
         <Section title="รายละเอียดการลงชื่อทำงาน">
@@ -364,7 +370,6 @@ export default function AdminPage() {
           </div>
         </Section>
       </div>
-
       {/* 5. LEAVE REQUEST TABLE */}
       <div className="print:hidden">
         <Section title="คำขอลางาน">
@@ -408,7 +413,6 @@ export default function AdminPage() {
           </div>
         </Section>
       </div>
-
       {/* 8. REPORT PREVIEW MODAL */}
       {showReport && (
         <div className="fixed inset-0 bg-slate-900/90 flex items-start justify-center z-[200] p-0 sm:p-4 overflow-y-auto backdrop-blur-md">
@@ -425,7 +429,6 @@ export default function AdminPage() {
                 <button onClick={() => setShowReport(false)} className="bg-white border border-gray-200 text-gray-500 px-6 py-3 rounded-2xl text-sm font-bold hover:bg-gray-100 transition-all">ปิดหน้าต่าง</button>
               </div>
             </div>
-
             {/* A4 Content Area */}
             <div className="flex-1 p-10 sm:p-20 bg-white print:p-0">
               {/* Report Header */}
@@ -451,7 +454,6 @@ export default function AdminPage() {
                   </div>
                 </div>
               </div>
-
               {/* Summary Stats in Report */}
               <div className="grid grid-cols-4 gap-6 mb-12">
                 {[
@@ -466,13 +468,11 @@ export default function AdminPage() {
                   </div>
                 ))}
               </div>
-
               {/* Data Table for Report */}
               <div className="mb-6 flex items-center gap-3">
                  <div className="h-8 w-2 bg-blue-600 rounded-full"></div>
                  <h4 className="font-black text-slate-900 text-lg uppercase tracking-tighter">Attendance Log Details</h4>
               </div>
-              
               <table className="w-full text-[13px] border-collapse mb-16">
                 <thead>
                   <tr className="bg-slate-900 text-white">
@@ -495,7 +495,6 @@ export default function AdminPage() {
                   ))}
                 </tbody>
               </table>
-
               {/* Signature Section */}
               <div className="mt-24 grid grid-cols-2 gap-20 px-10">
                 <div className="text-center">
@@ -514,7 +513,6 @@ export default function AdminPage() {
                   <p className="text-[10px] text-slate-400 font-bold mt-1">System Administrator Official Stamp</p>
                 </div>
               </div>
-              
               {/* Report Footer */}
               <div className="mt-20 text-center">
                 <div className="inline-block px-10 py-2 border-y border-slate-100">
@@ -527,7 +525,6 @@ export default function AdminPage() {
           </div>
         </div>
       )}
-
       {/* 6. REGISTER / EDIT MODAL */}
       {showRegister && (
         <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-50 p-4 backdrop-blur-md">
@@ -540,7 +537,6 @@ export default function AdminPage() {
                 {editingEmployee ? `Edit Employee: ${editingEmployee.id}` : "Registration"}
               </h2>
             </div>
-
             <div className="flex flex-col sm:flex-row items-center gap-8 bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
               <div className="relative group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
@@ -549,23 +545,22 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="space-y-2 text-center sm:text-left">
-                 <h4 className="font-black text-slate-800">Profile Picture</h4>
-                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Recommend size: 500x500 px</p>
+                 <h4 className="font-black text-slate-800">รูปโปรไฟล์</h4>
+                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">ขนาดรูปแนะนำ: 500x500 px</p>
                  <label className="inline-block bg-white border border-slate-200 text-slate-600 px-6 py-2 rounded-xl cursor-pointer hover:bg-slate-50 transition-all text-sm font-black shadow-sm">
                    Choose Image
                    <input type="file" accept="image/*" hidden onChange={handleImageChange} />
                  </label>
               </div>
             </div>
-
             {/* Auth Fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Login Username</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Username</label>
                 <input name="username" defaultValue={editingEmployee?.username} placeholder="Username" required className="w-full bg-slate-50 border-none p-4 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold" />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Security Password</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Password</label>
                 <input name="password" defaultValue={editingEmployee?.password} placeholder="••••••••" required className="w-full bg-slate-50 border-none p-4 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold" />
               </div>
             </div>
@@ -583,23 +578,36 @@ export default function AdminPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Department</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">แผนก</label>
                 <input name="department" defaultValue={editingEmployee?.department} placeholder="IT, HR, Sales" required className="w-full border border-slate-100 p-4 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm" />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Job Position</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">ตำแหน่งงาน</label>
                 <select name="position" defaultValue={editingEmployee?.position} required className="w-full border border-slate-100 p-4 rounded-2xl bg-white font-bold text-sm">
                   {positions.map((p, idx) => <option key={idx} value={p}>{p}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Working Site</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">ไซต์งาน/สาขา</label>
                 <select name="site" defaultValue={editingEmployee?.site} required className="w-full border border-slate-100 p-4 rounded-2xl bg-white font-bold text-sm">
                   {sites.map((s, idx) => <option key={idx} value={s}>{s}</option>)}
                 </select>
               </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">
+                  สถานะการเข้าถึง
+                </label>
+                <select 
+                  name="accessLevel" 
+                  defaultValue={editingEmployee?.accessLevel || "พนักงาน"} 
+                  required 
+                  className="w-full border border-slate-100 p-4 rounded-2xl bg-white font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none cursor-pointer"
+                >
+                  <option value="หัวหน้า">หัวหน้า (Leader)</option>
+                  <option value="พนักงาน">พนักงาน (Employee)</option>
+                </select>
+              </div>
             </div>
-
             <div className="flex justify-end gap-3 pt-6 border-t">
               <button type="button" onClick={() => { setShowRegister(false); setEditingEmployee(null); }} className="px-8 py-4 rounded-2xl text-slate-400 hover:text-slate-600 transition-colors font-bold uppercase tracking-widest text-xs">
                 Cancel
@@ -611,7 +619,6 @@ export default function AdminPage() {
           </form>
         </div>
       )}
-
       {/* 7. IMAGE VIEWER */}
       {viewImage && (
         <div className="fixed inset-0 bg-slate-900/95 flex items-center justify-center z-[300] p-4 backdrop-blur-xl" onClick={() => setViewImage(null)}>
