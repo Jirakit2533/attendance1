@@ -10,6 +10,7 @@ type RecordItem = {
   checkOut: string;
   location: string;
   imageUrl: string;
+  checkOutImageUrl?: string; // เพิ่มฟิลด์รูปตอนเลิกงาน
   position: string;
 };
 
@@ -35,6 +36,7 @@ export default function LeaderPage() {
   const [checkedIn, setCheckedIn] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false); // เพิ่มเพื่อเช็คว่ากำลังออกงานหรือไม่
   const [readyToCapture, setReadyToCapture] = useState(false);
 
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -57,8 +59,8 @@ export default function LeaderPage() {
     setLeaves(prev => prev.map(item => item.id === id ? { ...item, status: "ปฏิเสธ" } : item));
   };
 
-  /* ---------------- CHECK IN LOGIC ---------------- */
-  const handleCheckIn = async () => {
+  /* ---------------- CAMERA LOGIC (Shared) ---------------- */
+  const openCamera = async () => {
     try {
       setCheckingIn(true);
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -79,12 +81,24 @@ export default function LeaderPage() {
     }
   };
 
+  const handleCheckIn = () => {
+    setIsCheckingOut(false);
+    openCamera();
+  };
+
+  const handleCheckOut = () => {
+    setIsCheckingOut(true);
+    openCamera();
+  };
+
   const handleCapture = async () => {
     if (!videoRef.current || !streamRef.current) return;
     const canvas = document.createElement("canvas");
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     canvas.getContext("2d")!.drawImage(videoRef.current, 0, 0);
+    const capturedImage = canvas.toDataURL("image/png");
+    
     streamRef.current.getTracks().forEach(t => t.stop());
     setShowCamera(false);
     setReadyToCapture(false);
@@ -94,31 +108,34 @@ export default function LeaderPage() {
         navigator.geolocation.getCurrentPosition(res, rej)
       );
       const now = new Date();
-      setRecords(prev => [
-        {
-          date: now.toLocaleDateString('th-TH'),
-          checkIn: now.toLocaleTimeString('th-TH'),
-          checkOut: "-",
-          location: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
-          imageUrl: canvas.toDataURL("image/png"),
-          position: "ฝ่ายบริหาร / หัวหน้าแผนก",
-        },
-        ...prev,
-      ]);
-      setCheckedIn(true);
-    } catch (err) {
-      alert("กรุณาเปิด GPS เพื่อยืนยันตำแหน่งการเข้างาน");
-    }
-  };
 
-  const handleCheckOut = () => {
-    const now = new Date();
-    setCheckedIn(false);
-    setRecords(prev =>
-      prev.map((r, i) =>
-        i === 0 ? { ...r, checkOut: now.toLocaleTimeString('th-TH') } : r
-      )
-    );
+      if (isCheckingOut) {
+        // กรณีเลิกงาน: อัปเดตข้อมูลแถวบนสุด (ล่าสุด)
+        setRecords(prev =>
+          prev.map((r, i) =>
+            i === 0 ? { ...r, checkOut: now.toLocaleTimeString('th-TH'), checkOutImageUrl: capturedImage } : r
+          )
+        );
+        setCheckedIn(false);
+      } else {
+        // กรณีเข้างาน: เพิ่มแถวใหม่
+        setRecords(prev => [
+          {
+            date: now.toLocaleDateString('th-TH'),
+            checkIn: now.toLocaleTimeString('th-TH'),
+            checkOut: "-",
+            location: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
+            imageUrl: capturedImage,
+            checkOutImageUrl: "",
+            position: "ฝ่ายบริหาร / หัวหน้าแผนก",
+          },
+          ...prev,
+        ]);
+        setCheckedIn(true);
+      }
+    } catch (err) {
+      alert("กรุณาเปิด GPS เพื่อยืนยันตำแหน่ง");
+    }
   };
 
   const handleLogout = () => {
@@ -143,7 +160,7 @@ export default function LeaderPage() {
     setLeaves(prev => [
       {
         id: Date.now(),
-        employeeName: "นายสมชาย ใจดี", // ในที่นี้สมมติว่าเป็นชื่อ Leader ลาเอง
+        employeeName: "นายสมชาย ใจดี",
         type: leaveType,
         start: leaveStart,
         end: leaveEnd,
@@ -167,7 +184,7 @@ export default function LeaderPage() {
   return (
     <div className="min-h-screen bg-[#f8fafc] transition-all duration-300">
       
-      {/* 🟢 TOP NAVIGATION & BRAND LOGO */}
+      {/* 🟢 TOP NAVIGATION */}
       <nav className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur-xl border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4 group">
@@ -242,9 +259,13 @@ export default function LeaderPage() {
             ) : (
               <button
                 onClick={handleCheckOut}
-                className="w-full bg-slate-900 hover:bg-black text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
+                disabled={checkingIn}
+                className="w-full bg-slate-900 hover:bg-black text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 group"
               >
-                ลงชื่อเลิกงาน
+                <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                {checkingIn ? "กำลังเรียกกล้อง..." : "ลงชื่อเลิกงาน"}
               </button>
             )}
             <button
@@ -260,7 +281,6 @@ export default function LeaderPage() {
         {!showLeaveForm && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            {/* LEFT: ATTENDANCE HISTORY (2 Cols) */}
             <div className="lg:col-span-2 space-y-8">
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-50">
                 <div className="flex items-center justify-between mb-8">
@@ -271,18 +291,19 @@ export default function LeaderPage() {
                 </div>
 
                 <div className="overflow-x-auto rounded-[2rem] border border-gray-50">
-                  <table className="w-full text-sm min-w-[500px]">
+                  <table className="w-full text-sm min-w-[600px]">
                     <thead className="bg-gray-50/50 text-gray-400 uppercase text-[10px] font-black tracking-widest">
                       <tr>
                         <th className="p-6 text-left">วันที่</th>
                         <th className="p-6 text-center">ลงเวลา</th>
                         <th className="p-6 text-center">พิกัด</th>
-                        <th className="p-6 text-center">หลักฐาน</th>
+                        <th className="p-6 text-center">รูปเข้างาน</th>
+                        <th className="p-6 text-center">รูปเลิกงาน</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {records.length === 0 ? (
-                        <tr><td colSpan={4} className="p-16 text-center text-gray-300 font-bold italic">ไม่พบข้อมูลในวันนี้</td></tr>
+                        <tr><td colSpan={5} className="p-16 text-center text-gray-300 font-bold italic">ไม่พบข้อมูลในวันนี้</td></tr>
                       ) : (
                         records.map((r, i) => (
                           <tr key={i} className="hover:bg-blue-50/10 transition-colors group">
@@ -297,7 +318,14 @@ export default function LeaderPage() {
                               <span className="text-[10px] font-mono text-gray-400 block bg-gray-50 py-1 rounded-lg">📍 {r.location}</span>
                             </td>
                             <td className="p-6 text-center">
-                              <Image src={r.imageUrl} alt="Attendance" width={44} height={44} className="rounded-xl border-2 border-white shadow-md mx-auto unoptimized" unoptimized />
+                              <Image src={r.imageUrl} alt="CheckIn" width={44} height={44} className="rounded-xl border-2 border-white shadow-md mx-auto unoptimized" unoptimized />
+                            </td>
+                            <td className="p-6 text-center">
+                              {r.checkOutImageUrl ? (
+                                <Image src={r.checkOutImageUrl} alt="CheckOut" width={44} height={44} className="rounded-xl border-2 border-white shadow-md mx-auto unoptimized" unoptimized />
+                              ) : (
+                                <span className="text-[10px] text-gray-200 font-black uppercase tracking-tighter">No Photo</span>
+                              )}
                             </td>
                           </tr>
                         ))
@@ -308,7 +336,6 @@ export default function LeaderPage() {
               </div>
             </div>
 
-            {/* RIGHT: PENDING APPROVALS (1 Col) */}
             <div className="lg:col-span-1 space-y-8">
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-50">
                 <div className="flex items-center gap-3 mb-8">
@@ -331,20 +358,17 @@ export default function LeaderPage() {
                           </div>
                           {l.status === "รออนุมัติ" && <span className="w-2 h-2 bg-amber-400 rounded-full animate-ping"></span>}
                         </div>
-                        
                         <p className="text-xs text-gray-500 font-medium italic mb-6 line-clamp-2">"{l.reason}"</p>
-                        
                         <div className="flex flex-col gap-2">
                           <div className="flex justify-between items-center text-[10px] font-mono text-gray-400 mb-2">
                             <span>{l.start}</span>
                             <span>→</span>
                             <span>{l.end}</span>
                           </div>
-                          
                           {l.status === "รออนุมัติ" ? (
                             <div className="grid grid-cols-2 gap-2">
-                              <button onClick={() => handleApprove(l.id)} className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black py-2.5 rounded-xl transition-all uppercase tracking-widest">Approve</button>
-                              <button onClick={() => handleReject(l.id)} className="bg-gray-100 hover:bg-rose-50 hover:text-rose-500 text-gray-400 text-[10px] font-black py-2.5 rounded-xl transition-all uppercase">Reject</button>
+                              <button onClick={() => handleApprove(l.id)} className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black py-2.5 rounded-xl transition-all uppercase tracking-widest">อนุมัติ</button>
+                              <button onClick={() => handleReject(l.id)} className="bg-gray-100 hover:bg-rose-50 hover:text-rose-500 text-gray-400 text-[10px] font-black py-2.5 rounded-xl transition-all uppercase">ปฏิเสธ</button>
                             </div>
                           ) : (
                             <div className={`text-center py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${l.status === "อนุมัติแล้ว" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
@@ -361,14 +385,13 @@ export default function LeaderPage() {
           </div>
         )}
 
-        {/* 📝 LEAVE FORM SECTION (Consistent Theme) */}
+        {/* 📝 LEAVE FORM SECTION */}
         {showLeaveForm && (
           <div className="max-w-2xl mx-auto py-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
             <div className="text-center mb-12">
               <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-2">ยื่นเรื่อง <span className="text-indigo-600">ลางาน</span></h2>
               <div className="w-12 h-1.5 bg-indigo-600 mx-auto rounded-full"></div>
             </div>
-
             {leaveSuccess ? (
               <div className="p-12 bg-green-50 border border-green-100 text-green-700 rounded-[3rem] text-center space-y-4 shadow-xl">
                 <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-4xl">✓</div>
@@ -381,7 +404,6 @@ export default function LeaderPage() {
                     <div className="w-2 h-2 bg-red-600 rounded-full animate-ping"></div> {leaveError}
                   </div>
                 )}
-
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">ประเภทการลา</label>
                   <select
@@ -395,7 +417,6 @@ export default function LeaderPage() {
                     <option value="ลาพักร้อน">ลาพักร้อน (ANNUAL)</option>
                   </select>
                 </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-3">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">เริ่มต้น</label>
@@ -406,7 +427,6 @@ export default function LeaderPage() {
                     <input type="date" className="w-full bg-white border-2 border-transparent p-5 rounded-[1.5rem] font-bold text-gray-700 focus:border-indigo-500 outline-none shadow-sm" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} />
                   </div>
                 </div>
-
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">เหตุผลความจำเป็น</label>
                   <textarea
@@ -416,7 +436,6 @@ export default function LeaderPage() {
                     onChange={e => setLeaveReason(e.target.value)}
                   />
                 </div>
-
                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
                   <button onClick={submitLeave} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 py-6 rounded-[1.5rem] transition-all shadow-xl active:scale-95 uppercase tracking-tighter">ยืนยันการลา</button>
                   <button onClick={() => setShowLeaveForm(false)} className="flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black px-8 py-6 rounded-[1.5rem] transition-all hover:bg-gray-50 active:scale-95 uppercase tracking-tighter">ยกเลิก</button>
@@ -428,15 +447,16 @@ export default function LeaderPage() {
 
       </main>
 
-      {/* 📸 MODAL CAMERA (Biometric Style) */}
+      {/* 📸 MODAL CAMERA */}
       {showCamera && (
         <div className="fixed inset-0 bg-slate-900/98 flex flex-col items-center justify-center z-[999] p-6 backdrop-blur-2xl">
           <div className="w-full max-w-sm relative">
             <div className="absolute -top-12 left-0 w-full flex justify-between px-2">
-              <span className="text-blue-400 text-[10px] font-black tracking-widest uppercase animate-pulse">Scanning Admin Identity</span>
-              <span className="text-white/20 text-[10px] font-mono tracking-tighter">ID_VERIFY_SECURE_99</span>
+              <span className="text-blue-400 text-[10px] font-black tracking-widest uppercase animate-pulse">
+                {isCheckingOut ? "Scanning Out Identity" : "Scanning Admin Identity"}
+              </span>
+              <span className="text-white/20 text-[10px] font-mono tracking-tighter">SECURE_VERIFY_V3</span>
             </div>
-            
             <div className="relative rounded-[3.5rem] overflow-hidden border-[10px] border-white/5 shadow-2xl bg-black aspect-[3/4]">
               <video ref={videoRef} playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
               <div className="absolute inset-0 pointer-events-none">
@@ -447,7 +467,6 @@ export default function LeaderPage() {
                 </div>
               </div>
             </div>
-
             <div className="mt-16 flex flex-col items-center gap-10">
               {readyToCapture && (
                 <button

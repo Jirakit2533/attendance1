@@ -27,7 +27,7 @@ export default function LoginPage() {
       router.push("/administator");
     } else if (username.toLowerCase() === "provider") {
       localStorage.setItem("user", JSON.stringify({ role: "admin", username }));
-      router.push("/provider");
+      router.push("/superAdmin");
     } else if (username === "leader") {
       localStorage.setItem("user", JSON.stringify({ role: "leader", username }));
       router.push("/leader");

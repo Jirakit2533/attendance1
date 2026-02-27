@@ -10,6 +10,7 @@ type RecordItem = {
   checkOut: string;
   location: string;
   imageUrl: string;
+  checkOutImageUrl?: string; // เพิ่มฟิลด์รูปเลิกงาน
   position: string;
 };
 
@@ -31,6 +32,7 @@ export default function EmployeePage() {
   const [checkedIn, setCheckedIn] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false); // เช็คว่าเป็นการเลิกงานหรือไม่
   const [readyToCapture, setReadyToCapture] = useState(false);
 
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -44,8 +46,8 @@ export default function EmployeePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  /* ---------------- CHECK IN LOGIC ---------------- */
-  const handleCheckIn = async () => {
+  /* ---------------- CAMERA LOGIC (SHARED) ---------------- */
+  const startCamera = async () => {
     try {
       setCheckingIn(true);
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -66,41 +68,56 @@ export default function EmployeePage() {
     }
   };
 
+  const handleCheckIn = () => {
+    setIsCheckingOut(false);
+    startCamera();
+  };
+
+  const handleCheckOut = () => {
+    setIsCheckingOut(true);
+    startCamera();
+  };
+
   const handleCapture = async () => {
     if (!videoRef.current || !streamRef.current) return;
     const canvas = document.createElement("canvas");
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     canvas.getContext("2d")!.drawImage(videoRef.current, 0, 0);
+    const capturedImg = canvas.toDataURL("image/png");
+
     streamRef.current.getTracks().forEach(t => t.stop());
     setShowCamera(false);
     setReadyToCapture(false);
+
     const pos = await new Promise<GeolocationPosition>((res, rej) =>
       navigator.geolocation.getCurrentPosition(res, rej)
     );
     const now = new Date();
-    setRecords(prev => [
-      {
-        date: now.toLocaleDateString('th-TH'),
-        checkIn: now.toLocaleTimeString('th-TH'),
-        checkOut: "-",
-        location: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
-        imageUrl: canvas.toDataURL("image/png"),
-        position: "ฝ่ายไอที / พัฒนาซอฟต์แวร์",
-      },
-      ...prev,
-    ]);
-    setCheckedIn(true);
-  };
 
-  const handleCheckOut = () => {
-    const now = new Date();
-    setCheckedIn(false);
-    setRecords(prev =>
-      prev.map((r, i) =>
-        i === 0 ? { ...r, checkOut: now.toLocaleTimeString('th-TH') } : r
-      )
-    );
+    if (isCheckingOut) {
+      // กรณีลงชื่อเลิกงาน
+      setRecords(prev =>
+        prev.map((r, i) =>
+          i === 0 ? { ...r, checkOut: now.toLocaleTimeString('th-TH'), checkOutImageUrl: capturedImg } : r
+        )
+      );
+      setCheckedIn(false);
+    } else {
+      // กรณีลงชื่อเข้างาน
+      setRecords(prev => [
+        {
+          date: now.toLocaleDateString('th-TH'),
+          checkIn: now.toLocaleTimeString('th-TH'),
+          checkOut: "-",
+          location: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
+          imageUrl: capturedImg,
+          position: "ฝ่ายไอที / พัฒนาซอฟต์แวร์",
+        },
+        ...prev,
+      ]);
+      setCheckedIn(true);
+    }
   };
 
   const handleLogout = () => {
@@ -110,7 +127,7 @@ export default function EmployeePage() {
     router.push("/login");
   };
 
-  /* ---------------- LEAVE LOGIC (With Validation) ---------------- */
+  /* ---------------- LEAVE LOGIC ---------------- */
   const leaveDays = useMemo(() => {
     if (!leaveStart || !leaveEnd) return 0;
     const start = new Date(leaveStart);
@@ -127,7 +144,6 @@ export default function EmployeePage() {
     const start = new Date(leaveStart);
     const end = new Date(leaveEnd);
 
-    // 🚩 Validation Logic
     if (!leaveType || !leaveStart || !leaveEnd || !leaveReason) {
       setLeaveError("กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง");
       return;
@@ -166,7 +182,7 @@ export default function EmployeePage() {
   return (
     <div className="min-h-screen bg-[#f8fafc] transition-all duration-300">
       
-      {/* 🟢 TOP NAVIGATION & BRAND LOGO */}
+      {/* 🟢 TOP NAVIGATION */}
       <nav className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur-xl border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4 group">
@@ -242,9 +258,14 @@ export default function EmployeePage() {
             ) : (
               <button
                 onClick={handleCheckOut}
-                className="w-full bg-slate-900 hover:bg-black text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
+                disabled={checkingIn}
+                className="w-full bg-slate-900 hover:bg-black text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 group"
               >
-                ลงชื่อเลิกงาน
+                <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {checkingIn ? "กำลังเรียกกล้อง..." : "ลงชื่อเลิกงาน"}
               </button>
             )}
             <button
@@ -269,35 +290,43 @@ export default function EmployeePage() {
                 </div>
 
                 <div className="overflow-x-auto rounded-[2rem] border border-gray-50">
-                  <table className="w-full text-sm min-w-[700px]">
+                  <table className="w-full text-sm min-w-[800px]">
                     <thead className="bg-gray-50/50 text-gray-400 uppercase text-[10px] font-black tracking-widest">
                       <tr>
                         <th className="p-6 text-left">วันที่</th>
-                        <th className="p-6 text-left">เวลาเข้า</th>
-                        <th className="p-6 text-left">เวลาออก</th>
+                        <th className="p-6 text-left">เวลาเข้า / รูปถ่าย</th>
+                        <th className="p-6 text-left">เวลาออก / รูปถ่าย</th>
                         <th className="p-6 text-left">แผนก / ตำแหน่ง / สถานที่</th>
-                        <th className="p-6 text-center">หลักฐาน</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {records.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="p-20 text-center text-gray-300 font-bold italic">ยังไม่มีข้อมูลการเข้างานในระบบ</td>
+                          <td colSpan={4} className="p-20 text-center text-gray-300 font-bold italic">ยังไม่มีข้อมูลการเข้างานในระบบ</td>
                         </tr>
                       )}
                       {records.map((r, i) => (
                         <tr key={i} className="hover:bg-blue-50/10 transition-colors group">
                           <td className="p-6 font-bold text-gray-800">{r.date}</td>
-                          <td className="p-6"><span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl">{r.checkIn}</span></td>
-                          <td className="p-6"><span className="text-gray-400 font-black">{r.checkOut}</span></td>
+                          <td className="p-6">
+                            <div className="flex items-center gap-3">
+                              <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl">{r.checkIn}</span>
+                              <Image src={r.imageUrl} alt="Check In" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm unoptimized" unoptimized />
+                            </div>
+                          </td>
+                          <td className="p-6">
+                            <div className="flex items-center gap-3">
+                              <span className={r.checkOut === "-" ? "text-gray-300 font-black" : "text-slate-900 font-black bg-slate-100 px-3 py-1.5 rounded-xl"}>{r.checkOut}</span>
+                              {r.checkOutImageUrl && (
+                                <Image src={r.checkOutImageUrl} alt="Check Out" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm unoptimized" unoptimized />
+                              )}
+                            </div>
+                          </td>
                           <td className="p-6">
                             <div className="flex flex-col">
                                <span className="text-xs font-black text-gray-700">{r.position}</span>
                                <span className="text-[10px] font-mono text-gray-400">📍 {r.location}</span>
                             </div>
-                          </td>
-                          <td className="p-6 text-center">
-                              <Image src={r.imageUrl} alt="Attendance" width={48} height={48} className="rounded-2xl border-2 border-white shadow-md group-hover:scale-125 transition-transform mx-auto unoptimized" unoptimized />
                           </td>
                         </tr>
                       ))}
@@ -306,6 +335,7 @@ export default function EmployeePage() {
                 </div>
               </div>
 
+              {/* Leave History Section */}
               <div className="pt-10 border-t border-gray-50">
                 <div className="flex items-center gap-3 mb-8">
                     <div className="w-2 h-8 bg-indigo-600 rounded-full"></div>
@@ -342,7 +372,7 @@ export default function EmployeePage() {
             </>
           )}
 
-          {/* 📝 LEAVE FORM WITH VALIDATION */}
+          {/* Leave Form */}
           {showLeaveForm && (
             <div className="max-w-2xl mx-auto py-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
               <div className="text-center mb-12">
@@ -416,13 +446,15 @@ export default function EmployeePage() {
         </div>
       </main>
 
-      {/* 📸 MODAL CAMERA */}
+      {/* 📸 MODAL CAMERA (SHARED) */}
       {showCamera && (
         <div className="fixed inset-0 bg-slate-900/98 flex flex-col items-center justify-center z-[999] p-6 backdrop-blur-2xl">
           <div className="w-full max-w-sm relative">
             <div className="absolute -top-12 left-0 w-full flex justify-between px-2">
-              <span className="text-blue-400 text-[10px] font-black tracking-widest uppercase animate-pulse">กำลังสแกนข้อมูลยืนยันตัวตน</span>
-              <span className="text-white/20 text-[10px] font-mono tracking-tighter">SRS_ระบบความปลอดภัย_99</span>
+              <span className="text-blue-400 text-[10px] font-black tracking-widest uppercase animate-pulse">
+                {isCheckingOut ? "สแกนยืนยันการเลิกงาน" : "สแกนยืนยันการเข้างาน"}
+              </span>
+              <span className="text-white/20 text-[10px] font-mono tracking-tighter">SRS_SECURITY_v2</span>
             </div>
             
             <div className="relative rounded-[3.5rem] overflow-hidden border-[10px] border-white/5 shadow-2xl bg-black aspect-[3/4]">
@@ -430,7 +462,7 @@ export default function EmployeePage() {
               <div className="absolute inset-0 pointer-events-none">
                 <div className="w-full h-full border-[30px] border-black/20 rounded-[3rem]">
                    <div className="w-full h-full border-2 border-white/10 rounded-[2rem] relative">
-                      <div className="absolute top-0 left-0 w-full h-[2px] bg-blue-400 shadow-[0_0_20px_#60a5fa] animate-scan"></div>
+                      <div className={`absolute top-0 left-0 w-full h-[2px] ${isCheckingOut ? 'bg-amber-400 shadow-[0_0_20px_#fbbf24]' : 'bg-blue-400 shadow-[0_0_20px_#60a5fa]'} animate-scan`}></div>
                    </div>
                 </div>
               </div>
@@ -442,7 +474,7 @@ export default function EmployeePage() {
                   onClick={handleCapture}
                   className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(255,255,255,0.2)] active:scale-75 transition-all group"
                 >
-                  <div className="w-20 h-20 border-4 border-blue-600 rounded-full flex items-center justify-center">
+                  <div className={`w-20 h-20 border-4 ${isCheckingOut ? 'border-amber-500' : 'border-blue-600'} rounded-full flex items-center justify-center`}>
                     <div className="w-14 h-14 bg-slate-900 rounded-full"></div>
                   </div>
                 </button>
@@ -465,9 +497,7 @@ export default function EmployeePage() {
           80% { opacity: 1; }
           100% { top: 90%; opacity: 0; }
         }
-        .animate-scan {
-          animation: scan 3s ease-in-out infinite;
-        }
+        .animate-scan { animation: scan 3s ease-in-out infinite; }
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           25% { transform: translateX(-5px); }
