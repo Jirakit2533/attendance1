@@ -1,40 +1,35 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { User, Lock, Eye, EyeOff, ShieldCheck } from "lucide-react"; // ลงเพิ่มด้วย npm install lucide-react
+import { useState, useTransition } from "react";
+import { User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
+import { loginAction } from "@/server/auth";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
 
-  const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
 
-    const form = e.currentTarget;
-    const username = (form.username as HTMLInputElement).value;
-    const password = (form.password as HTMLInputElement).value;
+    const formData = new FormData(e.currentTarget);
 
-    if (password !== "1234") {
-      setError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
-      return;
-    }
-
-    if (username === "admin") {
-      localStorage.setItem("user", JSON.stringify({ role: "admin", username }));
-      router.push("/administator");
-    } else if (username.toLowerCase() === "provider") {
-      localStorage.setItem("user", JSON.stringify({ role: "admin", username }));
-      router.push("/superAdmin");
-    } else if (username === "leader") {
-      localStorage.setItem("user", JSON.stringify({ role: "leader", username }));
-      router.push("/leader");
-    } else {
-      localStorage.setItem("user", JSON.stringify({ role: "employee", username }));
-      router.push("/employee");
-    }
+    startTransition(async () => {
+      try {
+        const result = await loginAction(formData);
+        
+        if (result.success) {
+          // ✅ ใช้ window.location.href เพื่อล้างสถานะและให้ Middleware ตรวจสอบสิทธิ์ใหม่ทันที
+          // หมายเหตุ: คุกกี้ถูกเซ็ตจาก Server Action เรียบร้อยแล้ว ไม่จำเป็นต้องเซ็ตซ้ำที่นี่ครับ
+          window.location.href = result.redirect;
+        } else {
+          setError(result.message || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+        }
+      } catch (err) {
+        setError("เกิดข้อผิดพลาดในการเชื่อมต่อระบบ");
+      }
+    });
   };
 
   return (
@@ -47,10 +42,10 @@ export default function LoginPage() {
         <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white p-8">
           
           <header className="text-center mb-8">
-            {/* LOGO SPACE: ใส่ path โลโก้ของคุณที่นี่ */}
             <div className="flex justify-center mb-4">
-              <div className="w-20 h-20 bg-gradient-to-tr from-white-200 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
-                <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
+              <div className="w-20 h-20 bg-gradient-to-tr from-white to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 overflow-hidden">
+                {/* ใส่โลโก้ของคุณตรงนี้ */}
+                <img src="/logo.png" alt="Logo" className="w-full h-full object-contain p-2" />
               </div>
             </div>
             <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">
@@ -62,7 +57,6 @@ export default function LoginPage() {
           </header>
 
           <form onSubmit={handleLogin} className="space-y-5">
-            {/* Username */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-gray-600 ml-1 uppercase">
                 ชื่อผู้ใช้
@@ -72,17 +66,16 @@ export default function LoginPage() {
                   <User size={18} />
                 </span>
                 <input
-                  id="username"
                   name="username"
                   type="text"
                   required
+                  disabled={isPending}
                   placeholder="Username"
-                  className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-10 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-gray-700"
+                  className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-10 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-gray-700 disabled:opacity-50"
                 />
               </div>
             </div>
 
-            {/* Password */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-gray-600 ml-1 uppercase">
                 รหัสผ่าน
@@ -92,12 +85,12 @@ export default function LoginPage() {
                   <Lock size={18} />
                 </span>
                 <input
-                  id="password"
                   name="password"
                   type={showPassword ? "text" : "password"}
                   required
+                  disabled={isPending}
                   placeholder="••••••••"
-                  className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-10 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-gray-700"
+                  className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-10 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-gray-700 disabled:opacity-50"
                 />
                 <button
                   type="button"
@@ -110,21 +103,29 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="bg-red-50 text-red-600 text-xs py-2.5 px-4 rounded-lg text-center font-medium animate-pulse">
+              <div className="bg-red-50 text-red-600 text-[11px] py-2.5 px-4 rounded-lg text-center font-bold animate-pulse">
                 {error}
               </div>
             )}
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:shadow-blue-300 hover:scale-[1.02] active:scale-[0.98] transition-all mt-2"
+              disabled={isPending}
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:shadow-blue-300 hover:scale-[1.02] active:scale-[0.98] transition-all mt-2 flex items-center justify-center gap-2"
             >
-              ลงชื่อเข้าใช้งาน
+              {isPending ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  กำลังตรวจสอบ...
+                </>
+              ) : (
+                "ลงชื่อเข้าใช้งาน"
+              )}
             </button>
           </form>
 
-          <footer className="mt-8 text-center">
-            <p className="text-xs text-gray-400">
+          <footer className="mt-8 text-center border-t border-gray-50 pt-6">
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
               © {new Date().getFullYear()} Siam Royal Group. All rights reserved.
             </p>
           </footer>

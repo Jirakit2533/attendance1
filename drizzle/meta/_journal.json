@@ -15,6 +15,41 @@
       "when": 1772253839144,
       "tag": "0001_motionless_darwin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772259282812,
+      "tag": "0002_safe_puff_adder",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772293339893,
+      "tag": "0003_blue_boomer",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772294192194,
+      "tag": "0004_lethal_black_tom",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772295010784,
+      "tag": "0005_peaceful_pepper_potts",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772296518865,
+      "tag": "0006_abandoned_human_robot",
+      "breakpoints": true
     }
   ]
 }
