@@ -8,101 +8,119 @@ import LeaderClientPage from "./leaderClientPage";
 export default async function LeaderPage() {
   const user = await getCurrentUser();
 
-  // ป้องกันคนที่ไม่ใช่ Leader เข้าถึง
+  // 1. ป้องกันคนที่ไม่ใช่ Leader หรือไม่มีข้อมูลสำคัญ
   if (!user || user.role !== "leader") {
     redirect("/login");
   }
 
-  // --- 1. ดึงประวัติการเข้างานของตัว Leader เอง ---
-  const myRecords = await db
-    .select()
-    .from(attendanceTable)
-    .where(eq(attendanceTable.user_id, user.id))
-    .orderBy(desc(attendanceTable.date));
+  // ป้องกัน Error SQL: ตรวจสอบว่ามีค่า site และ department หรือไม่
+  // หากไม่มีให้ส่งค่าว่างเป็น String เพื่อไม่ให้ Query พัง (หรือจะจัดการ Error ตามเหมาะสม)
+  const currentDept = user.department ?? "";
+  const currentSite = user.site_id ?? "";
 
-  // --- 2. ดึงคำขอลาของพนักงาน (เฉพาะแผนกเดียวกัน + ไซต์เดียวกัน + ไม่ใช่ตัวเอง) ---
-  const teamLeaveRequests = await db
-    .select({
-      id: leaveTable.id,
-      firstName: usersTable.firstName,
-      lastName: usersTable.lastName,
-      type: leaveTable.type,
-      startDate: leaveTable.startDate,
-      endDate: leaveTable.endDate,
-      reason: leaveTable.reason,
-      status: leaveTable.status,
-    })
-    .from(leaveTable)
-    .innerJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
-    .where(
-      and(
-        eq(usersTable.department, user.department), // แผนกเดียวกัน
-        eq(usersTable.site_id, user.site_id),       // ไซต์เดียวกัน
-        ne(usersTable.id, user.id),                 // ไม่เอาของตัวเอง
-        eq(leaveTable.status, "pending")            // เฉพาะที่รออนุมัติ
+  try {
+    // --- 2. ดึงประวัติการเข้างานของตัว Leader เอง ---
+    const myRecords = await db
+      .select()
+      .from(attendanceTable)
+      .where(eq(attendanceTable.user_id, user.id))
+      .orderBy(desc(attendanceTable.date));
+
+    // --- 3. ดึงคำขอลา (Leader + ทีม) ---
+    const allLeaveRequests = await db
+      .select({
+        id: leaveTable.id,
+        firstName: usersTable.firstName,
+        lastName: usersTable.lastName,
+        type: leaveTable.type,
+        startDate: leaveTable.startDate,
+        endDate: leaveTable.endDate,
+        reason: leaveTable.reason,
+        status: leaveTable.status,
+        fileUrl: leaveTable.fileUrl,
+      })
+      .from(leaveTable)
+      .innerJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
+      .where(
+        and(
+          eq(usersTable.department, currentDept),
+          eq(usersTable.site_id, currentSite)
+        )
       )
-    );
+      .orderBy(desc(leaveTable.startDate));
 
-  // --- 3. เพิ่มเติม: ดึงการเข้างานของพนักงานในทีม (แผนกเดียวกัน + ไซต์เดียวกัน) ---
-  const teamAttendance = await db
-    .select({
-      id: attendanceTable.id,
-      firstName: usersTable.firstName,
-      lastName: usersTable.lastName,
-      position: usersTable.position,
-      date: attendanceTable.date,
-      checkIn: attendanceTable.checkIn,
-      checkOut: attendanceTable.checkOut,
-      locationIn: attendanceTable.locationIn,
-      imageIn: attendanceTable.imageIn,
-    })
-    .from(attendanceTable)
-    .innerJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
-    .where(
-      and(
-        eq(usersTable.department, user.department), // แผนกเดียวกัน
-        eq(usersTable.site_id, user.site_id),       // ไซต์เดียวกัน
-        ne(usersTable.id, user.id)                  // ไม่เอาของตัวเอง
+    // --- 4. ดึงการเข้างานของพนักงานในทีม (ยกเว้นตัวเอง) ---
+    const teamAttendance = await db
+      .select({
+        id: attendanceTable.id,
+        firstName: usersTable.firstName,
+        lastName: usersTable.lastName,
+        positionId: usersTable.positionId,
+        date: attendanceTable.date,
+        checkIn: attendanceTable.checkIn,
+        checkOut: attendanceTable.checkOut,
+        locationIn: attendanceTable.locationIn,
+        locationOut: attendanceTable.locationOut,
+        imageIn: attendanceTable.imageIn,
+        imageOut: attendanceTable.imageOut,
+      })
+      .from(attendanceTable)
+      .innerJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
+      .where(
+        and(
+          eq(usersTable.department, currentDept),
+          eq(usersTable.site_id, currentSite),
+          ne(usersTable.id, user.id)
+        )
       )
-    )
-    .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn));
+      .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn));
 
-  // --- จัด Format ข้อมูลส่งไปให้ Client Component ---
-  
-  const formattedMyRecords = myRecords.map(r => ({
-    date: r.date,
-    checkIn: r.checkIn ? new Date(r.checkIn).toLocaleTimeString('th-TH') : "-",
-    checkOut: r.checkOut ? new Date(r.checkOut).toLocaleTimeString('th-TH') : "-",
-    location: r.locationIn,
-    imageUrl: r.imageIn,
-  }));
+    // --- 5. จัด Format ข้อมูล (เน้นความปลอดภัยของ Date และ String) ---
+    
+    const formattedMyRecords = (myRecords || []).map(r => ({
+      date: r.date,
+      checkIn: r.checkIn ? new Date(r.checkIn).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : "-",
+      checkOut: r.checkOut ? new Date(r.checkOut).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : "-",
+      location: r.locationIn || "-",
+      imageUrl: r.imageIn || null,
+      imageOutUrl: r.imageOut || null,
+    }));
 
-  const formattedTeamAttendance = teamAttendance.map(t => ({
-    name: `${t.firstName} ${t.lastName}`,
-    position: t.position,
-    date: t.date,
-    checkIn: t.checkIn ? new Date(t.checkIn).toLocaleTimeString('th-TH') : "-",
-    checkOut: t.checkOut ? new Date(t.checkOut).toLocaleTimeString('th-TH') : "-",
-    location: t.locationIn,
-    imageUrl: t.imageIn,
-  }));
+    const formattedTeamAttendance = (teamAttendance || []).map(t => ({
+      employeeName: `${t.firstName || ''} ${t.lastName || ''}`.trim(),
+      position: t.positionId || "พนักงาน",
+      date: t.date,
+      checkIn: t.checkIn ? new Date(t.checkIn).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : "-",
+      checkOut: t.checkOut ? new Date(t.checkOut).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : "-",
+      location: t.locationIn || "-",
+      locationOut: t.locationOut || "-",
+      imageUrl: t.imageIn || null,
+      imageOutUrl: t.imageOut || null,
+    }));
 
-  const formattedLeaves = teamLeaveRequests.map(l => ({
-    id: l.id,
-    employeeName: `${l.firstName} ${l.lastName}`,
-    type: l.type,
-    start: l.startDate,
-    end: l.endDate,
-    reason: l.reason,
-    status: "รออนุมัติ"
-  }));
+    const formattedLeaves = (allLeaveRequests || []).map(l => ({
+      id: l.id,
+      employeeName: `${l.firstName || ''} ${l.lastName || ''}`.trim(),
+      type: l.type || "ลากิจ",
+      startDate: l.startDate,
+      endDate: l.endDate,
+      reason: l.reason || "-",
+      status: l.status || "pending",
+      fileUrl: l.fileUrl || null,
+    }));
 
-  return (
-    <LeaderClientPage 
-      userProfile={user}
-      myRecords={formattedMyRecords}
-      teamAttendance={formattedTeamAttendance}
-      teamLeaves={formattedLeaves}
-    />
-  );
+    // ใช้ JSON Cleanse เพื่อป้องกันพวกค่า undefined หลุดไป Client
+    const finalProps = JSON.parse(JSON.stringify({
+      userProfile: user,
+      initialRecords: formattedMyRecords,
+      initialTeamAttendance: formattedTeamAttendance,
+      initialLeaves: formattedLeaves,
+    }));
+
+    return <LeaderClientPage {...finalProps} />;
+
+  } catch (error) {
+    console.error("Leader Page Error:", error);
+    return <div className="p-10 text-red-500 font-bold text-center">เกิดข้อผิดพลาดในการโหลดข้อมูลกรุณาลองใหม่อีกครั้ง</div>;
+  }
 }

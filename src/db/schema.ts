@@ -38,12 +38,25 @@ export const adminsTable = pgTable("admins", {
   deletedAt: timestamp("deleted_at"),
 });
 
+export const departmentsTable = pgTable("departments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 255 }).notNull(),
+  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
+  createdBy: uuid("created_by_id").references(() => usersTable.id),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updateBy: uuid("update_by_id").references(() => usersTable.id),
+  updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
+  deletedBy: uuid("deleted_by_id").references(() => usersTable.id),
+  deletedAt: timestamp("deleted_at"),
+});
+
 export const sitesTable = pgTable("sites", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull(),
   address: text("address"),
   coodinates: varchar("coordinates", { length: 255 }),
-  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
+  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
+  departmentsId: uuid("department_id").references(() => departmentsTable.id), 
   createdBy: uuid("created_by_id").references(() => usersTable.id),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updateBy: uuid("update_by_id").references(() => usersTable.id),
@@ -66,9 +79,11 @@ export const usersTable = pgTable("users", {
   firstName: varchar("first_name", { length: 255 }).notNull(),
   lastName: varchar("last_name", { length: 255 }).notNull(),
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
-  department: varchar("department", { length: 255 }).notNull(),
+  departmentId: uuid("department_id").references(() => departmentsTable.id),
   positionId: uuid("position_id").references(() => positionsTable.id), 
   site_id: uuid("site_id").references(() => sitesTable.id),
+  avatarUrl: text("avatar_url"), 
+  avatarId: text("avatar_id"),
   createdBy: uuid("created_by_id").references(() => usersTable.id),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updateBy: uuid("update_by_id").references(() => usersTable.id),
@@ -78,15 +93,18 @@ export const usersTable = pgTable("users", {
 });
 
 export const attendanceTable = pgTable("attendance", {
-    id: uuid("id").primaryKey().defaultRandom(),
-    user_id: uuid("user_id").references(() => usersTable.id),
-    date: date("date").notNull(),
-    checkIn: timestamp("check_in").notNull(),
-    imageIn: text("image_in").notNull(),
-    locationIn: varchar("location_in", { length: 255 }).notNull(),
-    checkOut: timestamp("check_out"),
-    imageOut: text("image_out"),
-    locationOut: varchar("location_out", { length: 255 }),
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").references(() => usersTable.id),
+  date: date("date").notNull(),
+  checkIn: timestamp("check_in").notNull(),
+  imageIn: text("image_in").notNull(),  
+  imageInId: text("image_in_id"), 
+  locationIn: varchar("location_in", { length: 255 }).notNull(),
+  checkOut: timestamp("check_out"),
+  imageOut: text("image_out"),
+  imageOutId: text("image_out_id"),
+  locationOut: varchar("location_out", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const leaveTable = pgTable("leave", {
@@ -96,12 +114,13 @@ export const leaveTable = pgTable("leave", {
     startDate: date("start_date").notNull(),
     endDate: date("end_date").notNull(),
     reason: text("reason").notNull(),
-    status: varchar("status", { length: 255 }).notNull().default("pending"),
+    status: leaveStatusEnum("status").notNull().default("pending"),
     approvedBy: uuid("approved_by_id").references(() => usersTable.id),
+    rejectedBy: uuid("rejected_by_id").references(() => usersTable.id),
+    fileUrl: text("file_url").notNull(),
+    fileId: text("file_id").notNull(), 
+    fileName: text("file_name").notNull(),
 });
-
-
-
 
 export const usersRelations = relations(usersTable, ({ one, many }) => ({
   site: one(sitesTable, {

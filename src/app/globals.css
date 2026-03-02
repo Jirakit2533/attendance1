@@ -1,1 +1,6 @@
 @import "tailwindcss";
+@media print {
+    body { background: white; }
+    .print\:hidden { display: none !important; }
+    /* ซ่อน scrollbar และส่วนเกิน */
+  }

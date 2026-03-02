@@ -1,46 +1,47 @@
 "use client";
+import Image from "next/image";
 
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { checkInAction, checkOutAction } from "@/server/attendance";
 import { logoutAction } from "@/server/auth"; 
-import { createLeaveRequest } from "@/server/leave";
+import { checkInAction, checkOutAction, createLeaveRequest } from "./actions";
 
-type RecordItem = {
-  date: string;
-  checkIn: string;
-  checkOut: string;
-  location: string;
-  imageUrl: string;
-  checkOutImageUrl?: string;
-  position: string;
-};
-
-type LeaveItem = {
-  type: string;
-  start: string;
-  end: string;
-  reason: string;
-  days: number;
-  status: string;
-};
+// --- เพิ่ม Component LoadingOverlay เหมือนหน้า Leader ---
+const LoadingOverlay = () => (
+  <div className="fixed inset-0 z-[9999] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
+    <div className="relative flex items-center justify-center">
+      <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="w-8 h-8 bg-indigo-600 rounded-lg animate-pulse"></div>
+      </div>
+    </div>
+    <p className="mt-4 text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] animate-pulse">กำลังดำเนินการ...</p>
+  </div>
+);
 
 interface Props {
   userProfile: any;
-  initialRecords: RecordItem[];
-  initialLeaves: LeaveItem[];
+  initialRecords: any[];
+  initialLeaves: any[];
 }
 
 export default function EmployeeClientPage({ userProfile, initialRecords, initialLeaves }: Props) {
   const router = useRouter();
 
-  const [records, setRecords] = useState<RecordItem[]>(initialRecords);
-  const [leaves, setLeaves] = useState<LeaveItem[]>(initialLeaves);
+  const [records, setRecords] = useState<any[]>(initialRecords);
+  const [leaves, setLeaves] = useState<any[]>(initialLeaves);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const [checkedIn, setCheckedIn] = useState(false);
+  // ✅ Sync ข้อมูลจาก Props เมื่อมีการสั่ง router.refresh()
+  useEffect(() => {
+    setRecords(initialRecords);
+  }, [initialRecords]);
+
+  useEffect(() => {
+    setLeaves(initialLeaves);
+  }, [initialLeaves]);
+
   const [showCamera, setShowCamera] = useState(false);
-  const [checkingIn, setCheckingIn] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [readyToCapture, setReadyToCapture] = useState(false);
 
@@ -55,25 +56,33 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  useEffect(() => {
-    if (records.length > 0) {
-      const latest = records[0];
-      if (latest.checkOut === "-" || !latest.checkOut) {
-        setCheckedIn(true);
-      }
-    }
+  // ✅ คำนวณสถานะปุ่มจากข้อมูลปัจจุบัน (รองรับ Timezone ไทย)
+  const todayStatus = useMemo(() => {
+    const now = new Date();
+    const todayStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(now);
+    
+    const todayRecord = records.find((r: any) => r.date === todayStr);
+    return {
+      hasCheckedIn: !!todayRecord?.checkIn && todayRecord.checkIn !== "-",
+      hasCheckedOut: !!todayRecord?.checkOut && todayRecord.checkOut !== "-" && todayRecord.checkOut !== null,
+      record: todayRecord
+    };
   }, [records]);
 
+  /* ---------------- CAMERA LOGIC ---------------- */
   const startCamera = async () => {
     try {
-      setCheckingIn(true);
+      setIsProcessing(true);
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" },
         audio: false,
       });
       streamRef.current = stream;
       setShowCamera(true);
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 300));
       if (!videoRef.current) throw new Error("video not ready");
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
@@ -81,15 +90,25 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
     } catch (err) {
       alert("ไม่สามารถเข้าถึงกล้องได้ กรุณาตรวจสอบสิทธิ์การใช้งาน");
     } finally {
-      setCheckingIn(false);
+      setIsProcessing(false);
     }
   };
 
-  const handleCheckIn = () => { setIsCheckingOut(false); startCamera(); };
-  const handleCheckOut = () => { setIsCheckingOut(true); startCamera(); };
+/* ---------------- HANDLERS ---------------- */
+const handleCheckIn = () => {
+  setIsCheckingOut(false); 
+  startCamera(); 
+};
+
+const handleCheckOut = () => {
+  setIsCheckingOut(true);
+  startCamera();   
+};
 
   const handleCapture = async () => {
     if (!videoRef.current || !streamRef.current) return;
+    setIsProcessing(true);
+    
     const canvas = document.createElement("canvas");
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
@@ -100,55 +119,47 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
     setShowCamera(false);
     setReadyToCapture(false);
 
-    const pos = await new Promise<GeolocationPosition>((res, rej) =>
-      navigator.geolocation.getCurrentPosition(res, rej)
-    );
-    const locationStr = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
-
     try {
+      const pos = await new Promise<GeolocationPosition>((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 })
+      );
+      const locationStr = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+
       if (isCheckingOut) {
         const res = await checkOutAction(userProfile.id, capturedImg, locationStr);
         if (res.success) {
-          setRecords(prev => prev.map((r, i) => i === 0 ? { ...r, checkOut: new Date().toLocaleTimeString('th-TH'), checkOutImageUrl: capturedImg } : r));
-          setCheckedIn(false);
+          alert("ลงชื่อเลิกงานสำเร็จ");
+          router.refresh();
+        } else {
+          alert(res.error || "บันทึกไม่สำเร็จ");
         }
       } else {
         const res = await checkInAction(userProfile.id, capturedImg, locationStr);
         if (res.success) {
-          const newRecord: RecordItem = {
-            date: new Date().toLocaleDateString('th-TH'),
-            checkIn: new Date().toLocaleTimeString('th-TH'),
-            checkOut: "-",
-            location: locationStr,
-            imageUrl: capturedImg,
-            position: userProfile.position,
-          };
-          setRecords(prev => [newRecord, ...prev]);
-          setCheckedIn(true);
+          alert("ลงชื่อเข้างานสำเร็จ");
+          router.refresh();
+        } else {
+          alert(res.error || "บันทึกไม่สำเร็จ");
         }
       }
     } catch (error) {
-      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลหรือพิกัดพิกัด");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
+  /* ---------------- OTHER ACTIONS ---------------- */
   const handleLogout = async () => {
     if(!confirm("ยืนยันการออกจากระบบ?")) return;
-
-    // ลบคุกกี้ฝั่ง Client (สำหรับตัวที่ไม่ได้เป็น HttpOnly)
-    document.cookie = "session_user_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie = "user_role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-
+    setIsProcessing(true);
     try {
-        // สำคัญมาก: เรียก Server Action เพื่อลบคุกกี้ตัวที่เป็น HttpOnly
-        await logoutAction(); 
-        
-        // ใช้ href เพื่อให้ Browser รีโหลดและ Middleware ทำงานใหม่
-        window.location.href = "/login";
+      await logoutAction(); 
+      window.location.href = "/login";
     } catch (error) {
-        window.location.href = "/login";
+      window.location.href = "/login";
     }
-};
+  };
 
   const leaveDays = useMemo(() => {
     if (!leaveStart || !leaveEnd) return 0;
@@ -164,25 +175,31 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
       setLeaveError("กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง");
       return;
     }
-    const res = await createLeaveRequest({
-      userId: userProfile.id,
-      type: leaveType,
-      start: leaveStart,
-      end: leaveEnd,
-      reason: leaveReason,
-      days: leaveDays,
-    });
-    if (res.success) {
-      setLeaves(prev => [{ type: leaveType, start: leaveStart, end: leaveEnd, reason: leaveReason, days: leaveDays, status: "รออนุมัติ" }, ...prev]);
-      setLeaveSuccess(true);
-      setTimeout(() => {
-        setLeaveSuccess(false);
-        setShowLeaveForm(false);
-        setLeaveType(""); setLeaveStart(""); setLeaveEnd(""); setLeaveReason("");
-      }, 2500);
+    setIsProcessing(true);
+    try {
+      const res = await createLeaveRequest({
+        userId: userProfile.id,
+        type: leaveType,
+        start: leaveStart,
+        end: leaveEnd,
+        reason: leaveReason,
+        days: leaveDays,
+      });
+      if (res.success) {
+        setLeaveSuccess(true);
+        router.refresh();
+        setTimeout(() => {
+          setLeaveSuccess(false);
+          setShowLeaveForm(false);
+          setLeaveType(""); setLeaveStart(""); setLeaveEnd(""); setLeaveReason("");
+        }, 2000);
+      }
+    } catch (err) {
+      setLeaveError("เกิดข้อผิดพลาดในการส่งใบลา");
+    } finally {
+      setIsProcessing(false);
     }
   };
-
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {/* 🟢 TOP NAVIGATION */}
@@ -203,7 +220,6 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Online
               </span>
             </div>
-            {/* ปุ่ม Logout ที่หายไป ใส่กลับมาให้แล้วครับ */}
             <button 
               onClick={handleLogout}
               className="p-3 bg-red-50 hover:bg-red-500 text-red-500 hover:text-white rounded-2xl transition-all duration-300 group"
@@ -222,7 +238,6 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm mb-10 flex flex-col md:flex-row items-center md:items-start gap-8 border border-white">
           <div className="relative">
             <div className="absolute inset-0 bg-blue-500 rounded-full blur-2xl opacity-10"></div>
-            {/* ใส่ unoptimized ป้องกัน Error 400 จาก Next Image */}
             <Image src="/profile.png" alt="Profile" width={140} height={140} className="rounded-[2.5rem] border-4 border-white shadow-2xl w-32 h-32 md:w-36 md:h-36 object-cover relative z-10" unoptimized />
             <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center z-20">
               <div className="w-4 h-4 bg-green-500 rounded-full animate-pulse"></div>
@@ -238,16 +253,22 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
             </div>
           </div>
           <div className="flex flex-col gap-3 w-full md:w-auto min-w-[240px]">
-            {!checkedIn ? (
-              <button onClick={handleCheckIn} disabled={checkingIn} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3">
+            {/* ปรับเงื่อนไขปุ่มให้ใช้ todayStatus เพื่อความแม่นยำของ Timezone */}
+            {!todayStatus.hasCheckedIn ? (
+              <button onClick={handleCheckIn} disabled={isProcessing} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                {checkingIn ? "กำลังเรียกกล้อง..." : "ลงชื่อเข้าทำงาน"}
+                {isProcessing ? "กำลังประมวลผล..." : "ลงชื่อเข้าทำงาน"}
+              </button>
+            ) : !todayStatus.hasCheckedOut ? (
+              <button onClick={handleCheckOut} disabled={isProcessing} className="w-full bg-slate-900 hover:bg-black text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                {isProcessing ? "กำลังประมวลผล..." : "ลงชื่อเลิกงาน"}
               </button>
             ) : (
-              <button onClick={handleCheckOut} disabled={checkingIn} className="w-full bg-slate-900 hover:bg-black text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                {checkingIn ? "กำลังเรียกกล้อง..." : "ลงชื่อเลิกงาน"}
-              </button>
+              <div className="w-full bg-green-50 text-green-600 font-black px-8 py-5 rounded-[1.5rem] text-center border border-green-100 flex items-center justify-center gap-2">
+                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                บันทึกเวลาครบแล้ววันนี้
+              </div>
             )}
             <button onClick={() => setShowLeaveForm(true)} className="w-full bg-white border-2 border-gray-100 hover:border-blue-600 hover:text-blue-600 text-gray-500 font-black px-8 py-5 rounded-[1.5rem] transition-all active:scale-95 flex items-center justify-center gap-3">ขอลางาน</button>
           </div>
@@ -271,7 +292,7 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
                         <th className="p-6 text-left">วันที่</th>
                         <th className="p-6 text-left">เวลาเข้า / รูปถ่าย</th>
                         <th className="p-6 text-left">เวลาออก / รูปถ่าย</th>
-                        <th className="p-6 text-left">แผนก / ตำแหน่ง / สถานที่</th>
+                        <th className="p-6 text-left">แผนก / ตำแหน่ง / เขตรับผิดชอบ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -284,13 +305,13 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
                             <td className="p-6">
                               <div className="flex items-center gap-3">
                                 <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl">{r.checkIn}</span>
-                                <Image src={r.imageUrl} alt="In" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm" unoptimized />
+                                {r.imageUrl && <Image src={r.imageUrl} alt="In" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />}
                               </div>
                             </td>
                             <td className="p-6">
                               <div className="flex items-center gap-3">
                                 <span className={r.checkOut === "-" ? "text-gray-300 font-black" : "text-slate-900 font-black bg-slate-100 px-3 py-1.5 rounded-xl"}>{r.checkOut}</span>
-                                {r.checkOutImageUrl && <Image src={r.checkOutImageUrl} alt="Out" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm" unoptimized />}
+                                {r.checkOutImageUrl && <Image src={r.checkOutImageUrl} alt="Out" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />}
                               </div>
                             </td>
                             <td className="p-6">
@@ -324,7 +345,13 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
                             <p className="font-black text-gray-900 text-lg uppercase tracking-tight">{l.type}</p>
                             <p className="text-xs font-bold text-indigo-500 mt-1">{l.start} ถึง {l.end}</p>
                           </div>
-                          <span className="text-[9px] bg-amber-50 text-amber-600 px-4 py-2 rounded-full font-black border border-amber-100 uppercase tracking-widest">{l.status}</span>
+                          <span className={`text-[9px] px-4 py-2 rounded-full font-black border uppercase tracking-widest ${
+                            l.status === 'อนุมัติแล้ว' ? 'bg-green-50 text-green-600 border-green-100' :
+                            l.status === 'ปฏิเสธ' ? 'bg-red-50 text-red-600 border-red-100' :
+                            'bg-amber-50 text-amber-600 border-amber-100'
+                          }`}>
+                            {l.status}
+                          </span>
                         </div>
                         <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 text-sm text-gray-600 font-medium italic">{l.reason}</div>
                       </div>
@@ -375,7 +402,9 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
                     <textarea className="w-full bg-white p-5 rounded-[1.5rem] font-medium text-gray-700 outline-none shadow-sm min-h-[160px] resize-none" placeholder="ระบุเหตุผล..." value={leaveReason} onChange={e => setLeaveReason(e.target.value)} />
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                    <button onClick={submitLeave} className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-6 rounded-[1.5rem] shadow-xl active:scale-95 transition-all">ยืนยัน</button>
+                    <button onClick={submitLeave} disabled={isProcessing} className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-6 rounded-[1.5rem] shadow-xl active:scale-95 transition-all disabled:opacity-50">
+                      {isProcessing ? "กำลังส่ง..." : "ยืนยัน"}
+                    </button>
                     <button onClick={() => setShowLeaveForm(false)} className="flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black px-8 py-6 rounded-[1.5rem] hover:bg-gray-50 active:scale-95 transition-all">ยกเลิก</button>
                   </div>
                 </div>
@@ -388,27 +417,36 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
       {/* 📸 MODAL CAMERA */}
       {showCamera && (
         <div className="fixed inset-0 bg-slate-900/98 flex flex-col items-center justify-center z-[999] p-6 backdrop-blur-2xl">
-          <div className="w-full max-w-sm relative">
-            <div className="absolute -top-12 left-0 w-full flex justify-between px-2 text-blue-400 text-[10px] font-black tracking-widest uppercase animate-pulse">
-              {isCheckingOut ? "สแกนยืนยันการเลิกงาน" : "สแกนยืนยันการเข้างาน"}
+          <div className="w-full max-w-[320px] relative">
+            <div className="absolute -top-12 left-0 w-full flex justify-between px-2">
+              <span className="text-blue-400 text-[10px] font-black tracking-widest uppercase animate-pulse">Scanning Identity...</span>
             </div>
-            <div className="relative rounded-[3.5rem] overflow-hidden border-[10px] border-white/5 shadow-2xl bg-black aspect-[3/4]">
+            <div className="relative rounded-[3rem] overflow-hidden border-[10px] border-white/5 shadow-2xl bg-black aspect-[3/4]">
               <video ref={videoRef} playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
-              <div className="absolute inset-0 border-[30px] border-black/20 rounded-[3rem] pointer-events-none">
-                <div className="w-full h-full border-2 border-white/10 rounded-[2rem] relative">
-                  <div className={`absolute top-0 left-0 w-full h-[2px] ${isCheckingOut ? 'bg-amber-400' : 'bg-blue-400'} animate-scan`}></div>
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="w-full h-full border-[20px] border-black/20 rounded-[2rem]">
+                  <div className="w-full h-[2px] bg-blue-400 shadow-[0_0_20px_#60a5fa] absolute animate-scan"></div>
                 </div>
               </div>
             </div>
-            <div className="mt-16 flex flex-col items-center gap-10">
-              {readyToCapture && (
-                <button onClick={handleCapture} className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-2xl active:scale-75 transition-all">
-                  <div className={`w-20 h-20 border-4 ${isCheckingOut ? 'border-amber-500' : 'border-blue-600'} rounded-full flex items-center justify-center`}><div className="w-14 h-14 bg-slate-900 rounded-full"></div></div>
-                </button>
+            <div className="mt-12 flex flex-col items-center gap-10">
+              {readyToCapture && !isProcessing && (
+                <button onClick={handleCapture} className="w-20 h-20 bg-white rounded-full border-4 border-blue-600 shadow-[0_0_40px_rgba(255,255,255,0.2)] active:scale-75 transition-all"></button>
               )}
-              <button onClick={() => { streamRef.current?.getTracks().forEach(t => t.stop()); setShowCamera(false); }} className="text-white/30 hover:text-red-400 font-black text-[10px] tracking-[0.4em] uppercase">ยกเลิกขั้นตอน</button>
+              {isProcessing && <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>}
+              <button onClick={() => { streamRef.current?.getTracks().forEach(t => t.stop()); setShowCamera(false); }} className="text-white/30 font-black text-[25px] uppercase tracking-widest">ยกเลิก</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 🟢 LOADING OVERLAY สำหรับเคสที่กดจากข้างนอก */}
+      {isProcessing && !showCamera && (
+        <div className="fixed inset-0 z-[1000] bg-white/60 backdrop-blur-sm flex items-center justify-center">
+            <div className="flex flex-col items-center">
+                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="mt-4 text-[10px] font-black text-blue-600 tracking-widest uppercase">Processing...</p>
+            </div>
         </div>
       )}
 
@@ -420,4 +458,4 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
       `}</style>
     </div>
   );
-}
+}    

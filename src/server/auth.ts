@@ -62,13 +62,13 @@ export async function loginAction(formData: FormData) {
       cookieStore.set("session_user_id", user.id, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        maxAge: 60 * 60 * 24 * 7, // 7 วัน
+        maxAge: 60 * 60 * 4,
         path: "/",
       });
 
       cookieStore.set("user_role", role, {
         httpOnly: false,
-        maxAge: 60 * 60 * 24 * 7,
+        maxAge: 60 * 60 * 4,
         path: "/",
       });
 
