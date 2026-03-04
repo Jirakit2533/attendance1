@@ -4,7 +4,7 @@ import { useRef, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { logoutAction } from "@/server/auth";
-import { useUploadThing } from "@/lib/uploadThing";
+import { useUploadThing } from "@/lib/uploadthing";
 import { 
   saveAttendanceAction, 
   createLeaveRequestAction,
@@ -87,7 +87,7 @@ export default function LeaderClientPage({
 
   // ✅ 2. แยกใบลาของลูกน้องในทีม (Team's leaves)
   const teamLeaves = useMemo(() => 
-    leaves.filter((l: any) => l.user_id !== userProfile.id), 
+    leaves.filter((l: any) => l.user_id || l.userId !== userProfile.id), 
     [leaves, userProfile]
   );
 
@@ -444,31 +444,54 @@ export default function LeaderClientPage({
                       {records.length === 0 ? (
                         <tr><td colSpan={4} className="p-20 text-center text-gray-300 font-bold italic">ยังไม่มีข้อมูลการเข้างาน</td></tr>
                       ) : (
-                        records.map((r, i) => (
-                          <tr key={i} className="hover:bg-blue-50/10 transition-colors">
-                            <td className="p-6 font-bold text-gray-800">{r.date}</td>
-                            <td className="p-6">
-                              <div className="flex items-center gap-3">
-                                <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl">{r.checkIn || "--:--"}</span>
-                                {r.imageIn && <Image src={r.imageIn} alt="In" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />}
-                              </div>
-                            </td>
-                            <td className="p-6">
-                              <div className="flex items-center gap-3">
-                                <span className={!r.checkOut || r.checkOut === "-" ? "text-gray-300 font-black" : "text-slate-900 font-black bg-slate-100 px-3 py-1.5 rounded-xl"}>
-                                  {r.checkOut || "-"}
-                                </span>
-                                {r.imageOut && <Image src={r.imageOut} alt="Out" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />}
-                              </div>
-                            </td>
-                            <td className="p-6">
-                              <div className="flex flex-col">
-                                <span className="text-xs font-black text-gray-700 uppercase tracking-tighter">{r.position || userProfile.role}</span>
-                                <span className="text-[10px] font-mono text-gray-400 truncate max-w-[150px]">📍 {r.location || "ไม่ได้ระบุพิกัด"}</span>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
+                        records.map((r, i) => {
+                          // 🔍 DEBUG: บรรทัดนี้จะช่วยให้คุณเห็นค่าใน Console ว่าตัวแปรชื่ออะไรกันแน่
+                          console.log("Row data:", r); 
+
+                          // ดักจับค่าเวลา (เช็คทั้ง camelCase และ snake_case)
+                          const displayCheckIn = r.checkIn || r.check_in || r.check_in_time || "--:--";
+                          const displayCheckOut = r.checkOut || r.check_out || r.check_out_time || "-";
+                          
+                          // ดักจับรูปภาพ
+                          const displayImageIn = r.imageIn || r.image_in || r.image_in_url;
+                          const displayImageOut = r.imageOut || r.image_out || r.image_out_url;
+
+                          return (
+                            <tr key={i} className="hover:bg-blue-50/10 transition-colors">
+                              <td className="p-6 font-bold text-gray-800">{r.date || "-"}</td>
+                              <td className="p-6">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl">
+                                    {displayCheckIn}
+                                  </span>
+                                  {displayImageIn && (
+                                    <Image src={displayImageIn} alt="In" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-6">
+                                <div className="flex items-center gap-3">
+                                  <span className={!displayCheckOut || displayCheckOut === "-" ? "text-gray-300 font-black" : "text-slate-900 font-black bg-slate-100 px-3 py-1.5 rounded-xl"}>
+                                    {displayCheckOut}
+                                  </span>
+                                  {displayImageOut && (
+                                    <Image src={displayImageOut} alt="Out" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-6">
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-black text-gray-700 uppercase tracking-tighter">
+                                    {r.position || userProfile.role}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-gray-400 truncate max-w-[150px]">
+                                    📍 {r.location || r.locationIn || "ไม่ได้ระบุพิกัด"}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>

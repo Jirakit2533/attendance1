@@ -1,13 +1,14 @@
 import { db } from "@/lib/db";
 import { companyTable, usersTable, adminsTable, superAdminTable } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { cookies } from "next/headers"; // 👈 เพิ่มการดึง cookies
-import { redirect } from "next/navigation"; // 👈 เพิ่มการ redirect
+import { cookies } from "next/headers"; // Next.js 16+ cookies() returns a Promise
+import { redirect } from "next/navigation"; 
 import SuperAdminClientPage from "./superAdminClientPage";
 
 export default async function SuperAdminPage() {
   // 🛡️ [SECURITY CHECK] ตรวจสอบความมีตัวตนใน Database
-  const cookieStore = cookies();
+  // บรรทัดนี้สำคัญที่สุด: ต้องมี await นำหน้า cookies()
+  const cookieStore = await cookies(); 
   const userId = cookieStore.get('session_user_id')?.value;
 
   // 1. ดึงข้อมูล Super Admin สำหรับ Profile และใช้ตรวจสอบตัวตน
