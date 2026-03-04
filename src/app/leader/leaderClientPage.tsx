@@ -11,7 +11,18 @@ import {
   updateLeaveStatusAction 
 } from "./actions";
 
-// --- เพิ่ม Component LoadingOverlay เพื่อใช้แสดงตอนประมวลผล ---
+/* ---------------- COMPONENTS ---------------- */
+
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <section className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="flex items-center gap-4 mb-8">
+      <div className="h-10 w-2 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full shadow-lg shadow-blue-200"></div>
+      <h2 className="text-2xl font-black text-slate-800 tracking-tighter uppercase italic">{title}</h2>
+    </div>
+    {children}
+  </section>
+);
+
 const LoadingOverlay = () => (
   <div className="fixed inset-0 z-[9999] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
     <div className="relative flex items-center justify-center">
@@ -24,36 +35,32 @@ const LoadingOverlay = () => (
   </div>
 );
 
+/* ---------------- MAIN COMPONENT ---------------- */
+
 export default function LeaderClientPage({ 
   userProfile, 
-  initialRecords = [], 
+  myRecords = [], 
   initialLeaves = [], 
-  initialTeamAttendance = [] 
+  initialAttendance = [] 
 }: any) {
   const router = useRouter();
 
-  const [records, setRecords] = useState<any[]>(initialRecords);
+  // --- States ---
+  const [records, setRecords] = useState<any[]>(myRecords);
   const [leaves, setLeaves] = useState<any[]>(initialLeaves);
-  const [teamAttendance, setTeamAttendance] = useState<any[]>(initialTeamAttendance);
+  const [teamAttendance, setTeamAttendance] = useState<any[]>(initialAttendance);
+  const [viewImage, setViewImage] = useState<string | null>(null);
 
-  // ✅ เพิ่ม useEffect เพื่อคอย Update State เมื่อ Server ส่งข้อมูลชุดใหม่มาให้ (router.refresh)
-  useEffect(() => {
-    setRecords(initialRecords);
-  }, [initialRecords]);
-
-  useEffect(() => {
-    setLeaves(initialLeaves);
-  }, [initialLeaves]);
-
-  useEffect(() => {
-    setTeamAttendance(initialTeamAttendance);
-  }, [initialTeamAttendance]);
+  // Sync states when props change
+  useEffect(() => { setRecords(myRecords); }, [myRecords]);
+  useEffect(() => { setLeaves(initialLeaves); }, [initialLeaves]);
+  useEffect(() => { setTeamAttendance(initialAttendance); }, [initialAttendance]);
 
   const { startUpload: uploadAttendance } = useUploadThing("imageUploader");
   const { startUpload: uploadLeave } = useUploadThing("leaveFileUploader");
   
   const [showCamera, setShowCamera] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false); // Global Loading State
+  const [isProcessing, setIsProcessing] = useState(false); 
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [readyToCapture, setReadyToCapture] = useState(false);
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -61,25 +68,54 @@ export default function LeaderClientPage({
   const [leaveType, setLeaveType] = useState("");
   const [leaveStart, setLeaveStart] = useState("");
   const [leaveEnd, setLeaveEnd] = useState("");
+  const [searchAtt, setSearchAtt] = useState("");
   const [leaveReason, setLeaveReason] = useState("");
   const [leaveError, setLeaveError] = useState("");
   const [leaveFile, setLeaveFile] = useState<File | null>(null);
   const [leaveFilePreview, setLeaveFilePreview] = useState<string | null>(null);
+  const [searchLeave, setSearchLeave] = useState(""); 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  /* ---------------- MEMOIZED VALUES ---------------- */
-  const myLeaves = useMemo(() => leaves.filter((l: any) => l.employeeName === `${userProfile.firstName} ${userProfile.lastName}`), [leaves, userProfile]);
-  const teamLeaves = useMemo(() => leaves.filter((l: any) => l.employeeName !== `${userProfile.firstName} ${userProfile.lastName}`), [leaves, userProfile]);
+/* ---------------- MEMOIZED VALUES ---------------- */
+  
+  // ✅ 1. แยกใบลาของตัวเอง (Leader's own leaves)
+  const myLeaves = useMemo(() => 
+    leaves.filter((l: any) => l.user_id === userProfile.id || l.firstName === userProfile.firstName), 
+    [leaves, userProfile]
+  );
+
+  // ✅ 2. แยกใบลาของลูกน้องในทีม (Team's leaves)
+  const teamLeaves = useMemo(() => 
+    leaves.filter((l: any) => l.user_id !== userProfile.id), 
+    [leaves, userProfile]
+  );
+
+  // ✅ 3. กรองข้อมูลการลาของทีมเพื่อแสดงในตาราง (ใช้สำหรับ Search)
+  const filteredLeaves = useMemo(() => {
+    const term = searchLeave.toLowerCase();
+    return teamLeaves.filter((l: any) => 
+      l.employeeName?.toLowerCase().includes(term) || 
+      l.type?.toLowerCase().includes(term) ||
+      (l.reason && l.reason.toLowerCase().includes(term))
+    );
+  }, [teamLeaves, searchLeave]);
+
+  // ✅ 4. กรองข้อมูลการเข้างานของทีม (Attendance)
+  const filteredAttendance = useMemo(() => {
+    const searchTerm = searchAtt.toLowerCase();
+    return teamAttendance.filter((item: any) => 
+      item.employeeName?.toLowerCase().includes(searchTerm) || 
+      item.positionName?.toLowerCase().includes(searchTerm) ||     
+      item.date?.includes(searchTerm)                          
+    );
+  }, [teamAttendance, searchAtt]);
   
   const todayStatus = useMemo(() => {
     const now = new Date();
-    // ✅ ใช้ Timezone ไทย เพื่อให้ตรงกับวันที่บันทึกใน Server
     const todayStr = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Bangkok',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+      year: 'numeric', month: '2-digit', day: '2-digit',
     }).format(now);
     
     const todayRecord = records.find((r: any) => r.date === todayStr);
@@ -92,14 +128,14 @@ export default function LeaderClientPage({
   }, [records]);
 
   /* ---------------- LEADER ACTIONS ---------------- */
+  
   const handleApprove = async (leaveId: string) => {
     if (!confirm("คุณต้องการอนุมัติคำขอลางานนี้ใช่หรือไม่?")) return;
-  
-    setIsProcessing(true); // แสดง Loading Overlay
+    setIsProcessing(true);
     try {
-      const res = await updateLeaveStatusAction(leaveId, "อนุมัติแล้ว", userProfile.id);
+      const res = await updateLeaveStatusAction(leaveId, "approved", userProfile.id);
       if (res.success) {
-        // ไม่ต้องทำอะไรเพิ่ม revalidatePath จะอัปเดต UI ให้เอง
+        router.refresh();
       } else {
         alert(res.error || "เกิดข้อผิดพลาดในการอนุมัติ");
       }
@@ -112,12 +148,11 @@ export default function LeaderClientPage({
   
   const handleReject = async (leaveId: string) => {
     if (!confirm("คุณต้องการปฏิเสธคำขอลางานนี้ใช่หรือไม่?")) return;
-  
     setIsProcessing(true);
     try {
-      const res = await updateLeaveStatusAction(leaveId, "ปฏิเสธ", userProfile.id);
+      const res = await updateLeaveStatusAction(leaveId, "rejected", userProfile.id);
       if (res.success) {
-        // ข้อมูลจะถูกดึงใหม่โดยอัตโนมัติ
+        router.refresh();
       } else {
         alert(res.error || "เกิดข้อผิดพลาดในการปฏิเสธ");
       }
@@ -127,9 +162,9 @@ export default function LeaderClientPage({
       setIsProcessing(false);
     }
   };
-    
 
   /* ---------------- CAMERA & ATTENDANCE LOGIC ---------------- */
+  
   const openCamera = async () => {
     try {
       setIsProcessing(true);
@@ -182,12 +217,14 @@ export default function LeaderClientPage({
         type: isCheckingOut ? "OUT" : "IN",
         image: uploadedFile.url,
         fileId: uploadedFile.key,
-        location: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`
+        location: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
+        departmentId: userProfile.departmentId,
+        siteId: userProfile.site_id
       });
   
       if (result.success) {
         alert("บันทึกเวลาสำเร็จ");
-        router.refresh(); // ดึงข้อมูลชุดใหม่มาใส่ Props ทันที
+        router.refresh();
       } else {
         alert("Error: " + result.error);
       }
@@ -216,67 +253,58 @@ export default function LeaderClientPage({
     }
   };
 
-
-    const handleLogout = async () => {
-      if(!confirm("ยืนยันการออกจากระบบ?")) return;
-      setIsProcessing(true);
-      try {
-          await logoutAction(); 
-          window.location.href = "/login";
-      } catch (error) {
-          window.location.href = "/login";
-      }
-    };
+  const handleLogout = async () => {
+    if(!confirm("ยืนยันการออกจากระบบ?")) return;
+    setIsProcessing(true);
+    try {
+        await logoutAction(); 
+        window.location.href = "/login";
+    } catch (error) {
+        window.location.href = "/login";
+    }
+  };
 
   const submitLeave = async () => {
-    setLeaveError("");
     if (!leaveType || !leaveStart || !leaveEnd || !leaveReason) {
-      setLeaveError("กรุณากรอกข้อมูลให้ครบถ้วน");
+      setLeaveError("⚠️ กรุณากรอกข้อมูลให้ครบถ้วน");
       return;
     }
 
     setIsProcessing(true);
+    setLeaveError("");
+
     try {
       let fileUrl = "";
-      let fileId = "";
-      let fileName = "";
-
       if (leaveFile) {
         const uploadRes = await uploadLeave([leaveFile]);
-        if (uploadRes && uploadRes.length > 0) {
-          fileUrl = uploadRes[0].url;
-          fileId = uploadRes[0].key;
-          fileName = leaveFile.name;
-        } else {
-          throw new Error("อัปโหลดเอกสารไม่สำเร็จ");
-        }
+        if (uploadRes) fileUrl = uploadRes[0].url;
       }
 
       const res = await createLeaveRequestAction({
         userId: userProfile.id,
+        departmentId: userProfile.departmentId,
+        siteId: userProfile.site_id,
         type: leaveType,
         startDate: leaveStart,
         endDate: leaveEnd,
         reason: leaveReason,
-        fileUrl: fileUrl,
-        fileId: fileId,
-        fileName: fileName || "no_file"
+        fileUrl: fileUrl
       });
 
       if (res.success) {
         setLeaveSuccess(true);
-        setLeaveType(""); setLeaveStart(""); setLeaveEnd(""); setLeaveReason("");
-        setLeaveFile(null); setLeaveFilePreview(null);
-        router.refresh();
         setTimeout(() => {
-          setLeaveSuccess(false);
           setShowLeaveForm(false);
+          setLeaveSuccess(false);
+          setLeaveType(""); setLeaveStart(""); setLeaveEnd(""); setLeaveReason("");
+          setLeaveFile(null); setLeaveFilePreview(null);
         }, 2000);
+        router.refresh();
       } else {
-        setLeaveError(res.error || "เกิดข้อผิดพลาดในการบันทึก");
+        setLeaveError(res.error || "ไม่สามารถส่งคำขอลาได้");
       }
-    } catch (error: any) {
-      setLeaveError(error.message || "ไม่สามารถส่งใบลาได้");
+    } catch (err) {
+      setLeaveError("เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่");
     } finally {
       setIsProcessing(false);
     }
@@ -285,9 +313,7 @@ export default function LeaderClientPage({
   // ✅ อย่าลืมใส่ LoadingOverlay และส่วน Return ของ JSX ด้านล่างต่อจากนี้ตามเดิมของคุณนะครับ
   return (
     <div className="min-h-screen bg-[#f8fafc] transition-all duration-300">
-      {/* 🔴 Full-screen Loading Overlay */}
       {isProcessing && <LoadingOverlay />}
-
       {/* 🟢 TOP NAVIGATION */}
       <nav className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur-xl border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
@@ -424,7 +450,7 @@ export default function LeaderClientPage({
                             <td className="p-6">
                               <div className="flex items-center gap-3">
                                 <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl">{r.checkIn || "--:--"}</span>
-                                {r.imageUrl && <Image src={r.imageUrl} alt="In" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />}
+                                {r.imageIn && <Image src={r.imageIn} alt="In" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />}
                               </div>
                             </td>
                             <td className="p-6">
@@ -432,7 +458,7 @@ export default function LeaderClientPage({
                                 <span className={!r.checkOut || r.checkOut === "-" ? "text-gray-300 font-black" : "text-slate-900 font-black bg-slate-100 px-3 py-1.5 rounded-xl"}>
                                   {r.checkOut || "-"}
                                 </span>
-                                {r.imageOutUrl && <Image src={r.imageOutUrl} alt="Out" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />}
+                                {r.imageOut && <Image src={r.imageOut} alt="Out" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />}
                               </div>
                             </td>
                             <td className="p-6">
@@ -492,11 +518,13 @@ export default function LeaderClientPage({
                             </td>
                             <td className="p-6 text-center">
                               <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border
-                                ${l.status === 'อนุมัติแล้ว' ? 'bg-green-50 text-green-600 border-green-100' : 
-                                  l.status === 'ปฏิเสธ' ? 'bg-red-50 text-red-600 border-red-100' : 
+                                ${l.status === 'approved' || l.status === 'อนุมัติแล้ว' ? 'bg-green-50 text-green-600 border-green-100' : 
+                                  l.status === 'rejected' || l.status === 'ปฏิเสธ' ? 'bg-red-50 text-red-600 border-red-100' : 
                                   'bg-amber-50 text-amber-600 border-amber-100'}`}
                               >
-                                {l.status}
+                                {l.status === 'pending' ? 'รออนุมัติ' : 
+                                 l.status === 'approved' ? 'อนุมัติแล้ว' : 
+                                 l.status === 'rejected' ? 'ปฏิเสธ' : l.status}
                               </span>
                             </td>
                           </tr>
@@ -507,172 +535,219 @@ export default function LeaderClientPage({
                 </div>
               </div>
               
-              {/* ตารางที่ 3: การเข้างานของพนักงานในทีม */}
-              <div className="bg-white p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-gray-50">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-8 bg-emerald-500 rounded-full"></div>
-                    <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">การเข้างาน <span className="text-gray-300">ของพนักงาน</span></h2>
+             {/* ตารางที่ 3: การเข้างานของพนักงานในทีม */}
+              <div className="print:hidden mt-12">
+                <Section title="ตารางเข้า-ออกงาน">
+                  {/* Search Bar */}
+                  <div className="mb-6 relative max-w-md group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-blue-500">
+                      <span className="text-lg">🔍</span>
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="ค้นหาชื่อพนักงาน หรือ วันที่..." 
+                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm"
+                      value={searchAtt}
+                      onChange={(e) => setSearchAtt(e.target.value)}
+                    />
                   </div>
-                </div>
-                <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
-                  <table className="w-full text-sm min-w-[800px]">
-                    <thead className="bg-gray-50/50 text-gray-400 uppercase text-[10px] font-black tracking-widest">
-                      <tr>
-                        <th className="p-6 text-left">ชื่อพนักงาน</th>
-                        <th className="p-6 text-left">เวลาเข้า / รูปถ่าย</th>
-                        <th className="p-6 text-left">เวลาออก / รูปถ่าย</th>
-                        <th className="p-6 text-left">แผนก / ตำแหน่ง</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {teamAttendance.length === 0 ? (
-                        <tr><td colSpan={4} className="p-12 text-center text-gray-300 font-black text-xs uppercase tracking-widest">ยังไม่มีข้อมูลการเข้างานวันนี้</td></tr>
-                      ) : (
-                        teamAttendance.map((t, i) => (
-                          <tr key={i} className="hover:bg-emerald-50/10">
-                            <td className="p-6"><span className="font-black text-gray-800 uppercase text-xs">{t.employeeName}</span></td>
-                            <td className="p-6">
-                              <div className="flex items-center gap-3">
-                                <span className="text-emerald-600 font-black bg-emerald-50 px-3 py-1.5 rounded-xl">{t.checkIn || "--:--"}</span>
-                                {t.imageUrl && <Image src={t.imageUrl} alt="In" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm h-10 w-10 object-cover" unoptimized />}
-                              </div>
-                            </td>
-                            <td className="p-6">
-                              <div className="flex items-center gap-3">
-                                <span className="text-gray-500 font-black bg-gray-100 px-3 py-1.5 rounded-xl">{t.checkOut || "--:--"}</span>
-                                {t.imageOutUrl && <Image src={t.imageOutUrl} alt="Out" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm h-10 w-10 object-cover" unoptimized />}
-                              </div>
-                            </td>
-                            <td className="p-6">
-                              <div className="flex flex-col">
-                                <span className="text-xs font-black text-gray-700 uppercase tracking-tighter">{userProfile.department}</span>
-                                <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">📍 HQ STATION</span>
-                              </div>
-                            </td>
+
+                  <div className="rounded-[2.5rem] border border-slate-100 overflow-hidden bg-white shadow-xl shadow-slate-200/50">
+                    <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+                      <table className="min-w-[1300px] w-full text-sm border-separate border-spacing-0">
+                        <thead className="sticky top-0 z-20">
+                          <tr className="bg-slate-50/80 backdrop-blur-md text-slate-500 font-black uppercase text-[11px] tracking-[0.15em]">
+                            <th className="py-6 px-6 text-left border-b border-slate-100">พนักงาน</th>
+                            <th className="py-6 px-6 text-left border-b border-slate-100">ตำแหน่ง</th>
+                            <th className="py-6 px-6 text-left border-b border-slate-100">วันที่</th>
+                            <th className="py-6 px-6 text-center border-b border-slate-100">เวลาเข้า</th>
+                            <th className="py-6 px-6 text-center border-b border-slate-100">เวลาออก</th>
+                            <th className="py-6 px-6 text-center border-b border-slate-100">หลักฐานเข้า-ออก</th>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {filteredAttendance.length > 0 ? (
+                            filteredAttendance.map((a: any, index: number) => (
+                              <tr key={index} className="group hover:bg-blue-50/30 transition-all">
+                                <td className="py-5 px-6">
+                                  <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100">
+                                      <Image 
+                                        src={a.avatarUrl || "https://utfs.io/f/default-avatar-placeholder.png"} 
+                                        alt="profile" fill className="object-cover"
+                                        unoptimized 
+                                      />
+                                    </div>
+                                    <div>
+                                      <div className="font-black text-slate-800 text-base">{a.employeeName}</div>
+                                      <div className="text-blue-500 font-mono text-[10px] font-bold tracking-tight uppercase">@{a.userName || 'user'}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-5 px-6">
+                                  <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase">
+                                    {a.positionName || "พนักงาน"}
+                                  </span>
+                                </td>
+                                <td className="py-5 px-6 font-bold text-slate-600">
+                                  {/* แสดงวันที่แบบ 04/03/2026 */}
+                                  {a.date ? new Date(a.date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }) : "-"}
+                                </td>
+                                <td className="py-5 px-6 text-center font-black text-green-600 text-lg italic">
+                                  {a.checkIn ? new Date(a.checkIn).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : "--:--"}
+                                </td>
+                                <td className="py-5 px-6 text-center font-black text-red-600 text-lg italic">
+                                  {a.checkOut ? new Date(a.checkOut).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : "--:--"}
+                                </td>
+                                <td className="py-5 px-6">
+                                  <div className="flex justify-center gap-3">
+                                    {/* แก้ไขเป็น imageIn และ imageOut ให้ตรงกับที่ส่งมาจาก Server */}
+                                    {[ {url: a.imageIn, label: 'In'}, {url: a.imageOut, label: 'Out'} ].map((img, i) => (
+                                      img.url ? (
+                                        <div key={i} className="relative group/img">
+                                          <div 
+                                            onClick={() => setViewImage(img.url)}
+                                            className="w-11 h-11 rounded-xl overflow-hidden border-2 border-white shadow-sm cursor-zoom-in hover:border-blue-400 active:scale-95 transition-all bg-slate-100"
+                                          >
+                                            <Image src={img.url} alt={img.label} fill className="object-cover" unoptimized />
+                                          </div>
+                                          <span className={`absolute -bottom-2 -right-1 text-white text-[8px] px-1 rounded font-bold uppercase ${img.label === 'In' ? 'bg-green-500' : 'bg-red-500'}`}>
+                                            {img.label}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div key={i} className="w-11 h-11 rounded-xl border border-dashed border-slate-200 flex items-center justify-center text-[8px] text-slate-300 font-bold italic uppercase">
+                                          No {img.label}
+                                        </div>
+                                      )
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={6} className="py-32 text-center bg-slate-50/30">
+                                <div className="flex flex-col items-center justify-center gap-4">
+                                  <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-4xl animate-bounce">📅</div>
+                                  <p className="text-slate-400 italic font-black text-lg tracking-tight">ไม่พบข้อมูลการลงเวลาของทีมคุณ...</p>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </Section>
               </div>
-            </div>
 
             {/* ตารางที่ 4: คำขออนุมัติลางานของพนักงาน */}
-            <div className="bg-white p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-gray-50 mt-8 h-fit">
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-8 bg-indigo-600 rounded-full"></div>
-                  <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">
-                    คำขออนุมัติ <span className="text-gray-300">ลางานของพนักงาน</span>
-                  </h2>
-                </div>
-                <div className="bg-indigo-50 px-4 py-1.5 rounded-full">
-                  <span className="text-indigo-600 text-[10px] font-black uppercase tracking-widest">
-                    {teamLeaves.filter((l: any) => l.status === 'รออนุมัติ').length} รายการรอตรวจ
-                  </span>
-                </div>
+              <div className="print:hidden mt-12">
+                <Section title="คำขอลางาน">
+                  {/* Search Box */}
+                  <div className="mb-6 relative max-w-sm">
+                    <input 
+                      type="text" 
+                      placeholder="🔍 ค้นชื่อพนักงาน หรือ ประเภทลา..." 
+                      className="w-full pl-6 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm"
+                      value={searchLeave}
+                      onChange={(e) => setSearchLeave(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="rounded-[2.5rem] border border-slate-100 overflow-hidden bg-white shadow-xl shadow-slate-200/50">
+                    <div className="overflow-x-auto max-h-[550px] overflow-y-auto custom-scrollbar">
+                      <table className="min-w-[1200px] w-full text-sm border-separate border-spacing-0">
+                        <thead className="sticky top-0 z-20 bg-slate-50/90 backdrop-blur-sm">
+                          <tr className="text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]">
+                            <th className="py-6 px-6 text-left border-b border-slate-100">พนักงาน</th>
+                            <th className="py-6 px-4 text-center border-b border-slate-100">ประเภท & ระยะเวลา</th>
+                            <th className="py-6 px-4 text-center border-b border-slate-100">จำนวน</th>
+                            <th className="py-6 px-4 text-left border-b border-slate-100 w-1/4">เหตุผล & เอกสาร</th>
+                            <th className="py-6 px-4 text-center border-b border-slate-100">สถานะ</th>
+                            <th className="py-6 px-6 text-center border-b border-slate-100">จัดการ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {filteredLeaves.length > 0 ? (
+                            filteredLeaves.map((l) => {
+                              const diffDays = Math.ceil(Math.abs(new Date(l.endDate) - new Date(l.startDate)) / (1000 * 60 * 60 * 24)) + 1;
+                              return (
+                                <tr key={l.id} className="group hover:bg-indigo-50/30 transition-all">
+                                  <td className="py-5 px-6">
+                                    <div className="flex items-center gap-4">
+                                      <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm shrink-0">
+                                        <img 
+                                          src={l.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(l.employeeName || 'User')}&background=random`} 
+                                          alt="profile" className="w-full h-full object-cover"
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="font-black text-slate-800 text-base leading-none mb-1">{l.employeeName || "ไม่ระบุชื่อ"}</div>
+                                        <div className="text-indigo-500 font-mono text-[10px] font-bold italic">@{l.userName || 'user'}</div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-5 px-4 text-center">
+                                    <div className="inline-block bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg font-black text-[11px] mb-1">{l.type}</div>
+                                    <div className="text-slate-400 text-[10px] font-bold uppercase tracking-tighter">
+                                      {l.startDate} → {l.endDate}
+                                    </div>
+                                  </td>
+                                  <td className="py-5 px-4 text-center">
+                                    <span className="bg-orange-500 text-white px-3 py-1 rounded-full font-black text-xs shadow-sm shadow-orange-200">
+                                      {isNaN(diffDays) ? "-" : `${diffDays} วัน`}
+                                    </span>
+                                  </td>
+                                  <td className="py-5 px-4">
+                                    <div className="flex items-start gap-3">
+                                      {l.fileUrl && (
+                                        <div onClick={() => setViewImage(l.fileUrl)} className="w-10 h-10 shrink-0 rounded-xl overflow-hidden border border-slate-200 cursor-zoom-in hover:ring-2 hover:ring-indigo-400 transition-all bg-slate-50">
+                                          <img src={l.fileUrl} alt="doc" className="w-full h-full object-cover" />
+                                        </div>
+                                      )}
+                                      <p className="text-slate-600 italic text-xs leading-relaxed line-clamp-2">"{l.reason || 'ไม่มีระบุเหตุผล'}"</p>
+                                    </div>
+                                  </td>
+                                  <td className="py-5 px-4 text-center">
+                                    <span className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase shadow-sm ${
+                                      l.status === 'pending' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200' : 
+                                      l.status === 'approved' ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200' : 
+                                      'bg-rose-100 text-rose-700 ring-1 ring-rose-200'
+                                    }`}>
+                                      {l.status === 'pending' ? '• รออนุมัติ' : l.status === 'approved' ? '✓ อนุมัติแล้ว' : '✕ ปฏิเสธ'}
+                                    </span>
+                                  </td>
+                                  <td className="py-5 px-6">
+                                    <div className="flex justify-center gap-2">
+                                      {l.status === 'pending' ? (
+                                        <>
+                                          <button onClick={() => updateLeaveStatus(l.id, "approved")} className="bg-emerald-600 text-white px-5 py-2 rounded-xl text-xs font-black hover:bg-emerald-700 hover:-translate-y-0.5 transition-all shadow-lg shadow-emerald-200 active:scale-95">อนุมัติ</button>
+                                          <button onClick={() => updateLeaveStatus(l.id, "rejected")} className="bg-white border border-rose-200 text-rose-500 px-5 py-2 rounded-xl text-xs font-black hover:bg-rose-50 transition-all active:scale-95">ปฏิเสธ</button>
+                                        </>
+                                      ) : (
+                                        <button onClick={() => updateLeaveStatus(l.id, "pending")} className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-200 transition-all flex items-center gap-2 italic">
+                                          <span>✏️</span> แก้ไขสถานะ
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            <tr>
+                              <td colSpan={6} className="py-24 text-center text-slate-300 italic font-black tracking-widest">NO LEAVE REQUESTS FOUND</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </Section>
               </div>
-
-              <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
-                <table className="w-full text-sm min-w-[800px]">
-                  <thead className="bg-gray-50/50 text-gray-400 uppercase text-[10px] font-black tracking-widest">
-                    <tr>
-                      <th className="p-6 text-left">พนักงาน</th>
-                      <th className="p-6 text-left">ประเภท / วันที่</th>
-                      <th className="p-6 text-left">เหตุผล / หลักฐาน</th>
-                      <th className="p-6 text-center">สถานะ</th>
-                      <th className="p-6 text-center">จัดการคำขอ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {teamLeaves.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="p-16 text-center text-gray-300 font-bold italic">
-                          ไม่มีรายการคำขอลา
-                        </td>
-                      </tr>
-                    ) : (
-                      teamLeaves.map((l: any) => (
-                        <tr key={l.id} className="hover:bg-gray-50/50 transition-colors group">
-                          <td className="p-6">
-                            <div className="flex flex-col">
-                              <span className="font-black text-gray-900 uppercase tracking-tighter text-sm">{l.employeeName}</span>
-                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">ID: #{l.id.toString().slice(-4)}</span>
-                            </div>
-                          </td>
-                          <td className="p-6">
-                            <div className="flex flex-col gap-1">
-                              <span className="text-indigo-600 font-black text-xs uppercase">{l.type}</span>
-                              <span className="text-[11px] text-gray-500 font-bold">
-                                {l.startDate || l.start_date} <span className="text-gray-300 mx-1">→</span> {l.endDate || l.end_date}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="p-6">
-                            <div className="flex flex-col gap-1 max-w-[250px]">
-                              <span className="text-xs text-gray-400 italic line-clamp-1">"{l.reason || 'ไม่ได้ระบุเหตุผล'}"</span>
-                              {l.fileUrl && (
-                                <a href={l.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest transition-all w-fit">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                  </svg>
-                                  เปิดดูหลักฐาน
-                                </a>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* --- คอลัมน์สถานะ (ใหม่) --- */}
-                          <td className="p-6 text-center">
-                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border
-                              ${l.status === 'รออนุมัติ' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
-                                l.status === 'อนุมัติแล้ว' ? 'bg-green-50 text-green-600 border-green-100' : 
-                                'bg-red-50 text-red-600 border-red-100'}`}
-                            >
-                              {l.status}
-                            </span>
-                          </td>
-
-                          {/* --- คอลัมน์จัดการคำขอ --- */}
-                          <td className="p-6 text-center">
-                            {/* เช็คทั้งภาษาไทยและอังกฤษ และตัดช่องว่างออกเพื่อความแม่นยำ */}
-                            {(l.status?.trim() === "รออนุมัติ" || l.status?.toLowerCase().trim() === "pending") ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <button 
-                                  onClick={() => handleApprove(l.id)}
-                                  disabled={isProcessing}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase tracking-tighter transition-all active:scale-95 shadow-sm disabled:opacity-30"
-                                >
-                                  {isProcessing ? "..." : "อนุมัติ"}
-                                </button>
-                                <button 
-                                  onClick={() => handleReject(l.id)}
-                                  disabled={isProcessing}
-                                  className="bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-400 text-[10px] font-black px-4 py-2 rounded-xl uppercase tracking-tighter transition-all active:scale-95 disabled:opacity-30"
-                                >
-                                  {isProcessing ? "..." : "ปฏิเสธ"}
-                                </button>
-                              </div>
-                            ) : (
-                              /* ถ้าสถานะเป็น 'อนุมัติแล้ว' หรือ 'ปฏิเสธ' จะมาเข้าเงื่อนไขนี้ */
-                              <div className="flex flex-col items-center gap-1">
-                                <span className="text-[10px] text-gray-300 font-bold uppercase tracking-widest italic">
-                                  ดำเนินการแล้ว
-                                </span>
-                                {/* (Optional) แสดงชื่อคนตรวจถ้ามีข้อมูล */}
-                                {l.approvedBy && <span className="text-[9px] text-gray-300">โดย Leader</span>}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            </div>  
           </div>
         )}
 

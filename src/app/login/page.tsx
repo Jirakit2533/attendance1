@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { loginAction } from "@/server/auth";
 
@@ -8,6 +8,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [isProcessing, setIsProcessing] = useState(false); // ✅ เพิ่มสถานะกำลังเปลี่ยนหน้า
+
+  // ล้างคุกกี้เน่าและดึง Error จาก URL
+  useEffect(() => {
+    const cookiesToClear = ["session_user_id", "user_role", "role", "session"];
+    cookiesToClear.forEach(name => {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("invalid") || params.get("expired")) {
+      setError("เซสชันหมดอายุหรือข้อมูลไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่");
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -20,17 +34,22 @@ export default function LoginPage() {
         const result = await loginAction(formData);
         
         if (result.success) {
-          // ✅ ใช้ window.location.href เพื่อล้างสถานะและให้ Middleware ตรวจสอบสิทธิ์ใหม่ทันที
-          // หมายเหตุ: คุกกี้ถูกเซ็ตจาก Server Action เรียบร้อยแล้ว ไม่จำเป็นต้องเซ็ตซ้ำที่นี่ครับ
+          setIsProcessing(true); // ✅ เริ่มสถานะประมวลผลการเปลี่ยนหน้า
+          // ใช้ window.location.href เพื่อล้างสถานะและให้ Middleware ตรวจสอบสิทธิ์ใหม่ทันที
           window.location.href = result.redirect;
         } else {
           setError(result.message || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+          setIsProcessing(false);
         }
       } catch (err) {
         setError("เกิดข้อผิดพลาดในการเชื่อมต่อระบบ");
+        setIsProcessing(false);
       }
     });
   };
+
+  // กำหนดสถานะ Loading รวม
+  const isLoading = isPending || isProcessing;
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#f0f2f5] px-4 relative overflow-hidden">
@@ -44,7 +63,6 @@ export default function LoginPage() {
           <header className="text-center mb-8">
             <div className="flex justify-center mb-4">
               <div className="w-20 h-20 bg-gradient-to-tr from-white to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 overflow-hidden">
-                {/* ใส่โลโก้ของคุณตรงนี้ */}
                 <img src="/logo.png" alt="Logo" className="w-full h-full object-contain p-2" />
               </div>
             </div>
@@ -69,7 +87,7 @@ export default function LoginPage() {
                   name="username"
                   type="text"
                   required
-                  disabled={isPending}
+                  disabled={isLoading}
                   placeholder="Username"
                   className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-10 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-gray-700 disabled:opacity-50"
                 />
@@ -88,7 +106,7 @@ export default function LoginPage() {
                   name="password"
                   type={showPassword ? "text" : "password"}
                   required
-                  disabled={isPending}
+                  disabled={isLoading}
                   placeholder="••••••••"
                   className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-10 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-gray-700 disabled:opacity-50"
                 />
@@ -110,13 +128,13 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isLoading}
               className="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:shadow-blue-300 hover:scale-[1.02] active:scale-[0.98] transition-all mt-2 flex items-center justify-center gap-2"
             >
-              {isPending ? (
+              {isLoading ? (
                 <>
                   <Loader2 className="animate-spin" size={20} />
-                  กำลังตรวจสอบ...
+                  {isProcessing ? "กำลังนำคุณเข้าสู่ระบบ..." : "กำลังตรวจสอบ..."}
                 </>
               ) : (
                 "ลงชื่อเข้าใช้งาน"

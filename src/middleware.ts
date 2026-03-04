@@ -10,18 +10,25 @@ export function middleware(request: NextRequest) {
   const protectedPaths = ['/employee', '/leader', '/administrator', '/superAdmin'];
   const isProtected = protectedPaths.some(path => pathname.startsWith(path));
 
+  // --- LOGIC 0: ปล่อยให้ API Cleanup ทำงานได้เสมอ (สำคัญมาก) ---
+  if (pathname.startsWith('/api/auth/logout-cleanup')) {
+    return NextResponse.next();
+  }
+
   // --- LOGIC 1: ถ้ายังไม่ได้ Login แต่อยากเข้าหน้า Protected ---
   if (isProtected && !userId) {
+    // ถ้าไม่มี userId แต่มีเศษคุกกี้อื่นค้างอยู่ ให้ดีดไปล้างก่อนเพื่อความชัวร์
+    if (userRole) {
+      return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
+    }
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // --- LOGIC 2: ถ้า Login อยู่แล้ว แต่พยายามจะเข้าหน้า /login ---
   if (userId && pathname === '/login') {
-    // กรณี Session ค้างแต่ไม่มี Role (ผิดปกติ) ให้ล้างคุกกี้แล้วปล่อยไปหน้า Login
+    // กรณี Session ค้างแต่ไม่มี Role (ผิดปกติมาก) ให้ส่งไปล้างคุกกี้ทันที
     if (!userRole) {
-      const response = NextResponse.next();
-      response.cookies.delete('session_user_id');
-      return response;
+      return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
     }
     
     // Redirect ไปยังหน้าหลักของแต่ละ Role
@@ -73,16 +80,17 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
+     * - api (ยกเว้น api/auth/logout-cleanup)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - logo.png, images, etc.
      */
     '/employee/:path*',
     '/leader/:path*',
     '/administrator/:path*',
     '/superAdmin/:path*',
-    '/login'
+    '/login',
+    // เพิ่มให้ matcher เฝ้าดูหน้าล้างคุกกี้ด้วย
+    '/api/auth/logout-cleanup'
   ],
 };

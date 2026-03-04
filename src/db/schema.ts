@@ -1,5 +1,6 @@
 import { pgTable, varchar, timestamp, uuid, text, date, pgEnum } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { emailAddress } from "effect/FastCheck";
 
 
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
@@ -17,24 +18,31 @@ export const superAdminTable = pgTable("super_admins", {
 export const companyTable = pgTable("company", {
   id: uuid("id").primaryKey().defaultRandom(),
   // ✅ แก้ไข: user_id ตรงนี้ควรชี้ไปที่ superAdminTable.id เพราะ Super Admin เป็นคนสร้างบริษัท
-  user_id: uuid("user_id").references(() => superAdminTable.id), 
+  creatorId: uuid("user_id").references(() => superAdminTable.id),
+  companyCode: varchar("company_code", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
-  address: text("address").notNull(),
-  createdBy: varchar("created_by_name", { length: 255 }), 
-  updateBy: varchar("update_by_name", { length: 255 }), 
+  address: text("address"),
+  phone: varchar("phone", { length: 255 }),
+  email: varchar("email", { length: 255 }),
+  createdByName: varchar("created_by_name", { length: 255 }),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  updateByName: varchar("update_by_name", { length: 255 }), 
   updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
+  deletedByName: varchar("deleted_by_name", { length: 255 }),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const adminsTable = pgTable("admins", {
   id: uuid("id").primaryKey().defaultRandom(),
   user_id: uuid("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
+  creatorId: uuid("creator_id").references(() => superAdminTable.id),
   company: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
-  createdBy: varchar("created_by_name", { length: 255 }),
-  updateBy: varchar("update_by_name", { length: 255 }),
+  email: varchar("email", { length: 255 }),
+  createdByName: varchar("created_by_name", { length: 255 }), 
+  updateByName: varchar("update_by_name", { length: 255 }),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
-  deletedBy: varchar("deleted_by_name", { length: 255 }),
+  deletedByName: varchar("deleted_by_name", { length: 255 }),
   deletedAt: timestamp("deleted_at"),
 });
 
@@ -55,8 +63,7 @@ export const sitesTable = pgTable("sites", {
   name: varchar("name", { length: 255 }).notNull(),
   address: text("address"),
   coodinates: varchar("coordinates", { length: 255 }),
-  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
-  departmentsId: uuid("department_id").references(() => departmentsTable.id), 
+  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
   createdBy: uuid("created_by_id").references(() => usersTable.id),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updateBy: uuid("update_by_id").references(() => usersTable.id),
@@ -81,7 +88,7 @@ export const usersTable = pgTable("users", {
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
   departmentId: uuid("department_id").references(() => departmentsTable.id),
   positionId: uuid("position_id").references(() => positionsTable.id), 
-  site_id: uuid("site_id").references(() => sitesTable.id),
+  site_id: uuid("site_id").references(() => sitesTable.id, { onDelete: "set null" }),
   avatarUrl: text("avatar_url"), 
   avatarId: text("avatar_id"),
   createdBy: uuid("created_by_id").references(() => usersTable.id),
@@ -95,6 +102,8 @@ export const usersTable = pgTable("users", {
 export const attendanceTable = pgTable("attendance", {
   id: uuid("id").primaryKey().defaultRandom(),
   user_id: uuid("user_id").references(() => usersTable.id),
+  department_id: uuid("department_id").references(() => departmentsTable.id),
+  site_id: uuid("site_id").references(() => sitesTable.id),
   date: date("date").notNull(),
   checkIn: timestamp("check_in").notNull(),
   imageIn: text("image_in").notNull(),  
@@ -108,18 +117,23 @@ export const attendanceTable = pgTable("attendance", {
 });
 
 export const leaveTable = pgTable("leave", {
-    id: uuid("id").primaryKey().defaultRandom(),
-    user_id: uuid("user_id").references(() => usersTable.id),
-    type: varchar("type", { length: 255 }).notNull(),
-    startDate: date("start_date").notNull(),
-    endDate: date("end_date").notNull(),
-    reason: text("reason").notNull(),
-    status: leaveStatusEnum("status").notNull().default("pending"),
-    approvedBy: uuid("approved_by_id").references(() => usersTable.id),
-    rejectedBy: uuid("rejected_by_id").references(() => usersTable.id),
-    fileUrl: text("file_url").notNull(),
-    fileId: text("file_id").notNull(), 
-    fileName: text("file_name").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").references(() => usersTable.id),
+  department_id: uuid("department_id").references(() => departmentsTable.id),
+  site_id: uuid("site_id").references(() => sitesTable.id),
+  type: varchar("type", { length: 255 }).notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  reason: text("reason").notNull(),
+  status: leaveStatusEnum("status").notNull().default("pending"),
+  approvedBy: uuid("approved_by_id").references(() => usersTable.id),
+  approvedAt: timestamp("approved_at"), // เพิ่มเพื่อเก็บเวลาที่อนุมัติ
+  rejectedBy: uuid("rejected_by_id").references(() => usersTable.id),
+  rejectedAt: timestamp("rejected_at"), // เพิ่มเพื่อเก็บเวลาที่อนุมัติ
+  fileUrl: text("file_url"), // ปรับเป็น null ได้ เผื่อบางคนลาไม่มีใบรับรอง
+  fileId: text("file_id"),
+  fileName: text("file_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(), // 
 });
 
 export const usersRelations = relations(usersTable, ({ one, many }) => ({

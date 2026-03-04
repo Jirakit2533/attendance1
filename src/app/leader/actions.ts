@@ -7,7 +7,6 @@ import { revalidatePath } from "next/cache";
 
 /**
  * 1. บันทึกเวลาเข้า-ออก (Check-in / Check-out)
- * ปรับปรุง: รองรับการเช็ค Record เดิมก่อนอัปเดต และใช้ Timezone ที่แม่นยำ
  */
 export async function saveAttendanceAction(data: {
   userId: string;
@@ -15,6 +14,8 @@ export async function saveAttendanceAction(data: {
   image: string; 
   fileId?: string; 
   location: string;
+  departmentId: string;
+  siteId: string | null;
 }) {
   try {
     const now = new Date();
@@ -27,9 +28,10 @@ export async function saveAttendanceAction(data: {
     }).format(now); 
 
     if (data.type === "IN") {
-      // ตรวจสอบก่อนว่าวันนี้ Check-in ไปหรือยัง (ป้องกันการ Insert ซ้ำ)
       await db.insert(attendanceTable).values({
         user_id: data.userId,
+        department_id: data.departmentId,
+        site_id: data.siteId,
         date: todayDate,
         checkIn: now,
         imageIn: data.image,
@@ -37,7 +39,6 @@ export async function saveAttendanceAction(data: {
         locationIn: data.location,
       });
     } else {
-      // อัปเดตข้อมูลขาออก โดยอ้างอิง User ID และวันที่ปัจจุบัน
       const result = await db.update(attendanceTable)
         .set({
           checkOut: now,
@@ -53,15 +54,12 @@ export async function saveAttendanceAction(data: {
         );
       
       if (result.rowCount === 0) {
-        return { success: false, error: "ไม่พบข้อมูลการเข้างานของวันนี้ ไม่สามารถบันทึกเวลาออกได้" };
+        return { success: false, error: "ไม่พบข้อมูลการเข้างานของวันนี้ กรุณาลงเวลาเข้างานก่อน" };
       }
     }
 
-    // ล้าง Cache หน้าที่เกี่ยวข้อง
     revalidatePath("/leader");
     revalidatePath("/employee");
-    revalidatePath("/administrator"); 
-    
     return { success: true };
   } catch (error: any) {
     console.error("Attendance error:", error);
@@ -71,10 +69,11 @@ export async function saveAttendanceAction(data: {
 
 /**
  * 2. ส่งคำขอลางาน
- * ปรับปรุง: ตรวจสอบความครบถ้วนของข้อมูลไฟล์ตาม Schema (.notNull)
  */
 export async function createLeaveRequestAction(data: {
   userId: string;
+  departmentId: string;
+  siteId: string | null;
   type: string;
   startDate: string; 
   endDate: string;   
@@ -86,12 +85,13 @@ export async function createLeaveRequestAction(data: {
   try {
     await db.insert(leaveTable).values({
       user_id: data.userId,
+      department_id: data.departmentId,
+      site_id: data.siteId,
       type: data.type,
       startDate: data.startDate,
       endDate: data.endDate,
       reason: data.reason,
-      status: "รออนุมัติ", 
-      // ใส่ค่า default ในกรณีที่ไม่มีไฟล์ เพื่อไม่ให้ติด constraint .notNull()
+      status: "pending", 
       fileUrl: data.fileUrl || "no-file",
       fileId: data.fileId || "no-id",
       fileName: data.fileName || "no-name",
@@ -99,32 +99,28 @@ export async function createLeaveRequestAction(data: {
 
     revalidatePath("/leader");
     revalidatePath("/employee");
-    revalidatePath("/administrator");
-
     return { success: true };
   } catch (error: any) {
     console.error("Create leave error:", error);
-    return { success: false, error: "ส่งคำขอลาไม่สำเร็จ: " + (error.message || "") };
+    return { success: false, error: "ส่งคำขอลาไม่สำเร็จ" };
   }
 }
 
 /**
  * 3. อัปเดตสถานะการลา (อนุมัติ / ปฏิเสธ)
- * ปรับปรุง: จัดการ Field approvedBy และ rejectedBy ให้สัมพันธ์กับสถานะ
  */
 export async function updateLeaveStatusAction(
   leaveId: string, 
-  newStatus: "อนุมัติแล้ว" | "ปฏิเสธ" | "รออนุมัติ",
+  newStatus: "approved" | "rejected" | "pending",
   adminOrLeaderId: string
 ) {
   try {
-    // กำหนดค่าผู้ดำเนินการตามสถานะที่เลือก
     const updatePayload: any = { 
       status: newStatus,
-      // ถ้าอนุมัติ ให้เซ็ต approvedBy และล้าง rejectedBy (ถ้าเคยมี)
-      approvedBy: newStatus === "อนุมัติแล้ว" ? adminOrLeaderId : null,
-      // ถ้าปฏิเสธ ให้เซ็ต rejectedBy และล้าง approvedBy (ถ้าเคยมี)
-      rejectedBy: newStatus === "ปฏิเสธ" ? adminOrLeaderId : null,
+      approvedBy: newStatus === "approved" ? adminOrLeaderId : null,
+      approvedAt: newStatus === "approved" ? new Date() : null,
+      rejectedBy: newStatus === "rejected" ? adminOrLeaderId : null,
+      rejectedAt: newStatus === "rejected" ? new Date() : null,
     };
 
     await db.update(leaveTable)
@@ -133,11 +129,9 @@ export async function updateLeaveStatusAction(
 
     revalidatePath("/leader");
     revalidatePath("/employee");
-    revalidatePath("/administrator");
-
     return { success: true };
   } catch (error: any) {
     console.error("Update leave error:", error);
-    return { success: false, error: "ไม่สามารถอัปเดตสถานะได้: " + (error.message || "") };
+    return { success: false, error: "อัปเดตสถานะไม่สำเร็จ" };
   }
 }

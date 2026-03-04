@@ -2,13 +2,12 @@
 
 import { db } from "@/db";
 import { companyTable, usersTable, adminsTable, superAdminTable } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 
 /* ================== HELPER: Get Current Super Admin ================== */
-// ดึงข้อมูล Super Admin ที่ Login อยู่จาก Session
 async function getCurrentSuperAdmin() {
   const cookieStore = await cookies();
   const adminId = cookieStore.get("session_user_id")?.value;
@@ -28,7 +27,7 @@ async function getCurrentSuperAdmin() {
 /** ดึงข้อมูลบริษัททั้งหมด */
 export async function getCompanies() {
   try {
-    const data = await db.select().from(companyTable).orderBy(desc(companyTable.createdAt));
+    const data = await db.select().from(companyTable).orderBy(desc(companyTable.created_at));
     return { success: true, data };
   } catch (error) {
     console.error("Get Companies Error:", error);
@@ -46,15 +45,16 @@ export async function getAdmins() {
         firstName: usersTable.firstName,
         lastName: usersTable.lastName,
         role: usersTable.role,
+        email: adminsTable.email,
         companyId: companyTable.id,
         companyName: companyTable.name,
-        createdAt: usersTable.createdAt,
+        createdAt: usersTable.created_at,
       })
       .from(usersTable)
       .innerJoin(adminsTable, eq(usersTable.id, adminsTable.user_id))
       .innerJoin(companyTable, eq(adminsTable.company, companyTable.id))
       .where(eq(usersTable.role, "admin"))
-      .orderBy(desc(usersTable.createdAt));
+      .orderBy(desc(usersTable.created_at));
 
     return { success: true, data };
   } catch (error) {
@@ -70,25 +70,29 @@ export async function saveCompanyAction(data: any) {
     const admin = await getCurrentSuperAdmin();
     if (!admin) return { success: false, error: "Unauthorized: ไม่พบข้อมูล Super Admin" };
 
-    const isEdit = data.id && typeof data.id === "string" && !data.id.startsWith("COMP-");
+    const isEdit = data.id && typeof data.id === "string";
 
     if (isEdit) {
-      // ✅ แก้ไขบริษัท
       await db.update(companyTable)
         .set({
           name: data.name,
+          companyCode: data.companyCode, 
           address: data.address,
-          updateBy: admin.name,
+          phone: data.phone,
+          email: data.email,
+          updateByName: admin.name, // 📍 แก้ให้ตรง Schema: updateBy -> updateByName
           updatedAt: new Date(),
         })
         .where(eq(companyTable.id, data.id));
     } else {
-      // ✅ สร้างบริษัทใหม่
       await db.insert(companyTable).values({
+        companyCode: data.companyCode,
         name: data.name,
         address: data.address,
-        user_id: admin.id,
-        createdBy: admin.name,
+        phone: data.phone,
+        email: data.email,
+        creatorId: admin.id,      // 📍 แก้ให้ตรง Schema: user_id -> creatorId
+        createdByName: admin.name, // 📍 แก้ให้ตรง Schema: createdBy -> createdByName
       });
     }
 
@@ -96,18 +100,43 @@ export async function saveCompanyAction(data: any) {
     return { success: true };
   } catch (error: any) {
     console.error("Save Company Error:", error);
+    if (error.code === '23505') return { success: false, error: "รหัสบริษัทนี้ถูกใช้งานแล้ว" };
     return { success: false, error: error.message || "ล้มเหลวในการบันทึกข้อมูลบริษัท" };
   }
 }
 
 export async function deleteCompanyAction(id: string) {
   try {
-    await db.delete(companyTable).where(eq(companyTable.id, id));
+    const admin = await getCurrentSuperAdmin();
+    if (!admin) return { success: false, error: "Unauthorized" };
+
+    // ใช้การอัปเดตชื่อผู้ลบก่อนจะลบจริง (ถ้าต้องการเก็บ Log ชื่อคนลบใน DB ก่อนหายไป)
+    // หรือถ้า Schema ลบแบบ Hard Delete (ลบถาวร) บรรทัดนี้อาจไม่จำเป็น แต่ใส่ไว้ให้ตามโครงสร้างคุณครับ
+    await db.update(companyTable).set({ deletedByName: admin.name }).where(eq(companyTable.id, id));
+
+    await db.delete(adminsTable).where(eq(adminsTable.company, id));
+    await db.delete(usersTable).where(eq(usersTable.companyId, id));
+
+    const result = await db.delete(companyTable)
+      .where(eq(companyTable.id, id))
+      .returning({ deletedId: companyTable.id });
+
+    if (result.length === 0) {
+      return { success: false, error: "ไม่พบข้อมูลบริษัท หรือบริษัทถูกลบไปแล้ว" };
+    }
+
     revalidatePath("/superAdmin");
     return { success: true };
-  } catch (error) {
-    console.error("Delete Company Error:", error);
-    return { success: false, error: "ไม่สามารถลบบริษัทได้ เนื่องจากมีการใช้งานอยู่ (โปรดลบแอดมินในบริษัทนี้ออกก่อน)" };
+
+  } catch (error: any) {
+    console.error("❌ Delete Company Error:", error);
+    if (error.code === '23503') {
+      return { 
+        success: false, 
+        error: "ไม่สามารถลบได้: กรุณาลบ Site งานหรือข้อมูลอื่นๆ ที่เกี่ยวข้องกับบริษัทนี้ออกก่อน" 
+      };
+    }
+    return { success: false, error: "ล้มเหลว: " + (error.message || "Unknown error") };
   }
 }
 
@@ -121,13 +150,14 @@ export async function saveAdminAction(data: any) {
     const nameParts = data.name.trim().split(/\s+/);
     const firstName = nameParts[0] || "";
     const lastName = nameParts.slice(1).join(" ") || "";
+    const email = data.email || ""; 
 
     if (data.isEdit && data.id) {
-      // ✅ แก้ไข Admin (แยกคำสั่ง)
       const updatePayload: any = {
         firstName,
         lastName,
         userName: data.username,
+        companyId: data.companyId,
         updatedAt: new Date(),
       };
 
@@ -140,13 +170,13 @@ export async function saveAdminAction(data: any) {
       await db.update(adminsTable)
         .set({
           company: data.companyId,
-          updateBy: admin.name,
+          email: email,
+          updateByName: admin.name, // 📍 แก้ให้ตรง Schema: updateBy -> updateByName
           updatedAt: new Date(),
         })
         .where(eq(adminsTable.user_id, data.id));
 
     } else {
-      // ✅ สร้าง Admin ใหม่ (แยกคำสั่ง)
       const existingUser = await db.query.usersTable.findFirst({
         where: eq(usersTable.userName, data.username)
       });
@@ -154,22 +184,21 @@ export async function saveAdminAction(data: any) {
 
       const hashedPassword = await bcrypt.hash(data.password || "123456", 10);
 
-      // รันคำสั่งที่ 1
       const [newUser] = await db.insert(usersTable).values({
         firstName,
         lastName,
         userName: data.username,
         passwordHash: hashedPassword,
         role: "admin",
-        department: "Management",
-        position: "HR Admin",
+        companyId: data.companyId,
       }).returning({ id: usersTable.id });
 
-      // รันคำสั่งที่ 2
       await db.insert(adminsTable).values({
         user_id: newUser.id,
+        creatorId: admin.id,      // 📍 เพิ่มตาม Schema: เก็บ ID คนสร้าง
         company: data.companyId,
-        createdBy: admin.name,
+        email: email,
+        createdByName: admin.name, // 📍 แก้ให้ตรง Schema: createdBy -> createdByName
       });
     }
 
@@ -183,10 +212,8 @@ export async function saveAdminAction(data: any) {
 
 export async function deleteAdminAction(id: string) {
   try {
-    await db.transaction(async (tx) => {
-      await tx.delete(adminsTable).where(eq(adminsTable.user_id, id));
-      await tx.delete(usersTable).where(eq(usersTable.id, id));
-    });
+    await db.delete(adminsTable).where(eq(adminsTable.user_id, id));
+    await db.delete(usersTable).where(eq(usersTable.id, id));
     
     revalidatePath("/superAdmin");
     return { success: true };
