@@ -1,7 +1,7 @@
 "use server";
 
-import { db } from "@/db";
-import { leaveTable } from "@/db/schema";
+import { db } from "@/db/db";
+import { leaveTable } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 

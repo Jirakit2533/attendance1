@@ -1,7 +1,7 @@
 "use server";
 
-import { db } from "@/db";
-import { superAdminTable, usersTable } from "@/db/schema";
+import { db } from "@/db/db";
+import { superAdminTable, usersTable } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";

@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/db";
 import { 
   usersTable, 
   attendanceTable, 
@@ -8,7 +8,7 @@ import {
   companyTable,
   positionsTable,
   departmentsTable 
-} from "@/db/schema";
+} from "@/lib/schema";
 import { desc, eq, and, or, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation"; 

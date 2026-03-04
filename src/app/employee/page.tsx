@@ -3,8 +3,8 @@ import { getLeaveHistory } from "@/server/leave";
 import { getCurrentUser } from "@/lib/auth"; 
 import EmployeeClientPage from "./employeeClientPage";
 import { redirect } from "next/navigation";
-import { db } from "@/db"; // นำเข้า db เพื่อเช็คความมีตัวตน
-import { usersTable } from "@/db/schema";
+import { db } from "@/lib/db"; // นำเข้า db เพื่อเช็คความมีตัวตน
+import { usersTable } from "@/lib/schema";
 import { eq, and, isNull } from "drizzle-orm";
 
 export default async function Page() {

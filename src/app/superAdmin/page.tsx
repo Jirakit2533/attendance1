@@ -1,5 +1,5 @@
-import { db } from "@/db";
-import { companyTable, usersTable, adminsTable, superAdminTable } from "@/db/schema";
+import { db } from "@/db/db";
+import { companyTable, usersTable, adminsTable, superAdminTable } from "@/lib/schema";
 import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers"; // 👈 เพิ่มการดึง cookies
 import { redirect } from "next/navigation"; // 👈 เพิ่มการ redirect

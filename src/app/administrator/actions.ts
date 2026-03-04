@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/db";
 import { 
   usersTable, 
   adminsTable, 
@@ -10,7 +10,7 @@ import {
   leaveTable,
   positionsTable,
   departmentsTable 
-} from "@/db/schema";
+} from "@/lib/schema";
 import { eq, and, desc, isNull, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
