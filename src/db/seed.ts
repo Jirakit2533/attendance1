@@ -1,5 +1,5 @@
 import { db } from "./db"; // ปรับ path ให้ตรงกับไฟล์ db connection ของคุณ
-import { superAdminTable } from "../lib/schema";
+import { superAdminTable } from "./schema";
 import bcrypt from "bcryptjs";
 
 async function seed() {

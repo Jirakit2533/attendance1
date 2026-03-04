@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { companyTable, usersTable, adminsTable, superAdminTable } from "@/lib/schema";
+import { companyTable, usersTable, adminsTable, superAdminTable } from "@/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";

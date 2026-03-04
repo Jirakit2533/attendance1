@@ -10,7 +10,7 @@ import {
   leaveTable,
   positionsTable,
   departmentsTable 
-} from "@/lib/schema";
+} from "@/db/schema";
 import { eq, and, desc, isNull, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";

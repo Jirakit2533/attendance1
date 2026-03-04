@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { usersTable, attendanceTable, leaveTable, positionsTable } from "@/lib/schema";
+import { usersTable, attendanceTable, leaveTable, positionsTable } from "@/db/schema";
 import { eq, desc, and, ne, isNull } from "drizzle-orm";
 import LeaderClientPage from "./leaderClientPage";
 

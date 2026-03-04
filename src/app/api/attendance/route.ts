@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db"; // นำเข้าจากไฟล์ db.ts ที่เราสร้างไว้
-import { attendance } from "@/lib/schema"; // นำเข้า table attendance จาก schema.ts
+import { attendance } from "@/db/schema"; // นำเข้า table attendance จาก schema.ts
 import { desc, eq, and, isNull } from "drizzle-orm"; // นำเข้า helper สำหรับคำสั่ง SQL
 
 // GET: ดึงประวัติการเข้างาน

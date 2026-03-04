@@ -1,7 +1,7 @@
 // src/lib/auth.ts
 import { cookies } from "next/headers";
 import { db } from "@/db/db";
-import { usersTable } from "@/lib/schema";
+import { usersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function getCurrentUser() {

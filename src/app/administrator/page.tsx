@@ -8,7 +8,7 @@ import {
   companyTable,
   positionsTable,
   departmentsTable 
-} from "@/lib/schema";
+} from "@/db/schema";
 import { desc, eq, and, or, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation"; 

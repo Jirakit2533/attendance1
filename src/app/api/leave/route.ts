@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-
+import { db } from "@/db/db";
+import { attendance, leave, users } from "@/db/schema";
 export async function GET() {
   try {
     const leaves = await prisma.leave.findMany({
