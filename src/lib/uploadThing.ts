@@ -4,11 +4,10 @@ import {
   generateReactHelpers,
 } from "@uploadthing/react";
 
-// ✅ ตรวจสอบ Path นี้ให้ตรงกับไฟล์ core.ts ของคุณ
 import type { OurFileRouter } from "@/app/api/uploadthing/core"; 
 
-// ✅ สร้างและ Export เฉพาะ Helpers สำหรับหน้าบ้าน
-export const { useUploadthing, uploadFiles } = generateReactHelpers<OurFileRouter>();
+// ✅ แก้ไขตรงนี้ให้เป็น T ตัวใหญ่ เพื่อให้เป็นมาตรฐาน
+export const { useUploadThing, uploadFiles } = generateReactHelpers<OurFileRouter>();
 
 export const UploadButton = generateUploadButton<OurFileRouter>();
 export const UploadDropzone = generateUploadDropzone<OurFileRouter>();

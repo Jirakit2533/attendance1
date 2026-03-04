@@ -14,6 +14,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation"; 
 import AdminClientPage from "./adminClientPage";
 
+export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
+
 export default async function AdminDashboardPage() {
   try {
     // 1. ตรวจสอบ Session Admin

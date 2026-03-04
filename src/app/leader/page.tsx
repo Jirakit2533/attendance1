@@ -5,16 +5,18 @@ import { usersTable, attendanceTable, leaveTable, positionsTable } from "@/db/sc
 import { eq, desc, and, ne, isNull } from "drizzle-orm";
 import LeaderClientPage from "./leaderClientPage";
 
+export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
+
 export default async function LeaderPage() {
   // 1. ดึงข้อมูล User จาก Session
   const userFromAuth = await getCurrentUser();
 
-  // 🛡️ Security Check: ต้องมี Session และเป็น Leader เท่านั้น
+  // 🛡️ Security Check
   if (!userFromAuth || userFromAuth.role !== "leader") {
     redirect("/api/auth/logout-cleanup");
   }
 
-  // 🔍 ดึง Profile ล่าสุดเพื่อเช็ค Department และ Site
+  // 🔍 ดึง Profile ล่าสุด
   const userExists = await db
     .select()
     .from(usersTable)
@@ -28,8 +30,6 @@ export default async function LeaderPage() {
   const user = userExists[0];
   const currentDept = user.departmentId;
   const currentSite = user.site_id;
-
-  // 💡 หัวใจสำคัญ: ถ้า site_id เป็น null แสดงว่าดูได้ "ทุกไซต์" ในแผนกนั้น
   const isAllSitesLeader = !currentSite;
 
   try {
@@ -39,17 +39,15 @@ export default async function LeaderPage() {
       .from(attendanceTable)
       .where(eq(attendanceTable.user_id, user.id))
       .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
-      .limit(10);
+      .limit(31); // ดึงเผื่อไว้สำหรับ Filter รายเดือน
 
-    // เตรียมตัวแปรสำหรับข้อมูลทีม
     let allLeaveRequests: any[] = [];
     let teamAttendanceRaw: any[] = [];
 
-    // --- 3. ดึงข้อมูลทีม (กรองตามเงื่อนไข Dept และ Site) ---
+    // --- 3. ดึงข้อมูลทีม ---
     if (currentDept) {
       const siteCondition = isAllSitesLeader ? [] : [eq(usersTable.site_id, currentSite!)];
 
-      // ดึงคำขอลาของทีม
       allLeaveRequests = await db
         .select({
           id: leaveTable.id,
@@ -75,10 +73,10 @@ export default async function LeaderPage() {
         )
         .orderBy(desc(leaveTable.startDate));
 
-      // ดึงการเข้างานของพนักงานในทีม (ยกเว้นตัวหัวหน้าเอง)
       teamAttendanceRaw = await db
         .select({
           id: attendanceTable.id,
+          userId: attendanceTable.user_id, // เพิ่มเพื่อใช้ตรวจสอบใน Client
           firstName: usersTable.firstName,
           lastName: usersTable.lastName,
           userName: usersTable.userName,
@@ -107,7 +105,7 @@ export default async function LeaderPage() {
         .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn));
     }
 
-    // --- 4. จัด Props และ Mapping ชื่อตัวแปรให้ตรงกับ UI (LeaderClientPage) ---
+    // --- 4. จัด Props (สำคัญ: ห้ามใส่ || "-" ที่นี่ เพื่อให้ Logic Client ทำงานได้) ---
     const finalProps = {
       userProfile: {
         id: user.id,
@@ -120,35 +118,30 @@ export default async function LeaderPage() {
         avatarUrl: user.avatarUrl,
         isAllSites: isAllSitesLeader
       },
-      // ✅ Map ข้อมูล "การเข้างานของฉัน" ให้ชื่อ Key ตรงกับ UI
+      // ✅ ส่งค่าดิบเพื่อให้วันนี้สถานะ hasCheckedOut เช็คเจอว่าเป็น null จริงๆ
       myRecords: myRecordsRaw.map(r => ({
         id: r.id,
         date: r.date,
-        checkIn: r.checkIn || "--:--",
-        checkOut: r.checkOut || "-",
+        checkIn: r.checkIn, 
+        checkOut: r.checkOut, 
         imageIn: r.imageIn,
         imageOut: r.imageOut,
         location: r.locationIn || r.locationOut || "ไม่ได้ระบุพิกัด",
         position: user.role
       })),
-      // ✅ Map ข้อมูล "การเข้างานของทีม"
+      // ✅ Mapping ข้อมูลทีมสำหรับ Filter
       initialAttendance: teamAttendanceRaw.map(t => ({
         ...t,
         employeeName: `${t.firstName || ''} ${t.lastName || ''}`.trim(),
-        checkIn: t.checkIn || "--:--",
-        checkOut: t.checkOut || "-",
         location: t.locationIn || t.locationOut || "ไม่ได้ระบุพิกัด"
       })),
-      // ✅ Map ข้อมูล "ใบลา"
       initialLeaves: allLeaveRequests.map(l => ({
         ...l,
         employeeName: `${l.firstName || ''} ${l.lastName || ''}`.trim(),
       })),
     };
 
-    // ป้องกันปัญหา Date Object ใน Client Component
     const serializedProps = JSON.parse(JSON.stringify(finalProps));
-
     return <LeaderClientPage {...serializedProps} />;
 
   } catch (error) {

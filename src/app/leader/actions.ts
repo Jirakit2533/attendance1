@@ -6,6 +6,31 @@ import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 /**
+ * ฟังก์ชันช่วยแปลง Date เป็นสตริงเวลา HH:mm:ss (เวลาไทย)
+ */
+const getTimeString = (date: Date) => {
+  return new Intl.DateTimeFormat('en-GB', { //ใช้ en-GB เพื่อให้ได้ฟอร์แมต 24 ชม. ที่แน่นอน
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date).replace(/\//g, '-');
+};
+
+/**
+ * ฟังก์ชันช่วยแปลง Date เป็น ISO String แบบไทย (YYYY-MM-DD HH:mm:ss)
+ */
+const getFullDateTimeString = (date: Date) => {
+  const datePart = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(date);
+  const timePart = getTimeString(date);
+  return `${datePart} ${timePart}`;
+};
+
+/**
  * 1. บันทึกเวลาเข้า-ออก (Check-in / Check-out)
  */
 export async function saveAttendanceAction(data: {
@@ -19,7 +44,8 @@ export async function saveAttendanceAction(data: {
 }) {
   try {
     const now = new Date();
-    // สร้างวันที่ YYYY-MM-DD ตามเวลาไทย
+    
+    // สร้างวันที่ YYYY-MM-DD
     const todayDate = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Bangkok',
       year: 'numeric',
@@ -27,13 +53,15 @@ export async function saveAttendanceAction(data: {
       day: '2-digit',
     }).format(now); 
 
+    const timeStr = getTimeString(now);
+
     if (data.type === "IN") {
       await db.insert(attendanceTable).values({
         user_id: data.userId,
         department_id: data.departmentId,
         site_id: data.siteId,
         date: todayDate,
-        checkIn: now,
+        checkIn: timeStr,
         imageIn: data.image,
         imageInId: data.fileId || null,
         locationIn: data.location,
@@ -41,7 +69,7 @@ export async function saveAttendanceAction(data: {
     } else {
       const result = await db.update(attendanceTable)
         .set({
-          checkOut: now,
+          checkOut: new Date(), // Drizzle จะจัดการเรียก .toISOString() ให้เองโดยไม่ error
           imageOut: data.image,
           imageOutId: data.fileId || null,  
           locationOut: data.location,
@@ -54,16 +82,17 @@ export async function saveAttendanceAction(data: {
         );
       
       if (result.rowCount === 0) {
-        return { success: false, error: "ไม่พบข้อมูลการเข้างานของวันนี้ กรุณาลงเวลาเข้างานก่อน" };
+        return { success: false, error: "ไม่พบข้อมูลการเช็คอินของวันนี้" };
       }
     }
 
+    revalidatePath("/", "layout");
     revalidatePath("/leader");
     revalidatePath("/employee");
     return { success: true };
   } catch (error: any) {
     console.error("Attendance error:", error);
-    return { success: false, error: "บันทึกเวลาไม่สำเร็จ: " + (error.message || "") };
+    return { success: false, error: "บันทึกเวลาไม่สำเร็จ: " + (error.message || "Unknown Error") };
   }
 }
 
@@ -108,6 +137,7 @@ export async function createLeaveRequestAction(data: {
 
 /**
  * 3. อัปเดตสถานะการลา (อนุมัติ / ปฏิเสธ)
+ * แก้ไข: ใช้ String แทน Date Object เพื่อป้องกัน Error .toISOString()
  */
 export async function updateLeaveStatusAction(
   leaveId: string, 
@@ -115,12 +145,16 @@ export async function updateLeaveStatusAction(
   adminOrLeaderId: string
 ) {
   try {
+    const now = new Date();
+    const timeStampStr = getFullDateTimeString(now);
+
     const updatePayload: any = { 
       status: newStatus,
+      // บันทึกเป็น String แทนการส่ง Date Object เข้าไปตรงๆ
       approvedBy: newStatus === "approved" ? adminOrLeaderId : null,
-      approvedAt: newStatus === "approved" ? new Date() : null,
+      approvedAt: newStatus === "approved" ? timeStampStr : null,
       rejectedBy: newStatus === "rejected" ? adminOrLeaderId : null,
-      rejectedAt: newStatus === "rejected" ? new Date() : null,
+      rejectedAt: newStatus === "rejected" ? timeStampStr : null,
     };
 
     await db.update(leaveTable)

@@ -7,6 +7,8 @@ import { db } from "@/lib/db"; // นำเข้า db เพื่อเช็
 import { usersTable } from "@/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 
+export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
+
 export default async function Page() {
   // 1. ดึงข้อมูล User จาก Session/Cookie เบื้องต้น
   const userFromAuth = await getCurrentUser();

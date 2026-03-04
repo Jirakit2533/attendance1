@@ -1021,86 +1021,141 @@ export default function AdminClientPage({
         </div>
       )}
 
-      {/* --- 📊 MODAL: FILTER REPORT --- */}
+     {/* --- 📊 MODAL: FILTER REPORT (ตัวกรองรายงาน) --- */}
       {showFilterModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[400] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl relative">
-            <h3 className="text-xl font-black text-slate-900 text-center mb-6 uppercase italic">📊 กรองข้อมูลรายงาน</h3>
+            <h3 className="text-xl font-black text-slate-900 text-center mb-6 uppercase italic">📊 ตัวกรองรายงาน</h3>
             <div className="space-y-4">
-              <select onChange={(e) => setFilterDepartment(e.target.value)} className="w-full p-4 rounded-2xl bg-slate-50 font-bold outline-none border">
-                <option value="">เลือกแผนก (ทั้งหมด)</option>
-                {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-              <select onChange={(e) => setFilterSite(e.target.value)} className="w-full p-4 rounded-2xl bg-slate-50 font-bold outline-none border">
-                <option value="">เลือกไซต์งาน (ทั้งหมด)</option>
-                {sites.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 ml-4 uppercase">เลือกแผนก</label>
+                <select 
+                  onChange={(e) => setFilterDepartment(e.target.value)} 
+                  className="w-full p-4 rounded-2xl bg-slate-50 font-bold outline-none border text-sm"
+                >
+                  <option value="">ทุกแผนก</option>
+                  {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 ml-4 uppercase">เลือกไซต์งาน</label>
+                <select 
+                  onChange={(e) => setFilterSite(e.target.value)} 
+                  className="w-full p-4 rounded-2xl bg-slate-50 font-bold outline-none border text-sm"
+                >
+                  <option value="">ทุกไซต์งาน</option>
+                  {sites.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
             </div>
             <div className="flex gap-3 mt-8">
-              <button onClick={() => setShowFilterModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 uppercase text-[10px]">ยกเลิก</button>
-              <button onClick={() => { setShowFilterModal(false); setShowReport(true); }} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-blue-100">ดูรายงาน</button>
+              <button 
+                onClick={() => setShowFilterModal(false)} 
+                className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 uppercase text-[10px]"
+              >
+                ยกเลิก
+              </button>
+              <button 
+                onClick={() => { setShowFilterModal(false); setShowReport(true); }} 
+                className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-blue-100"
+              >
+                สร้างรายงาน
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- 🖨️ MODAL: REPORT PREVIEW --- */}
+      {/* --- 🖨️ MODAL: REPORT PREVIEW (ตัวอย่างรายงาน) --- */}
       {showReport && (
         <div className="fixed inset-0 bg-slate-900/95 flex items-start justify-center z-[600] p-4 overflow-y-auto custom-scrollbar">
           <div className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl flex flex-col p-10 print:p-0 min-h-[80vh]">
+            
+            {/* ส่วนหัว Modal - ซ่อนเมื่อสั่งพิมพ์ */}
             <div className="flex justify-between items-center mb-10 print:hidden">
-              <div className="font-black text-xl">REPORT PREVIEW</div>
+              <div className="font-black text-xl tracking-tighter text-slate-800">ตัวอย่างก่อนพิมพ์</div>
               <div className="flex gap-3">
-                <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl font-black uppercase text-xs shadow-lg shadow-blue-200">ปริ้นรายงาน (PDF)</button>
-                <button onClick={() => setShowReport(false)} className="bg-slate-100 hover:bg-slate-200 px-6 py-3 rounded-2xl font-bold text-xs transition-colors">ปิดหน้าต่าง</button>
+                <button 
+                  onClick={() => window.print()} 
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg shadow-blue-200 transition-all active:scale-95"
+                >
+                  ดาวน์โหลด / พิมพ์ (PDF)
+                </button>
+                <button 
+                  onClick={() => setShowReport(false)} 
+                  className="bg-slate-100 hover:bg-slate-200 px-6 py-3 rounded-2xl font-bold text-xs transition-colors text-slate-600"
+                >
+                  ปิดหน้าจอ
+                </button>
               </div>
             </div>
 
+            {/* เนื้อหาในใบรายงาน */}
             <div className="border-b-4 border-slate-900 pb-6 mb-6 flex justify-between items-end">
               <div>
-                <h2 className="text-3xl font-black uppercase tracking-tighter text-slate-900">{admin.company}</h2>
-                <p className="text-blue-600 font-bold italic uppercase text-sm tracking-widest">Attendance Report: {reportDate}</p>
+                <h2 className="text-3xl font-black tracking-tighter text-slate-900">{admin.company}</h2>
+                <p className="text-blue-600 font-bold text-sm tracking-tight mt-1">
+                  รายงานสรุปข้อมูลการลงเวลางานประจำวัน: {reportDate}
+                </p>
               </div>
-              <div className="text-right text-[10px] font-bold text-slate-400 uppercase">พิมพ์เมื่อ: {reportDate} | {reportTime}</div>
+              <div className="text-right text-[10px] font-bold text-slate-400 uppercase">
+                วันที่พิมพ์: {reportDate} | เวลา: {reportTime} น.
+              </div>
             </div>
 
+            {/* ตารางข้อมูลรายงาน */}
             <div className="overflow-hidden rounded-3xl border border-slate-100">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-900 text-white">
-                    <th className="p-4 text-left uppercase text-[10px]">Date</th>
-                    <th className="p-4 text-left uppercase text-[10px]">Employee</th>
-                    <th className="p-4 text-center uppercase text-[10px]">Check In</th>
-                    <th className="p-4 text-center uppercase text-[10px]">Check Out</th>
-                    <th className="p-4 text-right uppercase text-[10px]">Status</th>
+                    <th className="p-4 text-left font-bold text-[11px]">วันที่</th>
+                    <th className="p-4 text-left font-bold text-[11px]">ชื่อ-นามสกุลพนักงาน</th>
+                    <th className="p-4 text-center font-bold text-[11px]">เวลาเข้า</th>
+                    <th className="p-4 text-center font-bold text-[11px]">เวลาออก</th>
+                    <th className="p-4 text-right font-bold text-[11px]">สถานะการเข้างาน</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {attendance.map((a: any, i: number) => (
-                    <tr key={i} className="hover:bg-slate-50">
-                      <td className="p-4 font-bold text-slate-500">{a.date}</td>
-                      <td className="p-4">
-                        <div className="font-black text-slate-900">{a.employeeName}</div>
-                        <div className="text-[9px] text-slate-400 uppercase font-bold">{a.siteName}</div>
-                      </td>
-                      <td className="p-4 text-center text-emerald-600 font-black">{a.checkIn}</td>
-                      <td className="p-4 text-center text-red-500 font-black">{a.checkOut || "--:--"}</td>
-                      <td className="p-4 text-right">
-                        <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase ${a.checkOut ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
-                          {a.checkOut ? 'Complete' : 'Working'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {attendance.map((a: any, i: number) => {
+                    const formatT = (t: string) => t && t !== "-" ? (t.includes("T") ? t.split("T")[1] : (t.includes(" ") ? t.split(" ")[1] : t)).slice(0, 5) : "--:--";
+                    
+                    return (
+                      <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-4 font-bold text-slate-500">{a.date}</td>
+                        <td className="p-4">
+                          <div className="font-black text-slate-900">{a.employeeName}</div>
+                          <div className="text-[9px] text-slate-400 font-bold uppercase">สถานที่: {a.siteName || "ไม่ได้ระบุ"}</div>
+                        </td>
+                        <td className="p-4 text-center text-emerald-600 font-black">
+                          {formatT(a.checkIn)}
+                        </td>
+                        <td className="p-4 text-center text-red-500 font-black">
+                          {a.checkOut ? formatT(a.checkOut) : "--:--"}
+                        </td>
+                        <td className="p-4 text-right">
+                          <span className={`text-[10px] font-black px-3 py-1 rounded-full ${a.checkOut ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                            {a.checkOut ? 'เสร็จสิ้นภารกิจ' : 'กำลังปฏิบัติงาน'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
             
-            <div className="mt-auto pt-16 hidden print:grid grid-cols-2 gap-20">
-              <div className="text-center border-t border-slate-300 pt-4">
-                <p className="text-xs font-bold uppercase">ผู้อนุมัติรายงาน: {admin.name}</p>
+            {/* ส่วนท้ายรายงาน (แสดงเฉพาะตอนพิมพ์) */}
+            <div className="mt-auto pt-20 hidden print:grid grid-cols-2 gap-20">
+              <div className="text-center border-t border-slate-300 pt-6">
+                <p className="text-xs font-bold mb-12">ลงชื่อ: ............................................................</p>
+                <p className="text-[11px] font-black text-slate-900">({admin.name})</p>
+                <p className="text-[9px] font-bold text-slate-400 mt-1">ผู้อนุมัติรายงาน / หัวหน้าส่วนงาน</p>
+              </div>
+              <div className="text-center border-t border-slate-300 pt-6">
+                <p className="text-xs font-bold text-slate-200 italic uppercase tracking-[0.2em]">ตราประทับบริษัท</p>
               </div>
             </div>
+
           </div>
         </div>
       )}

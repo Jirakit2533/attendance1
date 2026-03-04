@@ -4,7 +4,7 @@ import { useRef, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { logoutAction } from "@/server/auth";
-import { useUploadthing } from "@/lib/uploadthing";
+import { useUploadThing } from "@/lib/uploadthing";
 import { 
   saveAttendanceAction, 
   createLeaveRequestAction,
@@ -112,21 +112,24 @@ export default function LeaderClientPage({
   }, [teamAttendance, searchAtt]);
   
   const todayStatus = useMemo(() => {
-    const now = new Date();
-    const todayStr = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Bangkok',
-      year: 'numeric', month: '2-digit', day: '2-digit',
-    }).format(now);
-    
-    const todayRecord = records.find((r: any) => r.date === todayStr);
+  const now = new Date();
+  const todayStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now);
+  
+  const todayRecord = records.find((r: any) => r.date === todayStr);
 
-    return {
-      hasCheckedIn: !!todayRecord?.checkIn,
-      hasCheckedOut: !!todayRecord?.checkOut && todayRecord.checkOut !== "-" && todayRecord.checkOut !== null,
-      record: todayRecord
-    };
-  }, [records]);
+  // ตัดช่องว่างออกก่อนเช็ค (กรณี DB คืนค่าเป็น "  ")
+  const checkOutValue = todayRecord?.checkOut?.toString().trim();
 
+  return {
+    hasCheckedIn: !!todayRecord?.checkIn,
+    // เช็คว่ามีค่า และค่าต้องไม่เท่ากับ "-" และไม่ว่างเปล่า
+    hasCheckedOut: !!checkOutValue && checkOutValue !== "-" && checkOutValue !== "",
+    record: todayRecord
+  };
+}, [records]);
   /* ---------------- LEADER ACTIONS ---------------- */
   
   const handleApprove = async (leaveId: string) => {
@@ -215,7 +218,7 @@ export default function LeaderClientPage({
       const result = await saveAttendanceAction({
         userId: userProfile.id,
         type: isCheckingOut ? "OUT" : "IN",
-        image: uploadedFile.url,
+        image: uploadedFile.ufsUrl || uploadedFile.url, // ใช้ ufsUrl ถ้ามี
         fileId: uploadedFile.key,
         location: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
         departmentId: userProfile.departmentId,
@@ -421,82 +424,139 @@ export default function LeaderClientPage({
 
         {/* 📊 DASHBOARD CONTENT */}
         {!showLeaveForm && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="max-w-7xl mx-auto space-y-8">
             <div className="lg:col-span-2 space-y-8">
               
               {/* ตารางที่ 1: การเข้างานของฉัน */}
+
               <div className="bg-white p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-gray-50 overflow-hidden">
                 <div className="flex items-center gap-3 mb-8">
-                  <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
-                  <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">การเข้างาน <span className="text-gray-300">ของฉัน</span></h2>
+                    <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
+                    <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">
+                    การเข้างาน <span className="text-gray-300">ของฉัน</span>
+                    </h2>
                 </div>
+                
                 <div className="overflow-x-auto rounded-[1.5rem] -mx-6 px-6 sm:mx-0 sm:px-0">
-                  <table className="w-full text-sm min-w-[800px]">
+                    <table className="w-full text-sm min-w-[800px]">
                     <thead className="bg-gray-50/50 text-gray-400 uppercase text-[10px] font-black tracking-widest">
-                      <tr>
+                        <tr>
                         <th className="p-6 text-left">วันที่</th>
                         <th className="p-6 text-left">เวลาเข้า / รูปถ่าย</th>
                         <th className="p-6 text-left">เวลาออก / รูปถ่าย</th>
                         <th className="p-6 text-left">รายละเอียด / สถานที่</th>
-                      </tr>
+                        </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {records.length === 0 ? (
-                        <tr><td colSpan={4} className="p-20 text-center text-gray-300 font-bold italic">ยังไม่มีข้อมูลการเข้างาน</td></tr>
-                      ) : (
+                        {records.length === 0 ? (
+                        <tr>
+                            <td colSpan={4} className="p-20 text-center text-gray-300 font-bold italic">
+                            ยังไม่มีข้อมูลการเข้างาน
+                            </td>
+                        </tr>
+                        ) : (
                         records.map((r, i) => {
-                          // 🔍 DEBUG: บรรทัดนี้จะช่วยให้คุณเห็นค่าใน Console ว่าตัวแปรชื่ออะไรกันแน่
-                          console.log("Row data:", r); 
+                            // 🔍 ดักจับค่าเวลา: รองรับทั้ง String ที่ส่งมาจาก Action ใหม่ และ Date Object เก่า
+                          const formatTime = (time: any) => {
+                            if (!time || time === "-" || time === "null") return "-";
 
-                          // ดักจับค่าเวลา (เช็คทั้ง camelCase และ snake_case)
-                          const displayCheckIn = r.checkIn || r.check_in || r.check_in_time || "--:--";
-                          const displayCheckOut = r.checkOut || r.check_out || r.check_out_time || "-";
-                          
-                          // ดักจับรูปภาพ
-                          const displayImageIn = r.imageIn || r.image_in || r.image_in_url;
-                          const displayImageOut = r.imageOut || r.image_out || r.image_out_url;
+                            // กรณีข้อมูลมาเป็น String (เช่น "2026-03-04 17:30:00" หรือ "17:30:00")
+                            if (typeof time === "string") {
+                                // ถ้ามีช่องว่าง (มีวันที่ติดมา) ให้แยกเอาเฉพาะส่วนหลัง
+                                const timePart = time.includes(" ") ? time.split(" ")[1] : time;
+                                // ตัดเอาเฉพาะ HH:mm (เอาแค่ 5 ตัวแรก เช่น 17:30)
+                                return timePart.split(":").slice(0, 2).join(":");
+                            }
 
-                          return (
+                            // กรณีข้อมูลมาเป็น Date Object
+                            return new Date(time).toLocaleTimeString("th-TH", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: false
+                            });
+                            };
+
+                            const displayCheckIn = formatTime(r.checkIn || r.check_in) || "--:--";
+                            const displayCheckOut = formatTime(r.checkOut || r.check_out) || "-";
+
+                            // รูปภาพ
+                            const displayImageIn = r.imageIn || r.image_in;
+                            const displayImageOut = r.imageOut || r.image_out;
+
+                            return (
                             <tr key={i} className="hover:bg-blue-50/10 transition-colors">
-                              <td className="p-6 font-bold text-gray-800">{r.date || "-"}</td>
-                              <td className="p-6">
+                            {/* วันที่ */}
+                            <td className="p-6 font-bold text-gray-800">
+                                {r.date || "-"}
+                            </td>
+
+                            {/* เช็คอิน */}
+                            <td className="p-6">
                                 <div className="flex items-center gap-3">
-                                  <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl">
-                                    {displayCheckIn}
-                                  </span>
-                                  {displayImageIn && (
-                                    <Image src={displayImageIn} alt="In" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />
-                                  )}
+                                <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100">
+                                    {r.checkIn && r.checkIn !== "-" 
+                                    ? (r.checkIn.includes("T") ? r.checkIn.split("T")[1] : (r.checkIn.includes(" ") ? r.checkIn.split(" ")[1] : r.checkIn)).slice(0, 5)
+                                    : "--:--"}
+                                </span>
+                                {displayImageIn && (
+                                    <Image
+                                    src={displayImageIn}
+                                    alt="In"
+                                    width={40}
+                                    height={40}
+                                    className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10"
+                                    unoptimized
+                                    />
+                                )}
                                 </div>
-                              </td>
-                              <td className="p-6">
+                            </td>
+
+                            {/* เช็คเอาท์ */}
+                            <td className="p-6">
                                 <div className="flex items-center gap-3">
-                                  <span className={!displayCheckOut || displayCheckOut === "-" ? "text-gray-300 font-black" : "text-slate-900 font-black bg-slate-100 px-3 py-1.5 rounded-xl"}>
-                                    {displayCheckOut}
-                                  </span>
-                                  {displayImageOut && (
-                                    <Image src={displayImageOut} alt="Out" width={40} height={40} className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10" unoptimized />
-                                  )}
-                                </div>
-                              </td>
-                              <td className="p-6">
-                                <div className="flex flex-col">
-                                  <span className="text-xs font-black text-gray-700 uppercase tracking-tighter">
-                                    {r.position || userProfile.role}
-                                  </span>
-                                  <span className="text-[10px] font-mono text-gray-400 truncate max-w-[150px]">
-                                    📍 {r.location || r.locationIn || "ไม่ได้ระบุพิกัด"}
-                                  </span>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
+                                <span
+                                    className={
+                                    !r.checkOut || r.checkOut === "-"
+                                        ? "text-gray-300 font-black px-3"
+                                        : "text-slate-900 font-black bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200"
+                                    }
+                                >
+                                    {r.checkOut && r.checkOut !== "-" 
+                                    ? (r.checkOut.includes("T") ? r.checkOut.split("T")[1] : (r.checkOut.includes(" ") ? r.checkOut.split(" ")[1] : r.checkOut)).slice(0, 5)
+                                    : "-"}
+                                </span>
+                                {displayImageOut && (
+                                    <Image
+                                    src={displayImageOut}
+                                    alt="Out"
+                                    width={40}
+                                    height={40}
+                                    className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10"
+                                    unoptimized
+                                    />
+                                    )}
+                                    </div>
+                                </td>
+
+                                {/* รายละเอียด */}
+                                <td className="p-6">
+                                    <div className="flex flex-col">
+                                    <span className="text-xs font-black text-gray-700 uppercase tracking-tighter">
+                                    {r.position || "พนักงาน"}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-gray-400 truncate max-w-[200px]" title={r.locationIn || r.location}>
+                                      📍 {r.locationIn || r.location || "ไม่ได้ระบุพิกัด"}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
 
               {/* ตารางที่ 2: คำขออนุมัติลางานของฉัน */}
               <div className="bg-white p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-gray-50">

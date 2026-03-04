@@ -5,6 +5,8 @@ import { cookies } from "next/headers"; // Next.js 16+ cookies() returns a Promi
 import { redirect } from "next/navigation"; 
 import SuperAdminClientPage from "./superAdminClientPage";
 
+export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
+
 export default async function SuperAdminPage() {
   // 🛡️ [SECURITY CHECK] ตรวจสอบความมีตัวตนใน Database
   // บรรทัดนี้สำคัญที่สุด: ต้องมี await นำหน้า cookies()
