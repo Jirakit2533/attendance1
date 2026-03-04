@@ -4,7 +4,7 @@ import { useRef, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { logoutAction } from "@/server/auth";
-import { useUploadThing } from "@/lib/uploadthing";
+import { useUploadthing } from "@/lib/uploadthing";
 import { 
   saveAttendanceAction, 
   createLeaveRequestAction,

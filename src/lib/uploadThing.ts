@@ -8,7 +8,7 @@ import {
 import type { OurFileRouter } from "@/app/api/uploadthing/core"; 
 
 // ✅ สร้างและ Export เฉพาะ Helpers สำหรับหน้าบ้าน
-export const { useUploadThing, uploadFiles } = generateReactHelpers<OurFileRouter>();
+export const { useUploadthing, uploadFiles } = generateReactHelpers<OurFileRouter>();
 
 export const UploadButton = generateUploadButton<OurFileRouter>();
 export const UploadDropzone = generateUploadDropzone<OurFileRouter>();
