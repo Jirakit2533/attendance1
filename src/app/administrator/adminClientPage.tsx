@@ -12,6 +12,8 @@ import { saveSiteAction,
         } from "./actions"; 
 
 
+export const dynamic = "force-dynamic";
+
 // --- SUB-COMPONENTS ---
 const Section = ({ title, children }) => (
   <section className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
