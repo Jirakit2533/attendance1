@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db/db"; // ปรับ path ตามโปรเจกต์คุณ
+import { db } from "@/lib/db"; // ปรับ path ตามโปรเจกต์คุณ
 import { attendanceTable } from "@/db/schema";
 import { and, eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";

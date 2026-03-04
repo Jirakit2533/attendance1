@@ -1,4 +1,4 @@
-import { db } from "./db"; // ปรับ path ให้ตรงกับไฟล์ db connection ของคุณ
+import { db } from "../lib/db"; // ปรับ path ให้ตรงกับไฟล์ db connection ของคุณ
 import { superAdminTable } from "./schema";
 import bcrypt from "bcryptjs";
 
