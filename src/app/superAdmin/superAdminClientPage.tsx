@@ -331,6 +331,31 @@ export default function SuperAdminClientPage({
 
       {/* 🔑 ADMIN TABLE SECTION */}
         <section className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-white overflow-hidden">
+        {/* --- ส่วนที่หายไปและเพิ่มกลับเข้ามาให้ครับ --- */}
+          <div className="p-8 border-b border-slate-50 bg-gray-200/30 flex flex-col md:flex-row justify-between items-center gap-4">
+            <h3 className="text-xl font-black flex items-center gap-3 shrink-0">
+              <Users className="text-purple-600"/> รายชื่อ HR Admin
+              <span className="ml-2 text-xs font-bold bg-purple-100 text-purple-600 px-2 py-1 rounded-md">{admins.length}</span>
+            </h3>
+            <div className="flex w-full md:w-auto gap-3">
+              <div className="relative flex-1 md:w-80">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="ค้นหาชื่อ หรือ Username..." 
+                  className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 outline-none font-bold"
+                  value={searchAdmin}
+                  onChange={(e) => setSearchAdmin(e.target.value)}
+                />
+              </div>
+              <button 
+                onClick={() => { setEditingAdmin(null); setShowAdminModal(true); }} 
+                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-black shadow-lg shadow-purple-100 flex items-center gap-2 transition-all active:scale-95 shrink-0 text-sm"
+              >
+                <Plus size={18} /> สร้างบัญชีแอดมิน
+              </button>
+            </div>
+          </div>
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
             <table className="w-full text-left border-separate border-spacing-0">
               <thead className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 shadow-sm text-[11px] uppercase font-black text-slate-400 tracking-widest">
