@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { saveSiteAction, 
          savePositionAction, 
@@ -10,8 +10,8 @@ import { saveSiteAction,
          deleteStaffAction, 
          logoutAction     
         } from "./actions"; 
-
-
+        
+ 
 export const dynamic = "force-dynamic";
 
 // --- SUB-COMPONENTS ---
@@ -103,6 +103,20 @@ export default function AdminClientPage({
   // Filter State for Report
   const [filterSite, setFilterSite] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+
+    window.history.pushState(null, "", window.location.href);
+
+    const handlePopState = () => {
+
+      window.history.pushState(null, "", window.location.href);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []); // ทำงานครั้งเดียวตอน Mount
+
   
   const filteredEmployees = useMemo(() => {
     return (employees || []).map(emp => {
@@ -171,6 +185,8 @@ export default function AdminClientPage({
       return matchSite && matchSearch;
     });
   }, [employees, filterSite, searchQuery]);
+
+
 
   // --- HANDLERS ---
 
