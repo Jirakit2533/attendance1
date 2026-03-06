@@ -17,7 +17,6 @@ export function middleware(request: NextRequest) {
 
   // --- LOGIC 1: ถ้ายังไม่ได้ Login แต่อยากเข้าหน้า Protected ---
   if (isProtected && !userId) {
-    // ถ้าไม่มี userId แต่มีเศษคุกกี้อื่นค้างอยู่ ให้ดีดไปล้างก่อนเพื่อความชัวร์
     if (userRole) {
       return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
     }
@@ -26,12 +25,10 @@ export function middleware(request: NextRequest) {
 
   // --- LOGIC 2: ถ้า Login อยู่แล้ว แต่พยายามจะเข้าหน้า /login ---
   if (userId && pathname === '/login') {
-    // กรณี Session ค้างแต่ไม่มี Role (ผิดปกติมาก) ให้ส่งไปล้างคุกกี้ทันที
     if (!userRole) {
       return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
     }
     
-    // Redirect ไปยังหน้าหลักของแต่ละ Role
     const roleRedirects: Record<string, string> = {
       superAdmin: '/superAdmin',
       admin: '/administrator',
@@ -45,52 +42,50 @@ export function middleware(request: NextRequest) {
   }
 
   // --- LOGIC 3: ป้องกันการเข้าหน้าผิดสิทธิ์ (Cross-Role Protection) ---
+  let response = NextResponse.next();
+
   if (userId && userRole) {
-    
-    // 1. ถ้าเป็น Leader แต่หลงมาหน้า Employee (ให้เด้งกลับไปหน้า Leader)
+    // 1. ถ้าเป็น Leader แต่หลงมาหน้า Employee
     if (pathname.startsWith('/employee') && userRole === 'leader') {
       return NextResponse.redirect(new URL('/leader', request.url));
     }
 
     // 2. ป้องกันระดับสิทธิ์เด็ดขาด
-    // ป้องกันหน้า Leader: เฉพาะ Leader เท่านั้นที่เข้าได้
     if (pathname.startsWith('/leader') && userRole !== 'leader') {
       const fallback = userRole === 'employee' ? '/employee' : '/login';
       return NextResponse.redirect(new URL(fallback, request.url));
     }
     
-    // ป้องกันหน้า Administrator: ต้องเป็น admin หรือ administrator เท่านั้น
     if (pathname.startsWith('/administrator')) {
       if (!(userRole === 'admin' || userRole === 'administrator')) {
         return NextResponse.redirect(new URL('/login', request.url));
       }
     }
 
-    // ป้องกันหน้า SuperAdmin: ต้องเป็น superAdmin เท่านั้น
     if (pathname.startsWith('/superAdmin') && userRole !== 'superAdmin') {
       return NextResponse.redirect(new URL('/login', request.url));
     }
   }
 
-  return NextResponse.next();
+  // --- LOGIC 4: ป้องกัน Browser Cache (แก้ปัญหาหน้าเก่าค้างตอนกด Back) ---
+  // บังคับให้หน้าที่มีข้อมูลสำคัญไม่ถูกเก็บไว้ใน Cache ของ Browser
+  if (isProtected || pathname === '/login') {
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+  }
+
+  return response;
 }
 
 // กำหนดขอบเขตของ Middleware
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (ยกเว้น api/auth/logout-cleanup)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     '/employee/:path*',
     '/leader/:path*',
     '/administrator/:path*',
     '/superAdmin/:path*',
     '/login',
-    // เพิ่มให้ matcher เฝ้าดูหน้าล้างคุกกี้ด้วย
     '/api/auth/logout-cleanup'
   ],
 };
