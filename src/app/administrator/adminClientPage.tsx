@@ -456,7 +456,7 @@ export default function AdminClientPage({
         >
           <span className="text-base sm:text-lg">{isProcessing ? "⏳" : "🚪"}</span>
           <span className="text-[10px] sm:text-sm font-bold uppercase tracking-tight">
-            {isProcessing ? "..." : "ออก"}
+            {isProcessing ? "..." : "ลงชื่อออก"}
           </span>
         </button>
       </div>
