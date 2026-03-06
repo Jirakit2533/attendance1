@@ -47,6 +47,16 @@ const LoadingOverlay = () => (
   </div>
 );
 
+const NavIconButton = ({ icon, label, color, onClick }) => (
+  <button 
+    onClick={onClick}
+    className={`flex items-center gap-2 bg-white text-slate-600 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-tight hover:bg-${color}-50 hover:text-${color}-600 transition-all border border-transparent hover:border-${color}-100 shadow-sm`}
+  >
+    <span>{icon}</span>
+    <span className="hidden lg:inline">{label}</span>
+  </button>
+);
+
 export default function AdminClientPage({ 
   initialEmployees = [], 
   initialAttendance = [], 
@@ -404,94 +414,88 @@ export default function AdminClientPage({
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
-      {/* --- HEADER --- */}
-      {isProcessing && <LoadingOverlay />}
-      <header className="bg-white/80 backdrop-blur-md sticky top-0 z-[100] border-b border-slate-100 print:hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 sm:h-24 flex items-center justify-between">
-          <Logo />
-
-          <div className="flex items-center gap-2 sm:gap-4">
-            {/* 📍 กลุ่มปุ่มตั้งค่า (เพิ่มปุ่มแผนกเข้าไปที่นี่) */}
-            <div className="flex items-center gap-1.5 sm:gap-2 pr-2 sm:pr-4 border-r border-slate-100">
-              
-              {/* --- ปุ่มเพิ่มแผนก (NEW!) --- */}
-              <button 
-                onClick={() => setShowAddDepartment(true)} 
-                disabled={isProcessing}
-                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-600 w-10 h-10 lg:w-auto lg:px-4 lg:py-2.5 rounded-xl text-[11px] font-black uppercase tracking-tight hover:bg-indigo-50 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100"
-                title="เพิ่มแผนก"
-              >
-                <span>🏢</span>
-                <span className="hidden lg:inline">เพิ่มแผนก</span>
-              </button>
-
-              <button 
-                onClick={() => setShowAddSite(true)} 
-                disabled={isProcessing}
-                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-600 w-10 h-10 lg:w-auto lg:px-4 lg:py-2.5 rounded-xl text-[11px] font-black uppercase tracking-tight hover:bg-emerald-50 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100"
-                title="เพิ่มไซต์งาน"
-              >
-                <span>📍</span>
-                <span className="hidden lg:inline">เพิ่มไซต์งาน</span>
-              </button>
-
-              <button 
-                onClick={() => setShowAddPosition(true)} 
-                disabled={isProcessing}
-                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-600 w-10 h-10 lg:w-auto lg:px-4 lg:py-2.5 rounded-xl text-[11px] font-black uppercase tracking-tight hover:bg-amber-50 hover:text-amber-600 transition-all border border-transparent hover:border-amber-100"
-                title="เพิ่มตำแหน่งงาน"
-              >
-                <span>💼</span>
-                <span className="hidden lg:inline">เพิ่มตำแหน่งงาน</span>
-              </button>
-            </div>
-
-            {/* 🚀 กลุ่มปุ่ม Action หลัก */}
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <button 
-                onClick={() => { setEditingEmployee(null); setPreviewImage(null); setShowRegister(true); }}
-                disabled={isProcessing}
-                className="bg-slate-900 text-white w-10 h-10 sm:w-auto sm:px-5 sm:py-3.5 rounded-xl sm:rounded-2xl font-black text-sm hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200 active:scale-95 flex items-center justify-center gap-2"
-                title="ลงทะเบียนพนักงาน"
-              >
-                <span className="text-xl leading-none">+</span> 
-                <span className="hidden md:inline text-xs sm:text-sm">ลงทะเบียน</span>
-              </button>
-              
-              <button 
-                onClick={() => setShowFilterModal(true)}
-                disabled={isProcessing}
-                className="bg-blue-600 text-white w-10 h-10 sm:w-auto sm:px-5 sm:py-3.5 rounded-xl sm:rounded-2xl font-black text-sm hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 active:scale-95 group flex items-center justify-center gap-2"
-                title="ทำใบรายงาน"
-              >
-                <span className="text-lg group-hover:rotate-12 transition-transform">📊</span>
-                <span className="hidden md:inline text-xs sm:text-sm">รายงาน</span>
-              </button>
-            </div>
-
-            {/* 👤 ส่วนข้อมูลผู้ใช้งานและ Logout */}
-            <div className="flex items-center gap-2 sm:gap-3 ml-1 pl-2 sm:pl-4 border-l border-slate-100">
-              <div className="text-right hidden xl:block">
-                <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1">
-                  {admin.role === 'admin' ? 'Administrator' : 'Leader'}
-                </p>
-                <p className="font-black text-slate-900 text-sm leading-none truncate max-w-[100px]">
-                  {admin.name}
-                </p>
-              </div>
-              
-              <button 
-                onClick={handleLogout}
-                disabled={isProcessing}
-                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-red-50 text-red-500 rounded-xl sm:rounded-2xl hover:bg-red-500 hover:text-white transition-all group border border-red-100"
-                title="ออกจากระบบ"
-              >
-                <span className="text-lg sm:text-xl group-hover:scale-110 transition-transform">🚪</span>
-              </button>
-            </div>
-          </div>
+{/* --- HEADER --- */}
+{isProcessing && <LoadingOverlay />}
+<header className="bg-white/95 backdrop-blur-md sticky top-0 z-[100] border-b border-slate-100 print:hidden transition-all">
+  <div className="max-w-7xl mx-auto px-4 sm:px-6">
+    
+    {/* --- แถวที่ 1 (Main Row): Logo + Logout --- */}
+    <div className="h-16 sm:h-24 flex items-center justify-between gap-4">
+      <Logo />
+      
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="text-right hidden sm:block border-r border-slate-100 pr-4 mr-1">
+          <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1">
+            {admin.role === 'admin' ? 'Administrator' : 'Leader'}
+          </p>
+          <p className="font-black text-slate-900 text-sm leading-none truncate max-w-[120px]">
+            {admin.name}
+          </p>
         </div>
-      </header>
+        
+        <button 
+          onClick={handleLogout}
+          disabled={isProcessing}
+          className="group flex items-center gap-2 px-3 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95"
+        >
+          <span className="text-base sm:text-lg">{isProcessing ? "⏳" : "🚪"}</span>
+          <span className="text-[10px] sm:text-sm font-bold uppercase tracking-tight">
+            {isProcessing ? "..." : "ออก"}
+          </span>
+        </button>
+      </div>
+    </div>
+
+    {/* --- แถวที่ 2 (Mobile Only): แถบเลื่อนรวมปุ่มทั้งหมด --- 
+        ซ่อนบน sm (640px) ขึ้นไป
+    */}
+    <div className="flex sm:hidden overflow-x-auto pb-4 gap-2 no-scrollbar">
+      {/* กลุ่ม Action หลัก (สีเด่น) */}
+      <button onClick={() => setShowRegister(true)} className="flex-none flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase">
+        <span>+</span> ลงทะเบียน
+      </button>
+      <button onClick={() => setShowFilterModal(true)} className="flex-none flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase">
+        <span>📊</span> รายงาน
+      </button>
+
+      {/* เส้นแบ่งเล็กๆ */}
+      <div className="w-[1px] bg-slate-200 shrink-0 my-1"></div>
+
+      {/* กลุ่มตั้งค่า */}
+      <button onClick={() => setShowAddDepartment(true)} className="flex-none flex items-center gap-2 bg-slate-100 text-slate-600 px-4 py-2.5 rounded-xl text-[10px] font-bold">
+        <span>🏢</span> แผนก
+      </button>
+      <button onClick={() => setShowAddSite(true)} className="flex-none flex items-center gap-2 bg-slate-100 text-slate-600 px-4 py-2.5 rounded-xl text-[10px] font-bold">
+        <span>📍</span> ไซต์งาน
+      </button>
+      <button onClick={() => setShowAddPosition(true)} className="flex-none flex items-center gap-2 bg-slate-100 text-slate-600 px-4 py-2.5 rounded-xl text-[10px] font-bold">
+        <span>💼</span> ตำแหน่ง
+      </button>
+    </div>
+
+    {/* --- แถวที่ 2 (Tablet & PC): จัดวางแบบคงที่สวยงาม --- 
+        แสดงตั้งแต่ sm (640px) ขึ้นไป
+    */}
+    <div className="hidden sm:flex items-center justify-between pb-6 border-t border-slate-50 pt-4">
+       <div className="flex items-center gap-2">
+         <div className="flex items-center gap-2 bg-slate-50/50 p-1 rounded-2xl border border-slate-100 shadow-inner">
+            <NavIconButton icon="🏢" label="แผนก" color="indigo" onClick={() => setShowAddDepartment(true)} />
+            <NavIconButton icon="📍" label="ไซต์งาน" color="emerald" onClick={() => setShowAddSite(true)} />
+            <NavIconButton icon="💼" label="ตำแหน่ง" color="amber" onClick={() => setShowAddPosition(true)} />
+         </div>
+       </div>
+
+       <div className="flex items-center gap-3">
+         <button onClick={() => setShowRegister(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-sm hover:bg-indigo-600 transition-all flex items-center gap-2 shadow-lg shadow-slate-200 active:scale-95">
+           <span className="text-xl leading-none">+</span> ลงทะเบียน
+         </button>
+         <button onClick={() => setShowFilterModal(true)} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-sm hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-100 active:scale-95">
+           <span>📊</span> รายงาน
+         </button>
+       </div>
+    </div>
+  </div>
+</header>
       <main className="max-w-7xl mx-auto px-6 pt-12">
         {/* --- STATS CARDS --- */}
         <div className="justify-center grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 print:hidden">
