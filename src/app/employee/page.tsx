@@ -3,8 +3,8 @@ import { getLeaveHistory } from "@/server/leave";
 import { getCurrentUser } from "@/lib/auth"; 
 import EmployeeClientPage from "./employeeClientPage";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db"; // นำเข้า db เพื่อเช็คความมีตัวตน
-import { usersTable } from "@/db/schema";
+import { db } from "@/db/db"; // นำเข้า db เพื่อเช็คความมีตัวตน
+import { usersTable, positionsTable, sitesTable } from "@/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 
 export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
@@ -20,13 +20,23 @@ export default async function Page() {
 
   // 🔍 ตรวจสอบกับฐานข้อมูลโดยตรงอีกครั้ง (เผื่อกรณี User ถูกลบไปแล้วแต่คุกกี้ยังค้าง)
   const userExists = await db
-    .select()
-    .from(usersTable)
-    .where(and(
-      eq(usersTable.id, userFromAuth.id),
-      isNull(usersTable.deletedAt) // ต้องยังไม่ถูกลบ
-    ))
-    .limit(1);
+  .select({
+    id: usersTable.id,
+    firstName: usersTable.firstName,
+    lastName: usersTable.lastName,
+    avatarUrl: usersTable.avatarUrl,
+    role: usersTable.role,
+    positionName: positionsTable.name, // ✅ ดึงชื่อตำแหน่ง
+    siteName: sitesTable.name,         // ✅ ดึงชื่อไซต์
+  })
+  .from(usersTable)
+  .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id)) // ✅ Join Position
+  .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))             // ✅ Join Site
+  .where(and(
+    eq(usersTable.id, userFromAuth.id),
+    isNull(usersTable.deletedAt)
+  ))
+  .limit(1);
 
   // 🚩 ถ้าหาไม่เจอใน DB (ถูกลบไปแล้ว) ให้กวาดล้างคุกกี้ในมือถือทิ้งทันที
   if (userExists.length === 0) {
@@ -47,7 +57,9 @@ export default async function Page() {
     location: r.locationIn || "-",
     imageUrl: r.imageIn || "/profile.png",
     checkOutImageUrl: r.imageOut,
-    position: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน" // ปรับตาม role จริงจาก DB
+    position: user.positionName || "-",
+    site: user.siteName || "-",
+    role: user.roleName === "leader" ? "หัวหน้างาน" : "พนักงาน" // ปรับตาม role จริงจาก DB
   }));
 
   const initialLeaves = dbLeaves.map(l => ({

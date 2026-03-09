@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db";
+import { db } from "@/db/db";
 import { 
   usersTable, 
   adminsTable, 
@@ -129,99 +129,120 @@ export async function createDepartmentAction(name: string) {
    STAFF (USER) ACTIONS
    ========================================================================== */
 
-   export async function saveStaffAction(data: any) {
-    try {
-      const admin = await getAdminContext();
-      if (!admin || !admin.companyId) return { success: false, error: "Unauthorized: ไม่ได้รับอนุญาต" };
-  
-      // --- 1. จัดการ Username (แก้ไขปัญหา UUID) ---
-      let inputUsername = data.userName || data.username;
-  
-      if (!data.id && (!inputUsername || inputUsername.trim() === "")) {
-        return { success: false, error: "กรุณาระบุชื่อผู้ใช้งาน (Username)" };
-      }
-  
-      // 2. จัดการ Password
-      let passwordHash = undefined;
-      if (data.password && data.password.trim() !== "") {
-        passwordHash = await bcrypt.hash(data.password, 10);
-      }
-  
-      // 3. จัดการรูปภาพ (Avatar)
-      let finalAvatarUrl = data.avatarUrl || null;
-      let finalAvatarId = data.avatarId || null;
-  
-      if (data.avatarUrl && data.avatarUrl.startsWith("data:image")) {
-        try {
-          // ✅ ถ้าเป็นการแก้ไข และมีรูปเดิม (avatarId) ให้ลบรูปเก่าออกก่อน
-          if (data.id) {
-            const existingUser = await db.select({ avatarId: usersTable.avatarId })
-              .from(usersTable)
-              .where(eq(usersTable.id, data.id))
-              .limit(1);
-            
-            if (existingUser[0]?.avatarId) {
-              await deleteFromDrive(existingUser[0].avatarId).catch(() => null);
-            }
-          } else if (data.avatarId) {
-            // กรณีอื่นๆ ที่มี avatarId ติดมา
-            await deleteFromDrive(data.avatarId).catch(() => null);
-          }
-  
-          const base64Data = data.avatarUrl.replace(/^data:image\/\w+;base64,/, "");
-          const buffer = Buffer.from(base64Data, "base64");
-          const fileName = `profile_${Date.now()}.jpg`;
-          const uploadResult = await uploadToDrive(buffer, fileName, "", "image/jpeg");
-          finalAvatarUrl = uploadResult.url;
-          finalAvatarId = uploadResult.fileId;
-        } catch (uploadError) {
-          console.error("Upload Error:", uploadError);
-        }
-      }
-  
-      // --- 4. เตรียม Payload ---
-      const payload: any = {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        role: data.role || "employee",
-        companyId: admin.companyId,
-        departmentId: data.departmentId || null,
-        positionId: data.positionId || null,
-        site_id: (data.siteId === "all_sites" || !data.siteId) ? null : data.siteId,
-        avatarUrl: finalAvatarUrl,
-        avatarId: finalAvatarId,
-        updateBy: admin.id,
-        updatedAt: new Date(),
-      };
-  
-      if (!data.id) {
-          payload.userName = inputUsername;
-          payload.createdBy = admin.id;
-          payload.passwordHash = passwordHash || await bcrypt.hash("123456", 10);
-      } else {
-          if (passwordHash) payload.passwordHash = passwordHash;
-          if (inputUsername && inputUsername.length < 30) {
-            payload.userName = inputUsername;
-          }
-      }
-  
-      // 5. บันทึกลง Database
-      if (data.id) {
-        await db.update(usersTable)
-          .set(payload)
-          .where(eq(usersTable.id, data.id));
-      } else {
-        await db.insert(usersTable).values(payload);
-      }
-  
-      revalidatePath("/administrator");
-      return { success: true, message: "บันทึกข้อมูลพนักงานสำเร็จ" };
-    } catch (error: any) {
-      console.error("Save Staff Error:", error);
-      if (error.code === "23505") return { success: false, error: "ชื่อผู้ใช้งานนี้มีอยู่ในระบบแล้ว" };
-      return { success: false, error: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" };
+  /* ==========================================================================
+   STAFF (USER) ACTIONS (ฉบับปรับปรุงการดักจับ Error ชื่อซ้ำ)
+   ========================================================================== */
+
+export async function saveStaffAction(data: any) {
+  try {
+    const admin = await getAdminContext();
+    if (!admin || !admin.companyId) return { success: false, error: "Unauthorized: ไม่ได้รับอนุญาต" };
+
+    // --- 1. จัดการ Username ---
+    let inputUsername = data.userName || data.username;
+
+    if (!data.id && (!inputUsername || inputUsername.trim() === "")) {
+      return { success: false, error: "กรุณาระบุชื่อผู้ใช้งาน (Username)" };
     }
+
+    // 2. จัดการ Password
+    let passwordHash = undefined;
+    if (data.password && data.password.trim() !== "") {
+      passwordHash = await bcrypt.hash(data.password, 10);
+    }
+
+    // 3. จัดการรูปภาพ (Avatar)
+    let finalAvatarUrl = data.avatarUrl || null;
+    let finalAvatarId = data.avatarId || null;
+
+    if (data.avatarUrl && data.avatarUrl.startsWith("data:image")) {
+      try {
+        if (data.id) {
+          const existingUser = await db.select({ avatarId: usersTable.avatarId })
+            .from(usersTable)
+            .where(eq(usersTable.id, data.id))
+            .limit(1);
+          
+          if (existingUser[0]?.avatarId) {
+            await deleteFromDrive(existingUser[0].avatarId).catch(() => null);
+          }
+        } else if (data.avatarId) {
+          await deleteFromDrive(data.avatarId).catch(() => null);
+        }
+
+        const base64Data = data.avatarUrl.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const fileName = `profile_${Date.now()}.jpg`;
+        const uploadResult = await uploadToDrive(buffer, fileName, "", "image/jpeg");
+        finalAvatarUrl = uploadResult.ufsUrl || uploadResult.url;
+        finalAvatarId = uploadResult.fileId;
+      } catch (uploadError) {
+        console.error("Upload Error:", uploadError);
+      }
+    }
+
+    // --- 4. เตรียม Payload ---
+    const payload: any = {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      role: data.role || "employee",
+      companyId: admin.companyId,
+      departmentId: data.departmentId || null,
+      positionId: data.positionId || null,
+      site_id: (data.siteId === "all_sites" || !data.siteId) ? null : data.siteId,
+      avatarUrl: finalAvatarUrl,
+      avatarId: finalAvatarId,
+      updateBy: admin.id,
+      updatedAt: new Date(),
+    };
+
+    if (!data.id) {
+        payload.userName = inputUsername;
+        payload.createdBy = admin.id;
+        payload.passwordHash = passwordHash || await bcrypt.hash("123456", 10);
+    } else {
+        if (passwordHash) payload.passwordHash = passwordHash;
+        if (inputUsername && inputUsername.length < 30) {
+          payload.userName = inputUsername;
+        }
+    }
+
+    // 5. บันทึกลง Database
+    if (data.id) {
+      await db.update(usersTable)
+        .set(payload)
+        .where(eq(usersTable.id, data.id));
+    } else {
+      await db.insert(usersTable).values(payload);
+    }
+
+    // ... (โค้ดส่วนบนเหมือนเดิม 100% ไม่แก้ ไม่ลด) ...
+
+    revalidatePath("/administrator");
+    return { success: true, message: "บันทึกข้อมูลพนักงานสำเร็จ" };
+  } catch (error: any) {
+    // 1. พิมพ์ Error ออกทาง Terminal เพื่อให้คุณเห็นค่าจริง (สำหรับการตรวจสอบ)
+    console.error("DEBUG - FULL ERROR:", error);
+
+    // 2. แปลง Error เป็นข้อความทั้งหมดเพื่อหา Keyword
+    const fullErrorString = JSON.stringify(error) || String(error);
+    
+    // 3. เช็ค Keyword ที่บ่งบอกว่า "ข้อมูลซ้ำ"
+    const isDuplicate = 
+      error.code === "23505" || 
+      fullErrorString.includes("23505") || 
+      fullErrorString.toLowerCase().includes("unique") || 
+      fullErrorString.toLowerCase().includes("already exists") ||
+      fullErrorString.toLowerCase().includes("duplicate");
+
+    if (isDuplicate) {
+      return { success: false, error: "ชื่อผู้ใช้งานนี้มีอยู่ในระบบแล้ว" };
+    }
+
+    // ถ้าไม่ใช่เรื่องชื่อซ้ำ ให้ส่ง Error กลาง (บรรทัดเดิมที่คุณมี)
+    return { success: false, error: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" };
   }
+}
   
   /* ==========================================================================
      DELETE STAFF ACTION (Soft Delete + ลบรูปภาพ)
@@ -341,20 +362,24 @@ export async function getDepartmentsAction() {
       const admin = await getAdminContext();
       if (!admin || !admin.companyId) return { success: false, data: [] };
       
-      // ✅ ดึงข้อมูลพร้อมระบุฟิลด์ check_in, check_out ให้ชัดเจน
+      // ✅ ดึงข้อมูลพร้อมระบุฟิลด์ และ Join ชื่อพนักงานมาแสดงผล
       const data = await db
         .select({
           id: attendanceTable.id,
           userId: attendanceTable.userId,
-          checkIn: attendanceTable.check_in,   // ตรวจสอบชื่อใน schema ให้ตรง
-          checkOut: attendanceTable.check_out, // ตรวจสอบชื่อใน schema ให้ตรง
+          firstName: usersTable.firstName,  // เพิ่มการดึงชื่อ
+          lastName: usersTable.lastName,    // เพิ่มการดึงนามสกุล
+          checkIn: attendanceTable.check_in,   
+          checkOut: attendanceTable.check_out, 
           date: attendanceTable.date,
         })
         .from(attendanceTable)
-        .orderBy(desc(attendanceTable.date));
+        .innerJoin(usersTable, eq(attendanceTable.userId, usersTable.id)) // Join เพื่อเอาชื่อ
+        .where(eq(usersTable.companyId, admin.companyId)) // กรองเฉพาะบริษัทตัวเอง
+        .orderBy(desc(attendanceTable.date), desc(attendanceTable.check_in));
         
-      // ตรวจสอบใน Terminal ว่ามีข้อมูลเวลาหลุดมาไหม
-      console.log("🔍 Attendance Sample:", data[0]);
+      // ตรวจสอบใน Terminal
+      console.log("🔍 Attendance Sample with User Name:", data[0]);
   
       return { 
         success: true, 

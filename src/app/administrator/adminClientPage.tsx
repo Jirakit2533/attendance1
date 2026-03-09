@@ -942,7 +942,7 @@ export default function AdminClientPage({
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="col-span-1 sm:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">รูปโปรไฟล์ (Profile Image)</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">รูปโปรไฟล์</label>
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
                   <div className="w-16 h-16 rounded-full bg-slate-200 overflow-hidden flex-shrink-0 border-2 border-white shadow-sm relative">
                     <img 
@@ -964,18 +964,26 @@ export default function AdminClientPage({
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Username {editingEmployee && "(แก้ไขไม่ได้)"}</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ชื่อผู้ใช้งาน {editingEmployee && "(แก้ไขไม่ได้)"}</label>
                 <input 
                   name="userName" 
                   defaultValue={editingEmployee?.userName} 
-                  placeholder="Username" 
+                  placeholder="ชื่อผู้ใช้งาน...(ภาษาอังกฤษ/ตัวเลข)" 
                   required 
                   disabled={!!editingEmployee}
-                  className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${editingEmployee ? 'bg-slate-100 text-slate-400 border-transparent' : 'bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white'}`} 
+                  // ✅ เพิ่มบรรทัดนี้เพื่อดักจับและลบตัวอักษรที่ไม่ใช่ภาษาอังกฤษ/ตัวเลข
+                  onInput={(e) => {
+                    e.currentTarget.value = e.currentTarget.value.replace(/[^a-zA-Z0-9]/g, '');
+                  }}
+                  className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${
+                    editingEmployee 
+                      ? 'bg-slate-100 text-slate-400 border-transparent' 
+                      : 'bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white'
+                  }`} 
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Password {editingEmployee && "(ล็อคไว้)"}</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">รหัสผ่าน {editingEmployee && "(ล็อคไว้)"}</label>
                 <input 
                   name="password" 
                   type="password" 
@@ -1004,7 +1012,7 @@ export default function AdminClientPage({
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ระดับสิทธิ์ (Role)</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ระดับสิทธิ์พนักงาน</label>
                 <select name="role" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)} className="w-full bg-slate-50 p-4 rounded-2xl font-bold outline-none border border-transparent focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer">
                   <option value="employee">Employee</option>
                   <option value="leader">Leader</option>

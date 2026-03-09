@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db } from "@/db/db";
 import { companyTable, usersTable, adminsTable, superAdminTable } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers"; // Next.js 16+ cookies() returns a Promise

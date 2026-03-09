@@ -8,7 +8,8 @@ import { useUploadThing } from "@/lib/uploadthing";
 import { 
   saveAttendanceAction, 
   createLeaveRequestAction,
-  updateLeaveStatusAction 
+  updateLeaveStatusAction,
+  changePasswordAction, 
 } from "./actions";
 
 /* ---------------- COMPONENTS ---------------- */
@@ -63,35 +64,218 @@ export default function LeaderClientPage({
   const [isProcessing, setIsProcessing] = useState(false); 
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [readyToCapture, setReadyToCapture] = useState(false);
+  const [searchAtt, setSearchAtt] = useState("");
+
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [leaveSuccess, setLeaveSuccess] = useState(false);
   const [leaveType, setLeaveType] = useState("");
   const [leaveStart, setLeaveStart] = useState("");
   const [leaveEnd, setLeaveEnd] = useState("");
-  const [searchAtt, setSearchAtt] = useState("");
   const [leaveReason, setLeaveReason] = useState("");
   const [leaveError, setLeaveError] = useState("");
   const [leaveFile, setLeaveFile] = useState<File | null>(null);
   const [leaveFilePreview, setLeaveFilePreview] = useState<string | null>(null);
   const [searchLeave, setSearchLeave] = useState(""); 
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pwData, setPwData] = useState({ old: "", new: "", confirm: "" });
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState(false);
+
+  const [showOldPw, setShowOldPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  
+  // ฟังก์ชันคำนวณจำนวนวันลา
+/* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
+
+const calculateLeaveDays = (start: string, end: string): number => {
+  if (!start || !end) return 0;
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  
+  // ล้างค่าเวลาให้เหลือแต่ช่วงวันที่เพื่อการคำนวณที่แม่นยำ
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(0, 0, 0, 0);
+
+  if (endDate < startDate) return 0;
+
+  const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+  // หารด้วยจำนวนมิลลิวินาทีในหนึ่งวัน และ +1 เพื่อให้นับวันแรกด้วย
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+};
+
+// ตรวจสอบว่าวันที่เลือกถูกต้องตามกฎธุรกิจหรือไม่
+const validateLeaveDates = (start: string, end: string) => {
+  if (!start || !end) return { isValid: true, error: "" }; // ยังกรอกไม่ครบ ไม่ต้องด่า
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+
+  if (startDate < today) {
+    return { isValid: false, error: "⚠️ ไม่สามารถลาล่วงลับย้อนหลังได้ กรุณาตรวจสอบวันที่เริ่มต้น" };
+  }
+
+  if (endDate < startDate) {
+    return { isValid: false, error: "⚠️ วันที่สิ้นสุดต้องอยู่หลังหรือวันเดียวกับวันที่เริ่มต้น" };
+  }
+
+  return { isValid: true, error: "" };
+};
+
+/* ---------------- HELPER FUNCTIONS ---------------- */
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new (window as any).Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 800; // คุมขนาดให้ไม่เกิน 800px เพื่อประหยัดพื้นที่
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = "#FFFFFF"; // เติมพื้นหลังสีขาว
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.6)); // บีบอัดคุณภาพ 60%
+        }
+      };
+    };
+  });
+};
+
+ /* ---------------- LEAVE LOGIC ---------------- */
+
+ const submitLeave = async () => {
+  if (!leaveType || !leaveStart || !leaveEnd || !leaveReason) {
+    setLeaveError("⚠️ กรุณากรอกข้อมูลให้ครบถ้วน");
+    return;
+  }
+
+  const dateCheck = validateLeaveDates(leaveStart, leaveEnd);
+  if (!dateCheck.isValid) {
+    setLeaveError(dateCheck.error);
+    return;
+  }
+
+  setIsProcessing(true);
+  setLeaveError(""); 
+
+  try {
+    let fileUrl = "";
+    let fileId = "";   // ✅ เตรียมตัวแปรเก็บ ID
+    let fileName = ""; // ✅ เตรียมตัวแปรเก็บชื่อไฟล์
+
+    if (leaveFile) {
+      const uploadRes = await uploadLeave([leaveFile]);
+      if (uploadRes && uploadRes[0]) {
+        fileUrl = uploadRes[0].url;
+        fileId = uploadRes[0].key || uploadRes[0].fileId; // ✅ เก็บ Key จาก UploadThing
+        fileName = leaveFile.name; // ✅ เก็บชื่อไฟล์ต้นฉบับ
+      }
+    }
+
+    // เรียก Action
+    const res = await createLeaveRequestAction({
+      userId: userProfile.id,
+      // 💡 ข้อแนะนำ: ถึงแม้จะส่งตรงนี้ไป แต่ผมแนะนำให้ใช้ Server Action 
+      // เวอร์ชั่นที่ผมแก้ให้ก่อนหน้าที่ดึงจาก DB โดยตรงจะชัวร์กว่าครับ
+      type: leaveType,
+      startDate: leaveStart,
+      endDate: leaveEnd,
+      reason: leaveReason,
+      fileUrl: fileUrl,
+      fileId: fileId,     // ✅ ส่งไปให้ครบ
+      fileName: fileName, // ✅ ส่งไปให้ครบ
+    });
+
+    if (res.success) {
+      setLeaveSuccess(true);
+      router.refresh();
+      setTimeout(() => {
+        setShowLeaveForm(false);
+        setLeaveSuccess(false);
+        setLeaveType(""); setLeaveStart(""); setLeaveEnd(""); setLeaveReason("");
+        setLeaveFile(null); setLeaveFilePreview(null);
+      }, 2000);
+    } else {
+      setLeaveError(res.error || "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    }
+  } catch (err) {
+    setLeaveError("ระบบขัดข้อง กรุณาลองใหม่ภายหลัง");
+    console.error(err);
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
+  /* ---------------- CAMERA & ATTENDANCE LOGIC ---------------- */
+  
+  const openCamera = async () => {
+    try {
+      setIsProcessing(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setShowCamera(true);
+      await new Promise(r => setTimeout(r, 300));
+      if (!videoRef.current) throw new Error("video not ready");
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      setReadyToCapture(true);
+    } catch (err) {
+      alert("ไม่สามารถเข้าถึงกล้องได้ กรุณาตรวจสอบสิทธิ์การใช้งาน");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
 /* ---------------- MEMOIZED VALUES ---------------- */
   
-  // ✅ 1. แยกใบลาของตัวเอง (Leader's own leaves)
+  // ✅ 1. แยกใบลาของตัวเอง (เอาเฉพาะ ID ของเราเท่านั้น)
   const myLeaves = useMemo(() => 
-    leaves.filter((l: any) => l.user_id === userProfile.id || l.firstName === userProfile.firstName), 
-    [leaves, userProfile]
+    leaves.filter((l: any) => 
+      (l.user_id === userProfile.id) || (l.userId === userProfile.id)
+    ), 
+    [leaves, userProfile.id]
   );
 
-  // ✅ 2. แยกใบลาของลูกน้องในทีม (Team's leaves)
+  // ✅ 2. แยกใบลาของลูกน้องในทีม (เอาทุกคน "ยกเว้น" ID ของเรา)
   const teamLeaves = useMemo(() => 
-    leaves.filter((l: any) => l.user_id || l.userId !== userProfile.id), 
-    [leaves, userProfile]
+    leaves.filter((l: any) => 
+      (l.user_id !== userProfile.id) && (l.userId !== userProfile.id)
+    ), 
+    [leaves, userProfile.id]
   );
 
-  // ✅ 3. กรองข้อมูลการลาของทีมเพื่อแสดงในตาราง (ใช้สำหรับ Search)
+  // ✅ 3. กรองข้อมูลการลาของทีมเพื่อแสดงในตาราง (จะสะอาดทันทีเพราะ teamLeaves กรองออกไปแล้ว)
   const filteredLeaves = useMemo(() => {
     const term = searchLeave.toLowerCase();
     return teamLeaves.filter((l: any) => 
@@ -166,28 +350,6 @@ export default function LeaderClientPage({
     }
   };
 
-  /* ---------------- CAMERA & ATTENDANCE LOGIC ---------------- */
-  
-  const openCamera = async () => {
-    try {
-      setIsProcessing(true);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-        audio: false,
-      });
-      streamRef.current = stream;
-      setShowCamera(true);
-      await new Promise(r => setTimeout(r, 300));
-      if (!videoRef.current) throw new Error("video not ready");
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-      setReadyToCapture(true);
-    } catch (err) {
-      alert("ไม่สามารถเข้าถึงกล้องได้ กรุณาตรวจสอบสิทธิ์การใช้งาน");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const handleCapture = async () => {
     if (!videoRef.current || !streamRef.current) return;
@@ -266,52 +428,9 @@ export default function LeaderClientPage({
         window.location.href = "/login";
     }
   };
-
-  const submitLeave = async () => {
-    if (!leaveType || !leaveStart || !leaveEnd || !leaveReason) {
-      setLeaveError("⚠️ กรุณากรอกข้อมูลให้ครบถ้วน");
-      return;
-    }
-
-    setIsProcessing(true);
-    setLeaveError("");
-
-    try {
-      let fileUrl = "";
-      if (leaveFile) {
-        const uploadRes = await uploadLeave([leaveFile]);
-        if (uploadRes) fileUrl = uploadRes[0].url;
-      }
-
-      const res = await createLeaveRequestAction({
-        userId: userProfile.id,
-        departmentId: userProfile.departmentId,
-        siteId: userProfile.site_id,
-        type: leaveType,
-        startDate: leaveStart,
-        endDate: leaveEnd,
-        reason: leaveReason,
-        fileUrl: fileUrl
-      });
-
-      if (res.success) {
-        setLeaveSuccess(true);
-        setTimeout(() => {
-          setShowLeaveForm(false);
-          setLeaveSuccess(false);
-          setLeaveType(""); setLeaveStart(""); setLeaveEnd(""); setLeaveReason("");
-          setLeaveFile(null); setLeaveFilePreview(null);
-        }, 2000);
-        router.refresh();
-      } else {
-        setLeaveError(res.error || "ไม่สามารถส่งคำขอลาได้");
-      }
-    } catch (err) {
-      setLeaveError("เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  
+ 
+  
 
   // ✅ อย่าลืมใส่ LoadingOverlay และส่วน Return ของ JSX ด้านล่างต่อจากนี้ตามเดิมของคุณนะครับ
   return (
@@ -339,31 +458,33 @@ export default function LeaderClientPage({
               </span>
             </div>
             <button 
-              onClick={handleLogout} 
+              onClick={handleLogout}
               disabled={isProcessing}
-              className="p-2 sm:p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all disabled:opacity-30"
+              className="group flex items-center gap-2 px-3 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+              <span className="text-base sm:text-lg">{isProcessing ? "⏳" : "🚪"}</span>
+              <span className="text-[10px] sm:text-sm font-bold uppercase tracking-tight">
+                {isProcessing ? "..." : "ลงชื่อออก"}
+              </span>
             </button>
           </div>
         </div>
       </nav>
+      
 
       <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-10">
         {/* 👤 LEADER PROFILE CARD */}
         <div className="bg-white p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_20px_50px_-15px_rgba(0,0,0,0.03)] mb-10 flex flex-col md:flex-row items-center md:items-start gap-8 relative border border-white">
           <div className="relative">
             <div className="absolute inset-0 bg-indigo-500 rounded-full blur-2xl opacity-10"></div>
-              <Image
-                src={userProfile?.avatarUrl || userProfile?.profileImage || `https://ui-avatars.com/api/?name=${userProfile?.firstName || 'User'}`}
-                alt="Profile"
-                width={140}
-                height={140}
-                className="rounded-[2rem] sm:rounded-[2.5rem] border-4 border-white shadow-2xl w-28 h-28 sm:w-36 sm:h-36 object-cover relative z-10"
-                unoptimized
-              />
+            <Image
+              src={userProfile?.avatarUrl || userProfile?.profileImage || `https://ui-avatars.com/api/?name=${userProfile?.firstName || 'User'}`}
+              alt="Profile"
+              width={140}
+              height={140}
+              className="rounded-[2rem] sm:rounded-[2.5rem] border-4 border-white shadow-2xl w-28 h-28 sm:w-36 sm:h-36 object-cover relative z-10"
+              unoptimized
+            />
             <div className="absolute -bottom-2 -right-2 w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center z-20">
               <div className="w-3 h-3 sm:w-4 sm:h-4 bg-blue-500 rounded-full animate-pulse"></div>
             </div>
@@ -371,7 +492,7 @@ export default function LeaderClientPage({
 
           <div className="flex-1 text-center md:text-left pt-2">
             <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
-              Leader / Head of Dept
+              ระดับหัวหน้า
             </div>
             <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight mb-1">{userProfile.firstName} {userProfile.lastName}</h2>
             <p className="text-gray-500 font-bold text-base sm:text-lg mb-6 tracking-tight">หัวหน้าแผนก {userProfile.department}</p>
@@ -380,7 +501,7 @@ export default function LeaderClientPage({
               <span className="bg-blue-50 text-blue-500 text-[10px] px-4 py-2 rounded-xl font-black border border-blue-100 uppercase tracking-widest">{userProfile.department}</span>
             </div>
           </div>
-          
+
           <div className="flex flex-col gap-4 mt-8 w-full md:w-64">
             {/* 1. ยังไม่ได้เช็คอินวันนี้ */}
             {!todayStatus.hasCheckedIn && (
@@ -412,12 +533,39 @@ export default function LeaderClientPage({
               </div>
             )}
 
+            {/* 4. ปุ่มลางาน */}
             <button
               onClick={() => setShowLeaveForm(true)}
               disabled={isProcessing}
               className="w-full bg-white border-2 border-gray-100 hover:border-indigo-600 hover:text-indigo-600 text-gray-500 font-black py-4 rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-3 uppercase text-sm"
             >
               ขอลางาน (ส่วนตัว)
+            </button>
+
+            {/* 5. ปุ่มเปลี่ยนรหัสผ่าน (เพิ่มใหม่) */}
+            <button
+              onClick={() => setShowPasswordModal(true)}
+              disabled={isProcessing}
+              className="w-full relative group active:scale-[0.97] transition-all duration-300 disabled:opacity-50"
+            >
+              {/* 1. Background Layer: เงาฟุ้งด้านหลังปุ่มเมื่อ Hover */}
+              <div className="absolute inset-0 bg-blue-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[1.5rem]"></div>
+              
+              {/* 2. Main Button Body */}
+              <div className="relative flex items-center justify-center gap-3 px-8 py-5 rounded-[1.5rem] bg-white border-2 border-gray-50 group-hover:border-blue-500 group-hover:bg-blue-50/30 transition-all duration-300 shadow-sm group-hover:shadow-md">
+                
+                {/* 3. Icon Box: มีการหมุนและขยายเล็กน้อย */}
+                <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white group-hover:rotate-12 group-hover:scale-110 transition-all duration-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                </div>
+                
+                {/* 4. Text: ใช้ฟอนต์หนาและเว้นระยะตัวอักษรให้ดูพรีเมียม */}
+                <span className="text-[11px] font-black text-gray-400 group-hover:text-blue-600 uppercase tracking-[0.15em] transition-colors">
+                  {isProcessing ? "กำลังประมวลผล..." : "เปลี่ยนรหัสผ่าน"}
+                </span>
+              </div>
             </button>
           </div>
         </div>
@@ -838,7 +986,9 @@ export default function LeaderClientPage({
         {showLeaveForm && (
           <div className="max-w-2xl mx-auto py-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
             <div className="text-center mb-12">
-              <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-2">ยื่นเรื่อง <span className="text-indigo-600">ลางาน</span></h2>
+              <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-2">
+                ยื่นเรื่อง <span className="text-indigo-600">ลางาน</span>
+              </h2>
               <div className="w-12 h-1.5 bg-indigo-600 mx-auto rounded-full"></div>
             </div>
             
@@ -849,11 +999,22 @@ export default function LeaderClientPage({
               </div>
             ) : (
               <div className="space-y-6 bg-gray-50/50 p-6 sm:p-10 rounded-[2rem] sm:rounded-[3rem] border border-gray-100 shadow-inner relative">
-                {leaveError && <div className="p-4 bg-red-50 text-red-600 rounded-xl text-xs font-black uppercase">{leaveError}</div>}
                 
+                {/* 🔥 แจ้งเตือนข้อผิดพลาด */}
+                {leaveError && (
+                  <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[11px] font-black uppercase animate-shake">
+                    {leaveError}
+                  </div>
+                )}
+                
+                {/* 1. ประเภทการลา */}
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase ml-2">ประเภทการลา</label>
-                  <select className="w-full bg-white p-5 rounded-[1.5rem] font-black text-gray-700 outline-none shadow-sm border-none focus:ring-2 focus:ring-indigo-500 transition-all" value={leaveType} onChange={e => setLeaveType(e.target.value)}>
+                  <select 
+                    className="w-full bg-white p-5 rounded-[1.5rem] font-black text-gray-700 outline-none shadow-sm border-none focus:ring-2 focus:ring-indigo-500 transition-all" 
+                    value={leaveType} 
+                    onChange={e => setLeaveType(e.target.value)}
+                  >
                     <option value="">โปรดระบุ</option>
                     <option value="ลาป่วย">ลาป่วย</option>
                     <option value="ลากิจ">ลากิจ</option>
@@ -861,53 +1022,104 @@ export default function LeaderClientPage({
                   </select>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">เริ่มต้น</label>
-                    <input type="date" className="w-full bg-white p-5 rounded-[1.5rem] font-bold outline-none shadow-sm" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">สิ้นสุด</label>
-                    <input type="date" className="w-full bg-white p-5 rounded-[1.5rem] font-bold outline-none shadow-sm" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} />
+                {/* 2. ส่วนวันที่ พร้อมระบบตรวจสอบความถูกต้อง */}
+                <div className="relative space-y-4">
+                  {calculateLeaveDays(leaveStart, leaveEnd) > 0 && validateLeaveDates(leaveStart, leaveEnd).isValid && (
+                    <div className="flex flex-col items-center justify-center py-4 animate-in zoom-in duration-300">
+                      <div className="bg-indigo-600 px-8 py-3 rounded-[2rem] shadow-xl flex items-center gap-3">
+                        <span className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">ระยะเวลา</span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-black text-white leading-none">{calculateLeaveDays(leaveStart, leaveEnd)}</span>
+                          <span className="text-sm font-bold text-white uppercase">วัน</span>
+                        </div>
+                      </div>
+                      <div className="h-4 w-0.5 bg-gradient-to-b from-indigo-600 to-transparent opacity-20"></div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                    {/* วันเริ่มต้น */}
+                    <div className="space-y-2 group">
+                      <label className={`text-[10px] font-black uppercase ml-4 transition-colors ${!validateLeaveDates(leaveStart, leaveEnd).isValid && leaveStart ? 'text-red-500' : 'text-gray-400 group-focus-within:text-indigo-500'}`}>เริ่มต้น</label>
+                      <input 
+                        type="date" 
+                        className={`w-full bg-white p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all ${!validateLeaveDates(leaveStart, leaveEnd).isValid && leaveStart ? 'border-red-200' : 'border-transparent focus:border-indigo-500'}`} 
+                        value={leaveStart} 
+                        onChange={e => setLeaveStart(e.target.value)} 
+                      />
+                    </div>
+                    {/* วันสิ้นสุด */}
+                    <div className="space-y-2 group">
+                      <label className={`text-[10px] font-black uppercase ml-4 transition-colors ${!validateLeaveDates(leaveStart, leaveEnd).isValid && leaveEnd ? 'text-red-500' : 'text-gray-400 group-focus-within:text-indigo-500'}`}>สิ้นสุด</label>
+                      <input 
+                        type="date" 
+                        className={`w-full bg-white p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all ${!validateLeaveDates(leaveStart, leaveEnd).isValid && leaveEnd ? 'border-red-200' : 'border-transparent focus:border-indigo-500'}`} 
+                        value={leaveEnd} 
+                        onChange={e => setLeaveEnd(e.target.value)} 
+                      />
+                    </div>
                   </div>
                 </div>
 
+                {/* 3. ระบุเหตุผล */}
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase ml-2">ระบุเหตุผล</label>
-                  <textarea className="w-full bg-white p-5 rounded-[1.5rem] font-medium min-h-[140px] outline-none shadow-sm" placeholder="เขียนเหตุผลประกอบการลาที่นี่..." value={leaveReason} onChange={e => setLeaveReason(e.target.value)} />
+                  <textarea 
+                    className="w-full bg-white p-5 rounded-[1.5rem] font-medium min-h-[140px] outline-none shadow-sm focus:ring-2 focus:ring-indigo-500 transition-all" 
+                    placeholder="เขียนเหตุผลประกอบการลาที่นี่..." 
+                    value={leaveReason} 
+                    onChange={e => setLeaveReason(e.target.value)} 
+                  />
                 </div>
 
+                {/* 4. อัปโหลดและบีบอัดรูปภาพ */}
                 <div className="space-y-3 mt-4">
                   <label className="text-[10px] font-black text-gray-400 uppercase ml-2">เอกสารประกอบ (ถ้ามี)</label>
                   <div className="relative group">
-                    <input type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="hidden" id="leave-file-upload" disabled={isProcessing} />
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setIsProcessing(true);
+                          try {
+                            const compressed = await compressImage(file); 
+                            setLeaveFilePreview(compressed);
+                            const res = await fetch(compressed);
+                            const blob = await res.blob();
+                            setLeaveFile(new File([blob], file.name, { type: "image/jpeg" }));
+                          } catch (err) {
+                            console.error("Compression Error:", err);
+                          } finally {
+                            setIsProcessing(false);
+                          }
+                        }
+                      }} 
+                      className="hidden" 
+                      id="leave-file-upload" 
+                      disabled={isProcessing} 
+                    />
                     <label htmlFor="leave-file-upload" className="flex flex-col items-center justify-center w-full bg-white border-2 border-dashed border-gray-200 p-8 rounded-[1.5rem] cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-all group shadow-sm">
                       {leaveFilePreview ? (
-                        <div className="relative w-full h-32">
-                          <img src={leaveFilePreview} alt="Preview" className="w-full h-full object-contain rounded-lg" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-lg transition-all">
-                            <span className="text-white text-xs font-black uppercase tracking-widest">เปลี่ยนไฟล์</span>
-                          </div>
-                        </div>
-                      ) : leaveFile ? (
-                        <div className="text-center py-4">
-                          <div className="text-indigo-600 font-black text-sm mb-1">📄 {leaveFile.name}</div>
-                          <p className="text-[10px] text-gray-400 uppercase">คลิกเพื่อเปลี่ยนไฟล์</p>
+                        <div className="relative w-full h-32 flex justify-center">
+                          <img src={leaveFilePreview} alt="Preview" className="h-full object-contain rounded-lg shadow-md" />
                         </div>
                       ) : (
                         <div className="text-center">
-                          <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-gray-400 group-hover:scale-110 group-hover:text-indigo-600 transition-all">
+                          <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-gray-400 group-hover:text-indigo-600 transition-all">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
                             </svg>
                           </div>
-                          <p className="text-xs font-black text-gray-400 uppercase tracking-tighter group-hover:text-indigo-600">กดเพื่อแนบรูปภาพหรือ PDF</p>
-                          <p className="text-[9px] text-gray-300 mt-1 uppercase">จำกัดขนาดไม่เกิน 5MB</p>
+                          <p className="text-xs font-black text-gray-400 uppercase tracking-tighter group-hover:text-indigo-600">แนบรูปภาพ</p>
                         </div>
                       )}
                     </label>
                   </div>
                 </div>
+
+                {/* 5. ปุ่มแอคชั่น */}
                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
                   <button 
                     onClick={submitLeave} 
@@ -917,9 +1129,9 @@ export default function LeaderClientPage({
                     {isProcessing ? "กำลังประมวลผล..." : "ยืนยันการลา"}
                   </button>
                   <button 
-                    onClick={() => { setShowLeaveForm(false); setLeaveFile(null); setLeaveFilePreview(null); }} 
+                    onClick={() => { setShowLeaveForm(false); setLeaveFile(null); setLeaveFilePreview(null); setLeaveError(""); }} 
                     disabled={isProcessing}
-                    className="flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black py-6 rounded-[1.5rem] uppercase tracking-tighter hover:bg-gray-50 transition-all disabled:opacity-30"
+                    className="flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black py-6 rounded-[1.5rem] uppercase hover:bg-gray-50 transition-all disabled:opacity-30"
                   >
                     ยกเลิก
                   </button>
@@ -930,6 +1142,140 @@ export default function LeaderClientPage({
         )}
       </main>
 
+      {/* 🔐 MODAL CHANGE PASSWORD */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="absolute inset-0" onClick={() => !isProcessing && setShowPasswordModal(false)}></div>
+          
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-300 relative z-10">
+            <div className="p-8 sm:p-10">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl">🔐</div>
+                <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">เปลี่ยนรหัสผ่านใหม่</h3>
+                <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Security Update</p>
+              </div>
+
+              {pwError && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[10px] font-black uppercase animate-shake">
+                  ⚠️ {pwError}
+                </div>
+              )}
+              
+              {pwSuccess && (
+                <div className="mb-4 p-4 bg-green-50 border border-green-100 text-green-600 rounded-2xl text-[10px] font-black uppercase text-center">
+                  🎉 เปลี่ยนรหัสผ่านสำเร็จแล้ว!
+                </div>
+              )}
+
+              {!pwSuccess && (
+                <div className="space-y-4">
+                  {/* รหัสผ่านปัจจุบัน */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">รหัสผ่านปัจจุบัน</label>
+                    <div className="relative">
+                      <input 
+                        type={showOldPw ? "text" : "password"} 
+                        className="w-full bg-gray-50 p-4 pr-12 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all"
+                        value={pwData.old}
+                        onChange={e => { setPwData({...pwData, old: e.target.value}); setPwError(""); }}
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowOldPw(!showOldPw)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-600 transition-colors"
+                      >
+                        {showOldPw ? "ซ่อน" : "ดู"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* รหัสผ่านใหม่ */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">รหัสผ่านใหม่</label>
+                    <div className="relative">
+                      <input 
+                        type={showNewPw ? "text" : "password"} 
+                        className="w-full bg-gray-50 p-4 pr-12 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all"
+                        value={pwData.new}
+                        onChange={e => { setPwData({...pwData, new: e.target.value}); setPwError(""); }}
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowNewPw(!showNewPw)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-600 transition-colors"
+                      >
+                        {showNewPw ? "ซ่อน" : "ดู"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ยืนยันรหัสผ่านใหม่ */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">ยืนยันรหัสผ่านใหม่</label>
+                    <div className="relative">
+                      <input 
+                        type={showConfirmPw ? "text" : "password"} 
+                        className="w-full bg-gray-50 p-4 pr-12 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all"
+                        value={pwData.confirm}
+                        onChange={e => { setPwData({...pwData, confirm: e.target.value}); setPwError(""); }}
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowConfirmPw(!showConfirmPw)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-600 transition-colors"
+                      >
+                        {showConfirmPw ? "ซ่อน" : "ดู"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button 
+                      onClick={async () => {
+                        if(!pwData.old || !pwData.new || !pwData.confirm) return setPwError("กรุณากรอกข้อมูลให้ครบ");
+                        if(pwData.new !== pwData.confirm) return setPwError("รหัสผ่านใหม่ไม่ตรงกัน");
+                        
+                        setIsProcessing(true);
+                        const res = await changePasswordAction({
+                          userId: userProfile.id,
+                          oldPassword: pwData.old,
+                          newPassword: pwData.new
+                        });
+                        setIsProcessing(false);
+
+                        if(res.success) {
+                          setPwSuccess(true);
+                          setTimeout(() => { 
+                            setShowPasswordModal(false); 
+                            setPwSuccess(false); 
+                            setPwData({old:"", new:"", confirm:""}); 
+                            // รีเซ็ตการเปิดตาด้วย
+                            setShowOldPw(false); setShowNewPw(false); setShowConfirmPw(false);
+                          }, 2000);
+                        } else {
+                          setPwError(res.error);
+                        }
+                      }}
+                      disabled={isProcessing}
+                      className="flex-[2] bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all uppercase text-xs tracking-widest disabled:opacity-50 disabled:grayscale"
+                    >
+                      {isProcessing ? "กำลังประมวลผล..." : "อัปเดตรหัสผ่าน"}
+                    </button>
+                    <button 
+                      onClick={() => { setShowPasswordModal(false); setPwError(""); }}
+                      disabled={isProcessing}
+                      className="flex-1 bg-gray-100 text-gray-400 font-black py-4 rounded-2xl uppercase text-xs tracking-widest disabled:opacity-30"
+                    >
+                      ปิด
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* 📸 MODAL CAMERA */}
       {showCamera && (
         <div className="fixed inset-0 bg-slate-900/98 flex flex-col items-center justify-center z-[999] p-6 backdrop-blur-2xl">

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { logoutAction } from "@/server/auth"; 
-import { checkInAction, checkOutAction, createLeaveRequest } from "./actions";
+import { checkInAction, checkOutAction, createLeaveRequest, changePasswordAction } from "./actions";
 
 // --- เพิ่ม Component LoadingOverlay เหมือนหน้า Leader ---
 const LoadingOverlay = () => (
@@ -23,6 +23,8 @@ interface Props {
   userProfile: any;
   initialRecords: any[];
   initialLeaves: any[];
+  position: string;
+  site: string;
 }
 
 export default function EmployeeClientPage({ userProfile, initialRecords, initialLeaves }: Props) {
@@ -53,8 +55,84 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
   const [leaveReason, setLeaveReason] = useState("");
   const [leaveError, setLeaveError] = useState("");
 
+  const [leaveFileBase64, setLeaveFileBase64] = useState<string | null>(null);
+  const [leaveFileName, setLeaveFileName] = useState("");
+  const [leaveFilePreview, setLeaveFilePreview] = useState<string | null>(null);
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pwData, setPwData] = useState({ old: "", new: "", confirm: "" });
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState(false);
+
+  const [showOldPw, setShowOldPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // ฟังก์ชันคำนวณจำนวนวันลา
+  /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
+
+const calculateLeaveDays = (start: string, end: string): number => {
+  if (!start || !end) return 0;
+  
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  
+  // ล้างค่าเวลาให้เหลือ 00:00:00 เพื่อคำนวณเฉพาะจำนวนวัน
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(0, 0, 0, 0);
+
+  // ถ้าวันสิ้นสุดมาก่อนวันเริ่มต้น ให้คืนค่าเป็น 0
+  if (endDate < startDate) return 0;
+
+  // คำนวณส่วนต่างมิลลิวินาที
+  const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+  
+  // แปลงเป็นจำนวนวัน และ +1 (เพราะการลาวันที่ 1 ถึงวันที่ 1 คือการลา 1 วัน)
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+};
+
+// เรียกใช้งานเพื่อให้ UI อัปเดต
+const totalDays = useMemo(() => calculateLeaveDays(leaveStart, leaveEnd), [leaveStart, leaveEnd]);
+
+// ตรวจสอบความถูกต้องก่อนส่งข้อมูล
+const validateLeaveDates = (start: string, end: string) => {
+  if (!start || !end) return { isValid: false, error: "⚠️ กรุณาระบุวันที่เริ่มต้นและสิ้นสุด" };
+
+  // ดึงวันที่ปัจจุบันแบบไทย (Asia/Bangkok) เพื่อใช้เปรียบเทียบ
+  const now = new Date();
+  const today = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+  today.setHours(0, 0, 0, 0);
+
+  const startDate = new Date(start);
+  startDate.setHours(0, 0, 0, 0);
+  
+  const endDate = new Date(end);
+  endDate.setHours(0, 0, 0, 0);
+
+  // 1. ตรวจสอบ: ห้ามลาล่วงลับย้อนหลัง (วันเริ่มลาต้องไม่น้อยกว่าวันนี้)
+  if (startDate < today) {
+    return { 
+      isValid: false, 
+      error: "⚠️ ไม่สามารถลาย้อนหลังได้ กรุณาเลือกวันที่เริ่มต้นเป็นตั้งแต่วันนี้เป็นต้นไป" 
+    };
+  }
+
+  // 2. ตรวจสอบ: วันที่สิ้นสุดต้องไม่อยู่ก่อนวันที่เริ่มต้น
+  if (endDate < startDate) {
+    return { 
+      isValid: false, 
+      error: "⚠️ วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มต้น" 
+    };
+  }
+
+  return { isValid: true, error: "" };
+};
+
+// ตรวจสอบว่าวันที่เลือกถูกต้องตามกฎธุรกิจหรือไม่
+
 
   // ✅ คำนวณสถานะปุ่มจากข้อมูลปัจจุบัน (รองรับ Timezone ไทย)
   const todayStatus = useMemo(() => {
@@ -93,6 +171,34 @@ export default function EmployeeClientPage({ userProfile, initialRecords, initia
       setIsProcessing(false);
     }
   };
+
+  /**
+ * ฟังก์ชันลดขนาดรูปภาพโดยใช้ Canvas
+ * คุมขนาดไม่ให้เกิน ~1MB และลดขนาดกว้างยาวลง
+ */
+const compressImage = (file) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+          const img = new window.Image();
+          img.src = event.target.result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 800; 
+            let width = img.width, height = img.height;
+            if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } 
+            else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              resolve(canvas.toDataURL('image/jpeg', 0.6)); 
+            }
+          };
+        };
+      });
+    };
 
 /* ---------------- HANDLERS ---------------- */
 const handleCheckIn = () => {
@@ -148,6 +254,78 @@ const handleCheckOut = () => {
       setIsProcessing(false);
     }
   };
+/* ---------------- LEAVE HANDLERS ---------------- */
+
+// 1. ฟังก์ชันเลือกไฟล์และแปลงเป็น Base64
+const handleFileChange = async (e) => {
+  const file = e.target.files?.[0];
+  if (file) {
+    setIsProcessing(true); // เริ่มแสดง Loading
+    try {
+      // 🚀 เรียกใช้ฟังก์ชันที่คุณส่งมา (ส่งตัวแปร file เข้าไปโดยตรง)
+      const compressedBase64 = await compressImage(file);
+      
+      setLeaveFileBase64(compressedBase64); // สำหรับส่งไป Server
+      setLeaveFilePreview(compressedBase64); // สำหรับแสดงตัวอย่างรูป
+      setLeaveFileName(file.name);
+    } catch (error) {
+      console.error("Compression failed:", error);
+      alert("ไม่สามารถประมวลผลรูปภาพได้");
+    } finally {
+      setIsProcessing(false); // ปิด Loading
+    }
+  }
+};
+
+// 2. ฟังก์ชันส่งคำขอลางาน
+const submitLeave = async () => {
+  setLeaveError("");
+  
+  // 1. เช็คค่าว่าง
+  if (!leaveType || !leaveStart || !leaveEnd || !leaveReason) {
+    setLeaveError("กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง");
+    return;
+  }
+
+  // 2. เรียกใช้ Logic Validation ที่คุณเขียนไว้ (แทรกตรงนี้)
+  const validation = validateLeaveDates(leaveStart, leaveEnd);
+  if (!validation.isValid) {
+    setLeaveError(validation.error);
+    return;
+  }
+  
+  setIsProcessing(true);
+  try {
+    // เรียกใช้ action โดยส่ง base64File และ fileName ไปด้วย
+    const res = await createLeaveRequest({
+      userId: userProfile.id,
+      type: leaveType,
+      start: leaveStart,
+      end: leaveEnd,
+      reason: leaveReason,
+      base64File: leaveFileBase64 || undefined, // ส่งไฟล์รูปภาพ (ถ้ามี)
+      fileName: leaveFileName,
+    });
+
+    if (res.success) {
+      setLeaveSuccess(true);
+      router.refresh();
+      setTimeout(() => {
+        setLeaveSuccess(false);
+        setShowLeaveForm(false);
+        // Reset States ทั้งหมด
+        setLeaveType(""); setLeaveStart(""); setLeaveEnd(""); setLeaveReason("");
+        setLeaveFileBase64(null); setLeaveFileName(""); setLeaveFilePreview(null);
+      }, 2000);
+    } else {
+      setLeaveError(res.error || "เกิดข้อผิดพลาดในการส่งใบลา");
+    }
+  } catch (err) {
+    setLeaveError("ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง");
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   /* ---------------- OTHER ACTIONS ---------------- */
   const handleLogout = async () => {
@@ -169,37 +347,6 @@ const handleCheckOut = () => {
     return Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   }, [leaveStart, leaveEnd]);
 
-  const submitLeave = async () => {
-    setLeaveError("");
-    if (!leaveType || !leaveStart || !leaveEnd || !leaveReason) {
-      setLeaveError("กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง");
-      return;
-    }
-    setIsProcessing(true);
-    try {
-      const res = await createLeaveRequest({
-        userId: userProfile.id,
-        type: leaveType,
-        start: leaveStart,
-        end: leaveEnd,
-        reason: leaveReason,
-        days: leaveDays,
-      });
-      if (res.success) {
-        setLeaveSuccess(true);
-        router.refresh();
-        setTimeout(() => {
-          setLeaveSuccess(false);
-          setShowLeaveForm(false);
-          setLeaveType(""); setLeaveStart(""); setLeaveEnd(""); setLeaveReason("");
-        }, 2000);
-      }
-    } catch (err) {
-      setLeaveError("เกิดข้อผิดพลาดในการส่งใบลา");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {/* 🟢 TOP NAVIGATION */}
@@ -222,20 +369,21 @@ const handleCheckOut = () => {
             </div>
             <button 
               onClick={handleLogout}
-              className="p-3 bg-red-50 hover:bg-red-500 text-red-500 hover:text-white rounded-2xl transition-all duration-300 group"
-              title="ออกจากระบบ"
+              disabled={isProcessing}
+              className="group flex items-center gap-2 px-3 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+              <span className="text-base sm:text-lg">{isProcessing ? "⏳" : "🚪"}</span>
+              <span className="text-[10px] sm:text-sm font-bold uppercase tracking-tight">
+                {isProcessing ? "..." : "ลงชื่อออก"}
+              </span>
             </button>
           </div>
         </div>
       </nav>
 
       <main className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-10">
-        {/* 👤 PROFILE CARD */}
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm mb-10 flex flex-col md:flex-row items-center md:items-start gap-8 border border-white">
+       {/* 👤 PROFILE CARD */}
+       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm mb-10 flex flex-col md:flex-row items-center md:items-start gap-8 border border-white">
           <div className="relative">
             <div className="absolute inset-0 bg-blue-500 rounded-full blur-2xl opacity-10"></div>
             <Image src="/profile.png" alt="Profile" width={140} height={140} className="rounded-[2.5rem] border-4 border-white shadow-2xl w-32 h-32 md:w-36 md:h-36 object-cover relative z-10" unoptimized />
@@ -245,15 +393,17 @@ const handleCheckOut = () => {
           </div>
           <div className="flex-1 text-center md:text-left pt-2">
             <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">พนักงานประจำ</div>
-            <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-1">{userProfile.firstName} {userProfile.lastName}</h2>
+            {/* <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-1">{userProfile.firstName} {userProfile.lastName}</h2> */}
+            <h2 className="text-3xl font-black text-gray-900 tracking-tight mb-1">{userProfile.firstName}</h2>
             <p className="text-gray-500 font-bold text-lg mb-6">{userProfile.position}</p>
             <div className="flex flex-wrap justify-center md:justify-start gap-2">
               <span className="bg-gray-50 text-gray-400 text-[10px] px-4 py-2 rounded-xl font-black border border-gray-100">รหัส: {userProfile.userName}</span>
               <span className="bg-blue-50 text-blue-500 text-[10px] px-4 py-2 rounded-xl font-black border border-blue-100 uppercase">{userProfile.department}</span>
             </div>
           </div>
+          
           <div className="flex flex-col gap-3 w-full md:w-auto min-w-[240px]">
-            {/* ปรับเงื่อนไขปุ่มให้ใช้ todayStatus เพื่อความแม่นยำของ Timezone */}
+            {/* 1. ปุ่มลงชื่อเข้า/ออกงาน */}
             {!todayStatus.hasCheckedIn ? (
               <button onClick={handleCheckIn} disabled={isProcessing} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-5 rounded-[1.5rem] transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -270,7 +420,37 @@ const handleCheckOut = () => {
                 บันทึกเวลาครบแล้ววันนี้
               </div>
             )}
-            <button onClick={() => setShowLeaveForm(true)} className="w-full bg-white border-2 border-gray-100 hover:border-blue-600 hover:text-blue-600 text-gray-500 font-black px-8 py-5 rounded-[1.5rem] transition-all active:scale-95 flex items-center justify-center gap-3">ขอลางาน</button>
+
+            {/* 2. ปุ่มขอลางาน */}
+            <button onClick={() => setShowLeaveForm(true)} className="w-full bg-white border-2 border-gray-100 hover:border-blue-600 hover:text-blue-600 text-gray-500 font-black px-8 py-5 rounded-[1.5rem] transition-all active:scale-95 flex items-center justify-center gap-3">
+              ขอลางาน
+            </button>
+
+            {/* 3. ปุ่มเปลี่ยนรหัสผ่าน (เพิ่มใหม่ ดีไซน์หรู) */}
+            <button
+              onClick={() => setShowPasswordModal(true)}
+              disabled={isProcessing}
+              className="w-full relative group active:scale-[0.97] transition-all duration-300 disabled:opacity-50"
+            >
+              {/* 1. Background Layer: เงาฟุ้งด้านหลังปุ่มเมื่อ Hover */}
+              <div className="absolute inset-0 bg-blue-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[1.5rem]"></div>
+              
+              {/* 2. Main Button Body */}
+              <div className="relative flex items-center justify-center gap-3 px-8 py-5 rounded-[1.5rem] bg-white border-2 border-gray-50 group-hover:border-blue-500 group-hover:bg-blue-50/30 transition-all duration-300 shadow-sm group-hover:shadow-md">
+                
+                {/* 3. Icon Box: มีการหมุนและขยายเล็กน้อย */}
+                <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white group-hover:rotate-12 group-hover:scale-110 transition-all duration-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                </div>
+                
+                {/* 4. Text: ใช้ฟอนต์หนาและเว้นระยะตัวอักษรให้ดูพรีเมียม */}
+                <span className="text-[11px] font-black text-gray-400 group-hover:text-blue-600 uppercase tracking-[0.15em] transition-colors">
+                  {isProcessing ? "กำลังประมวลผล..." : "เปลี่ยนรหัสผ่าน"}
+                </span>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -292,7 +472,7 @@ const handleCheckOut = () => {
                         <th className="p-6 text-left">วันที่</th>
                         <th className="p-6 text-left">เวลาเข้า / รูปถ่าย</th>
                         <th className="p-6 text-left">เวลาออก / รูปถ่าย</th>
-                        <th className="p-6 text-left">แผนก / ตำแหน่ง / เขตรับผิดชอบ</th>
+                        <th className="p-6 text-left">ตำแหน่ง / เขตรับผิดชอบ / ระดับสิทธิ์</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -315,9 +495,35 @@ const handleCheckOut = () => {
                               </div>
                             </td>
                             <td className="p-6">
-                              <div className="flex flex-col">
-                                <span className="text-xs font-black text-gray-700">{r.position}</span>
-                                <span className="text-[10px] font-mono text-gray-400">📍 {r.location}</span>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-1">
+                                {/* แถวที่ 1: ตำแหน่ง (เน้นใหญ่สุด) */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-black text-gray-900 uppercase tracking-tight bg-indigo-600 text-white px-3 py-1 rounded-xl shadow-sm">
+                                    {r.position}
+                                  </span>
+                                </div>
+
+                                {/* แถวที่ 2: ไซต์งาน และ Role (เน้นดูง่าย) */}
+                                <div className="flex items-center gap-3">
+                                  {/* ไซต์งาน */}
+                                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-lg border border-gray-200">
+                                    <span className="text-base">📍</span>
+                                    <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
+                                      {r.site}
+                                    </span>
+                                  </div>
+
+                                  {/* เส้นแบ่ง (แสดงเฉพาะบนจอใหญ่) */}
+                                  <span className="hidden sm:block text-gray-300">|</span>
+
+                                  {/* ระดับ/Role */}
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-2.5 h-2.5 rounded-full shadow-inner ${r.role === 'หัวหน้างาน' ? 'bg-amber-400' : 'bg-emerald-400'}`}></div>
+                                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
+                                      {r.role}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
                             </td>
                           </tr>
@@ -362,57 +568,312 @@ const handleCheckOut = () => {
             </>
           )}
 
-          {/* LEAVE FORM */}
-          {showLeaveForm && (
-            <div className="max-w-2xl mx-auto py-4">
-              <div className="text-center mb-12">
-                <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-2">ยื่นเรื่อง <span className="text-blue-600">ลางาน</span></h2>
-                <div className="w-12 h-1.5 bg-blue-600 mx-auto rounded-full"></div>
+         {/* 📝 LEAVE FORM SECTION */}
+        {showLeaveForm && (
+          <div className="max-w-2xl mx-auto py-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-2">
+                ยื่นเรื่อง <span className="text-indigo-600">ลางาน</span>
+              </h2>
+              <div className="w-12 h-1.5 bg-indigo-600 mx-auto rounded-full"></div>
+            </div>
+            
+            {leaveSuccess ? (
+              <div className="p-12 bg-green-50 border border-green-100 text-green-700 rounded-[3rem] text-center space-y-4 shadow-xl">
+                <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-4xl">✓</div>
+                <p className="font-black text-2xl tracking-tighter uppercase">ส่งคำขอลาสำเร็จ</p>
               </div>
-              {leaveSuccess ? (
-                <div className="p-12 bg-green-50 border border-green-100 text-green-700 rounded-[3rem] text-center space-y-4">
-                  <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-4xl shadow-lg">✓</div>
-                  <p className="font-black text-2xl tracking-tighter uppercase">ส่งข้อมูลสำเร็จ</p>
+            ) : (
+              <div className="space-y-6 bg-gray-50/50 p-6 sm:p-10 rounded-[2rem] sm:rounded-[3rem] border border-gray-100 shadow-inner relative">
+                
+                {/* 🔥 แจ้งเตือนข้อผิดพลาด - แสดงเมื่อมี error และล้างออกเมื่อมีการแก้ไขวันที่ */}
+                {leaveError && (
+                  <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[11px] font-black uppercase animate-in slide-in-from-top-2">
+                    <span className="mr-2">⚠️</span> {leaveError}
+                  </div>
+                )}
+                
+                {/* 1. ประเภทการลา */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-gray-400 uppercase ml-2">ประเภทการลา</label>
+                  <select 
+                    className="w-full bg-white p-5 rounded-[1.5rem] font-black text-gray-700 outline-none shadow-sm border-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer hover:bg-gray-50" 
+                    value={leaveType} 
+                    onChange={e => {
+                      setLeaveType(e.target.value);
+                      setLeaveError(""); // ล้าง error เมื่อเปลี่ยนประเภท
+                    }}
+                  >
+                    <option value="">โปรดระบุ</option>
+                    <option value="ลาป่วย">ลาป่วย</option>
+                    <option value="ลากิจ">ลากิจ</option>
+                    <option value="ลาพักร้อน">ลาพักร้อน</option>
+                  </select>
                 </div>
-              ) : (
-                <div className="space-y-6 bg-gray-50/50 p-10 rounded-[3rem] border border-gray-100">
-                  {leaveError && <div className="p-5 bg-red-50 text-red-600 rounded-[1.5rem] text-xs font-black animate-shake">{leaveError}</div>}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">ประเภทการลา</label>
-                    <select className="w-full bg-white p-5 rounded-[1.5rem] font-black text-gray-700 outline-none shadow-sm" value={leaveType} onChange={e => setLeaveType(e.target.value)}>
-                      <option value="">เลือกประเภทการลา</option>
-                      <option value="ลาป่วย">ลาป่วย (SICK LEAVE)</option>
-                      <option value="ลากิจ">ลากิจ (PERSONAL LEAVE)</option>
-                      <option value="ลาพักร้อน">ลาพักร้อน (ANNUAL LEAVE)</option>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">ตั้งแต่วันที่</label>
-                      <input type="date" className="w-full bg-white p-5 rounded-[1.5rem] font-bold text-gray-700 outline-none shadow-sm" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} />
+
+                {/* 2. ส่วนวันที่ พร้อมระบบตรวจสอบความถูกต้อง */}
+                <div className="relative space-y-4">
+                  {/* 🗓️ บล็อกแสดงผลจำนวนวัน (แสดงเฉพาะเมื่อวันที่ถูกต้องตาม Logic) */}
+                  {totalDays > 0 && validateLeaveDates(leaveStart, leaveEnd).isValid && (
+                    <div className="flex flex-col items-center justify-center py-4 animate-in zoom-in duration-300">
+                      <div className="bg-indigo-600 px-8 py-3 rounded-[2rem] shadow-[0_10px_25px_-5px_rgba(79,70,229,0.4)] flex items-center gap-3">
+                        <span className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">ระยะเวลา</span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-black text-white leading-none">{totalDays}</span>
+                          <span className="text-sm font-bold text-white uppercase">วัน</span>
+                        </div>
+                      </div>
+                      <div className="h-4 w-0.5 bg-gradient-to-b from-indigo-600 to-transparent opacity-20"></div>
                     </div>
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">ถึงวันที่</label>
-                      <input type="date" className="w-full bg-white p-5 rounded-[1.5rem] font-bold text-gray-700 outline-none shadow-sm" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} />
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                    {/* วันเริ่มต้น */}
+                    <div className="space-y-2 group">
+                      <label className={`text-[10px] font-black uppercase ml-4 transition-colors ${leaveError?.includes('เริ่มต้น') || (leaveStart && !validateLeaveDates(leaveStart, leaveEnd).isValid) ? 'text-red-500' : 'text-gray-400 group-focus-within:text-indigo-500'}`}>เริ่มต้น</label>
+                      <div className="relative">
+                        <input 
+                          type="date" 
+                          className={`w-full p-5 rounded-[1.8rem] font-black text-gray-700 outline-none shadow-sm border-2 transition-all appearance-none ${leaveError?.includes('เริ่มต้น') ? 'border-red-200 bg-red-50/50' : 'bg-white border-transparent focus:border-indigo-500'}`} 
+                          value={leaveStart} 
+                          onChange={e => {
+                            setLeaveStart(e.target.value);
+                            setLeaveError(""); // ล้าง error ทันทีเพื่อให้สีแดงหายไป
+                          }} 
+                        />
+                      </div>
+                    </div>
+
+                    {/* วันสิ้นสุด */}
+                    <div className="space-y-2 group">
+                      <label className={`text-[10px] font-black uppercase ml-4 transition-colors ${leaveError?.includes('สิ้นสุด') || (leaveEnd && !validateLeaveDates(leaveStart, leaveEnd).isValid) ? 'text-red-500' : 'text-gray-400 group-focus-within:text-indigo-500'}`}>สิ้นสุด</label>
+                      <div className="relative">
+                        <input 
+                          type="date" 
+                          className={`w-full p-5 rounded-[1.8rem] font-black text-gray-700 outline-none shadow-sm border-2 transition-all appearance-none ${leaveError?.includes('สิ้นสุด') ? 'border-red-200 bg-red-50/50' : 'bg-white border-transparent focus:border-indigo-500'}`} 
+                          value={leaveEnd} 
+                          onChange={e => {
+                            setLeaveEnd(e.target.value);
+                            setLeaveError(""); // ล้าง error ทันทีเพื่อให้สีแดงหายไป
+                          }} 
+                        />
+                      </div>
                     </div>
                   </div>
-                  {leaveDays > 0 && <div className="bg-blue-600 text-white p-5 rounded-[1.5rem] text-center text-sm font-black uppercase tracking-widest">สรุปจำนวนวันลา: {leaveDays} วัน</div>}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">เหตุผลการลางาน</label>
-                    <textarea className="w-full bg-white p-5 rounded-[1.5rem] font-medium text-gray-700 outline-none shadow-sm min-h-[160px] resize-none" placeholder="ระบุเหตุผล..." value={leaveReason} onChange={e => setLeaveReason(e.target.value)} />
+                </div>
+
+                {/* 3. ระบุเหตุผล */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-gray-400 uppercase ml-2">ระบุเหตุผล</label>
+                  <textarea 
+                    className="w-full bg-white p-5 rounded-[1.5rem] font-medium min-h-[120px] outline-none shadow-sm focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-gray-300" 
+                    placeholder="เขียนเหตุผลประกอบการลาที่นี่..." 
+                    value={leaveReason} 
+                    onChange={e => {
+                      setLeaveReason(e.target.value);
+                      if(leaveError === "กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง") setLeaveError("");
+                    }} 
+                  />
+                </div>
+
+                {/* 4. อัปโหลดและบีบอัดรูปภาพ */}
+                <div className="space-y-3 mt-4">
+                  <label className="text-[10px] font-black text-gray-400 uppercase ml-2">เอกสารประกอบ (ไม่เกิน 1MB)</label>
+                  <div className="relative group">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleFileChange} 
+                      className="hidden" 
+                      id="leave-file-upload" 
+                      disabled={isProcessing} 
+                    />
+                    <label htmlFor="leave-file-upload" className="flex flex-col items-center justify-center w-full bg-white border-2 border-dashed border-gray-200 p-6 rounded-[1.5rem] cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-all group shadow-sm active:scale-[0.98]">
+                      {leaveFilePreview ? (
+                        <div className="relative w-full h-32 flex justify-center">
+                          <img src={leaveFilePreview} alt="Preview" className="h-full object-contain rounded-xl shadow-md" />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-all">
+                            <span className="text-white text-[10px] font-black uppercase">เปลี่ยนรูป</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <div className="w-10 h-10 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-2 text-gray-400 group-hover:text-indigo-600 group-hover:rotate-12 transition-all duration-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                          <p className="text-[11px] font-black text-gray-400 uppercase tracking-tighter">คลิกเพื่อแนบหลักฐาน</p>
+                        </div>
+                      )}
+                    </label>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                    <button onClick={submitLeave} disabled={isProcessing} className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-6 rounded-[1.5rem] shadow-xl active:scale-95 transition-all disabled:opacity-50">
-                      {isProcessing ? "กำลังส่ง..." : "ยืนยัน"}
+                </div>
+
+                {/* 5. ปุ่มแอคชั่น */}
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  <button 
+                    onClick={submitLeave} 
+                    disabled={isProcessing || !!leaveError || !leaveStart || !leaveEnd}
+                    className="flex-[2] bg-indigo-600 text-white font-black py-6 rounded-[1.5rem] shadow-xl active:scale-95 hover:bg-indigo-700 transition-all uppercase tracking-tighter disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isProcessing ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : "ยืนยันการลา"}
+                  </button>
+                  <button 
+                    onClick={() => { 
+                      setShowLeaveForm(false); 
+                      setLeaveFilePreview(null); 
+                      setLeaveFileBase64(null); 
+                      setLeaveError(""); 
+                    }} 
+                    disabled={isProcessing}
+                    className="flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black py-6 rounded-[1.5rem] uppercase hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-30"
+                  >
+                    ยกเลิก
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+      </main>
+
+    {/* 🔐 MODAL CHANGE PASSWORD */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="absolute inset-0" onClick={() => !isProcessing && setShowPasswordModal(false)}></div>
+          
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-300 relative z-10">
+            <div className="p-8 sm:p-10">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl">🔐</div>
+                <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">เปลี่ยนรหัสผ่านใหม่</h3>
+                <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Security Update</p>
+              </div>
+
+              {pwError && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[10px] font-black uppercase animate-shake">
+                  ⚠️ {pwError}
+                </div>
+              )}
+              
+              {pwSuccess && (
+                <div className="mb-4 p-4 bg-green-50 border border-green-100 text-green-600 rounded-2xl text-[10px] font-black uppercase text-center">
+                  🎉 เปลี่ยนรหัสผ่านสำเร็จแล้ว!
+                </div>
+              )}
+
+              {!pwSuccess && (
+                <div className="space-y-4">
+                  {/* รหัสผ่านปัจจุบัน */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">รหัสผ่านปัจจุบัน</label>
+                    <div className="relative">
+                      <input 
+                        type={showOldPw ? "text" : "password"} 
+                        className="w-full bg-gray-50 p-4 pr-12 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all"
+                        value={pwData.old}
+                        onChange={e => { setPwData({...pwData, old: e.target.value}); setPwError(""); }}
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowOldPw(!showOldPw)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-600 transition-colors"
+                      >
+                        {showOldPw ? "ซ่อน" : "ดู"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* รหัสผ่านใหม่ */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">รหัสผ่านใหม่</label>
+                    <div className="relative">
+                      <input 
+                        type={showNewPw ? "text" : "password"} 
+                        className="w-full bg-gray-50 p-4 pr-12 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all"
+                        value={pwData.new}
+                        onChange={e => { setPwData({...pwData, new: e.target.value}); setPwError(""); }}
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowNewPw(!showNewPw)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-600 transition-colors"
+                      >
+                        {showNewPw ? "ซ่อน" : "ดู"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ยืนยันรหัสผ่านใหม่ */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">ยืนยันรหัสผ่านใหม่</label>
+                    <div className="relative">
+                      <input 
+                        type={showConfirmPw ? "text" : "password"} 
+                        className="w-full bg-gray-50 p-4 pr-12 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 transition-all"
+                        value={pwData.confirm}
+                        onChange={e => { setPwData({...pwData, confirm: e.target.value}); setPwError(""); }}
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowConfirmPw(!showConfirmPw)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-600 transition-colors"
+                      >
+                        {showConfirmPw ? "ซ่อน" : "ดู"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button 
+                      onClick={async () => {
+                        if(!pwData.old || !pwData.new || !pwData.confirm) return setPwError("กรุณากรอกข้อมูลให้ครบ");
+                        if(pwData.new !== pwData.confirm) return setPwError("รหัสผ่านใหม่ไม่ตรงกัน");
+                        
+                        setIsProcessing(true);
+                        const res = await changePasswordAction({
+                          userId: userProfile.id,
+                          oldPassword: pwData.old,
+                          newPassword: pwData.new
+                        });
+                        setIsProcessing(false);
+
+                        if(res.success) {
+                          setPwSuccess(true);
+                          setTimeout(() => { 
+                            setShowPasswordModal(false); 
+                            setPwSuccess(false); 
+                            setPwData({old:"", new:"", confirm:""}); 
+                            // รีเซ็ตการเปิดตาด้วย
+                            setShowOldPw(false); setShowNewPw(false); setShowConfirmPw(false);
+                          }, 2000);
+                        } else {
+                          setPwError(res.error);
+                        }
+                      }}
+                      disabled={isProcessing}
+                      className="flex-[2] bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all uppercase text-xs tracking-widest disabled:opacity-50 disabled:grayscale"
+                    >
+                      {isProcessing ? "กำลังประมวลผล..." : "อัปเดตรหัสผ่าน"}
                     </button>
-                    <button onClick={() => setShowLeaveForm(false)} className="flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black px-8 py-6 rounded-[1.5rem] hover:bg-gray-50 active:scale-95 transition-all">ยกเลิก</button>
+                    <button 
+                      onClick={() => { setShowPasswordModal(false); setPwError(""); }}
+                      disabled={isProcessing}
+                      className="flex-1 bg-gray-100 text-gray-400 font-black py-4 rounded-2xl uppercase text-xs tracking-widest disabled:opacity-30"
+                    >
+                      ปิด
+                    </button>
                   </div>
                 </div>
               )}
             </div>
-          )}
+          </div>
         </div>
-      </main>
+      )}
 
       {/* 📸 MODAL CAMERA */}
       {showCamera && (
