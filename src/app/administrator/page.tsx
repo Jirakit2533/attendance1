@@ -207,7 +207,16 @@ export default async function AdminDashboardPage() {
     return <AdminClientPage {...safeProps} />;
 
   } catch (error: any) {
+    // 🛡️ 1. เช็คว่าเป็นคำสั่ง Redirect ของ Next.js หรือไม่
+    // ถ้าใช่ ให้ปล่อยมันทำงาน (throw ต่อไป) เพื่อให้หน้าเว็บเปลี่ยนได้จริง
+    if (error.message === 'NEXT_REDIRECT' || error.digest?.includes('NEXT_REDIRECT')) {
+      throw error;
+    }
+
+    // 2. ถ้าไม่ใช่ Redirect (เป็น Error จริงๆ เช่น DB พัง) ให้ Log ออกมา
     console.error("Critical Dashboard Error:", error);
+    
+    // 3. ส่งไปหน้า Logout Cleanup เพื่อล้าง Session
     redirect('/api/auth/logout-cleanup');
   }
 }
