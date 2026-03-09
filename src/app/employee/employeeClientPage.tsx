@@ -211,49 +211,60 @@ const handleCheckOut = () => {
   startCamera();   
 };
 
-  const handleCapture = async () => {
-    if (!videoRef.current || !streamRef.current) return;
-    setIsProcessing(true);
-    
-    const canvas = document.createElement("canvas");
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    canvas.getContext("2d")!.drawImage(videoRef.current, 0, 0);
-    const capturedImg = canvas.toDataURL("image/png");
+const handleCapture = async () => {
+  if (!videoRef.current || !streamRef.current) return;
+  setIsProcessing(true);
+  
+  const canvas = document.createElement("canvas");
+  canvas.width = videoRef.current.videoWidth;
+  canvas.height = videoRef.current.videoHeight;
+  canvas.getContext("2d")!.drawImage(videoRef.current, 0, 0);
+  const capturedImg = canvas.toDataURL("image/png");
 
-    streamRef.current.getTracks().forEach(t => t.stop());
-    setShowCamera(false);
-    setReadyToCapture(false);
+  streamRef.current.getTracks().forEach(t => t.stop());
+  setShowCamera(false);
+  setReadyToCapture(false);
 
-    try {
-      const pos = await new Promise<GeolocationPosition>((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 })
-      );
-      const locationStr = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+  try {
+    const pos = await new Promise<GeolocationPosition>((res, rej) =>
+      navigator.geolocation.getCurrentPosition(res, rej, { 
+        enableHighAccuracy: true, // เพิ่มเพื่อกระตุ้นการใช้ GPS ความแม่นยำสูง
+        timeout: 10000,
+        maximumAge: 0 
+      })
+    );
+    const locationStr = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
 
-      if (isCheckingOut) {
-        const res = await checkOutAction(userProfile.id, capturedImg, locationStr);
-        if (res.success) {
-          alert("ลงชื่อเลิกงานสำเร็จ");
-          router.refresh();
-        } else {
-          alert(res.error || "บันทึกไม่สำเร็จ");
-        }
+    if (isCheckingOut) {
+      const res = await checkOutAction(userProfile.id, capturedImg, locationStr);
+      if (res.success) {
+        alert("ลงชื่อเลิกงานสำเร็จ");
+        router.refresh();
       } else {
-        const res = await checkInAction(userProfile.id, capturedImg, locationStr);
-        if (res.success) {
-          alert("ลงชื่อเข้างานสำเร็จ");
-          router.refresh();
-        } else {
-          alert(res.error || "บันทึกไม่สำเร็จ");
-        }
+        alert(res.error || "บันทึกไม่สำเร็จ");
       }
-    } catch (error) {
-      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลหรือพิกัด กรุณาเปิดตำแหน่ง GPS และลองอีกครั้ง");
-    } finally {
-      setIsProcessing(false);
+    } else {
+      const res = await checkInAction(userProfile.id, capturedImg, locationStr);
+      if (res.success) {
+        alert("ลงชื่อเข้างานสำเร็จ");
+        router.refresh();
+      } else {
+        alert(res.error || "บันทึกไม่สำเร็จ");
+      }
     }
-  };
+  } catch (error: any) {
+    // เพิ่มการแจ้งเตือนแยกตามสาเหตุโดยไม่ลบโครงสร้างเดิม
+    if (error.code === 1) {
+      alert("กรุณาอนุญาตสิทธิ์การเข้าถึงตำแหน่งในเบราว์เซอร์");
+    } else if (error.code === 2 || error.code === 3) {
+      alert("ไม่สามารถระบุตำแหน่งได้ กรุณาเปิด GPS และตรวจสอบว่าอยู่ในที่โล่ง");
+    } else {
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลหรือพิกัด กรุณาเปิดตำแหน่ง GPS และลองอีกครั้ง");
+    }
+  } finally {
+    setIsProcessing(false);
+  }
+};
 /* ---------------- LEAVE HANDLERS ---------------- */
 
 // 1. ฟังก์ชันเลือกไฟล์และแปลงเป็น Base64

@@ -359,42 +359,48 @@ const compressImage = (file: File): Promise<string> => {
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     canvas.getContext("2d")!.drawImage(videoRef.current, 0, 0);
-    const capturedImage = canvas.toDataURL("image/png");
-    
+    const capturedImg = canvas.toDataURL("image/png");
+  
     streamRef.current.getTracks().forEach(t => t.stop());
     setShowCamera(false);
     setReadyToCapture(false);
-    
+  
     try {
       const pos = await new Promise<GeolocationPosition>((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 })
+        navigator.geolocation.getCurrentPosition(res, rej, { 
+          enableHighAccuracy: true, // เพิ่มเพื่อกระตุ้นการใช้ GPS ความแม่นยำสูง (มักจะทำให้มือถือถามเปิด GPS)
+          timeout: 10000,
+          maximumAge: 0 
+        })
       );
-      
-      const blob = await (await fetch(capturedImage)).blob();
-      const file = new File([blob], `attendance_${userProfile.id}.png`, { type: "image/png" });
+      const locationStr = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
   
-      const uploadRes = await uploadAttendance([file]);
-      if (!uploadRes) throw new Error("อัปโหลดรูปภาพไม่สำเร็จ");
-  
-      const uploadedFile = uploadRes[0];
-      const result = await saveAttendanceAction({
-        userId: userProfile.id,
-        type: isCheckingOut ? "OUT" : "IN",
-        image: uploadedFile.ufsUrl || uploadedFile.url, // ใช้ ufsUrl ถ้ามี
-        fileId: uploadedFile.key,
-        location: `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
-        departmentId: userProfile.departmentId,
-        siteId: userProfile.site_id
-      });
-  
-      if (result.success) {
-        alert("บันทึกเวลาสำเร็จ");
-        router.refresh();
+      if (isCheckingOut) {
+        const res = await checkOutAction(userProfile.id, capturedImg, locationStr);
+        if (res.success) {
+          alert("ลงชื่อเลิกงานสำเร็จ");
+          router.refresh();
+        } else {
+          alert(res.error || "บันทึกไม่สำเร็จ");
+        }
       } else {
-        alert("Error: " + result.error);
+        const res = await checkInAction(userProfile.id, capturedImg, locationStr);
+        if (res.success) {
+          alert("ลงชื่อเข้างานสำเร็จ");
+          router.refresh();
+        } else {
+          alert(res.error || "บันทึกไม่สำเร็จ");
+        }
       }
-    } catch (err: any) {
-      alert(err.message || "เกิดข้อผิดพลาดในการบันทึกพิกัดหรือข้อมูล");
+    } catch (error: any) {
+      // แยกกรณี Error เพื่อแจ้งให้พนักงานเปิด GPS หรืออนุญาตสิทธิ์
+      if (error.code === 1) {
+        alert("กรุณา 'อนุญาต' ให้เบราว์เซอร์เข้าถึงตำแหน่ง และตรวจสอบการตั้งค่าความเป็นส่วนตัว");
+      } else if (error.code === 2 || error.code === 3) {
+        alert("ไม่พบสัญญาณพิกัด! กรุณาเปิดตำแหน่ง (GPS) บนมือถือ และลองใหม่อีกครั้งในที่โล่ง");
+      } else {
+        alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลหรือพิกัด กรุณาเปิดตำแหน่ง GPS และลองอีกครั้ง");
+      }
     } finally {
       setIsProcessing(false);
     }
