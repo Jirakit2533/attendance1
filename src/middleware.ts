@@ -10,13 +10,18 @@ export function middleware(request: NextRequest) {
   const protectedPaths = ['/employee', '/leader', '/administrator', '/superAdmin'];
   const isProtected = protectedPaths.some(path => pathname.startsWith(path));
 
-  // --- LOGIC 0: ปล่อยให้ API Cleanup ทำงานได้เสมอ (สำคัญมาก) ---
-  if (pathname.startsWith('/api/auth/logout-cleanup')) {
+  // --- LOGIC 0: ปล่อยให้ API และ Internal Path ทำงานได้เสมอ ---
+  if (
+    pathname.startsWith('/api/auth/logout-cleanup') || 
+    pathname.startsWith('/_next') || 
+    pathname.includes('.')
+  ) {
     return NextResponse.next();
   }
 
   // --- LOGIC 1: ถ้ายังไม่ได้ Login แต่อยากเข้าหน้า Protected ---
   if (isProtected && !userId) {
+    // ถ้ามี Role ค้างแต่ไม่มี ID ให้ไปล้างค่าก่อน
     if (userRole) {
       return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
     }
@@ -42,10 +47,8 @@ export function middleware(request: NextRequest) {
   }
 
   // --- LOGIC 3: ป้องกันการเข้าหน้าผิดสิทธิ์ (Cross-Role Protection) ---
-  let response = NextResponse.next();
-
   if (userId && userRole) {
-    // 1. ถ้าเป็น Leader แต่หลงมาหน้า Employee
+    // 1. ถ้าเป็น Leader แต่หลงมาหน้า Employee (ให้ไปหน้า Leader แทน)
     if (pathname.startsWith('/employee') && userRole === 'leader') {
       return NextResponse.redirect(new URL('/leader', request.url));
     }
@@ -67,8 +70,9 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // --- LOGIC 4: ป้องกัน Browser Cache (แก้ปัญหาหน้าเก่าค้างตอนกด Back) ---
-  // บังคับให้หน้าที่มีข้อมูลสำคัญไม่ถูกเก็บไว้ใน Cache ของ Browser
+  // --- LOGIC 4: จัดการ Response และป้องกัน Browser Cache ---
+  const response = NextResponse.next();
+
   if (isProtected || pathname === '/login') {
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     response.headers.set('Pragma', 'no-cache');
@@ -78,14 +82,13 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-// กำหนดขอบเขตของ Middleware
+// --- CONFIG: ปรับ Matcher ให้รองรับ Server Actions (แก้ 404 บน Vercel) ---
 export const config = {
   matcher: [
-    '/employee/:path*',
-    '/leader/:path*',
-    '/administrator/:path*',
-    '/superAdmin/:path*',
-    '/login',
-    '/api/auth/logout-cleanup'
+    /*
+     * ตรวจสอบทุกเส้นทางยกเว้นไฟล์ Static และ API ที่ไม่เกี่ยวข้อง
+     * วิธีนี้จะช่วยให้ Server Actions (POST) วิ่งผ่าน Middleware ไปหา Page ได้ถูกต้อง
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)',
   ],
 };
