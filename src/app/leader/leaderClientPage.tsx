@@ -592,7 +592,7 @@ const compressImage = (file: File): Promise<string> => {
                         <th className="p-6 text-left">วันที่</th>
                         <th className="p-6 text-left">เวลาเข้า / รูปถ่าย</th>
                         <th className="p-6 text-left">เวลาออก / รูปถ่าย</th>
-                        <th className="p-6 text-left">รายละเอียด / สถานที่</th>
+                        <th className="p-6 text-left">ต่ำแหน่ง/เขตรับผิดชอบ/ระดับสิทธิ์</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -688,13 +688,35 @@ const compressImage = (file: File): Promise<string> => {
 
                                 {/* รายละเอียด */}
                                 <td className="p-6">
-                                    <div className="flex flex-col">
-                                    <span className="text-xs font-black text-gray-700 uppercase tracking-tighter">
-                                    {r.position || "พนักงาน"}
-                                    </span>
-                                    <span className="text-[10px] font-mono text-gray-400 truncate max-w-[200px]" title={r.locationIn || r.location}>
-                                      📍 {r.locationIn || r.location || "ไม่ได้ระบุพิกัด"}
-                                    </span>
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-1">
+                                    {/* แถวที่ 1: ตำแหน่ง (เน้นใหญ่สุด) */}
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-black text-gray-900 uppercase tracking-tight bg-indigo-600 text-white px-3 py-1 rounded-xl shadow-sm">
+                                        {r.position}
+                                      </span>
+                                    </div>
+
+                                    {/* แถวที่ 2: ไซต์งาน และ Role (เน้นดูง่าย) */}
+                                    <div className="flex items-center gap-3">
+                                      {/* ไซต์งาน */}
+                                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-lg border border-gray-200">
+                                        <span className="text-base">📍</span>
+                                        <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
+                                          {r.site}
+                                        </span>
+                                      </div>
+
+                                      {/* เส้นแบ่ง (แสดงเฉพาะบนจอใหญ่) */}
+                                      <span className="hidden sm:block text-gray-300">|</span>
+
+                                      {/* ระดับ/Role */}
+                                      <div className="flex items-center gap-2">
+                                        <div className={`w-2.5 h-2.5 rounded-full shadow-inner ${r.role === 'หัวหน้างาน' ? 'bg-amber-400' : 'bg-emerald-400'}`}></div>
+                                        <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
+                                          {r.role}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
                                 </td>
                               </tr>

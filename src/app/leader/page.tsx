@@ -1,25 +1,35 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/db/db";
-import { usersTable, attendanceTable, leaveTable, positionsTable } from "@/db/schema";
+import { usersTable, attendanceTable, leaveTable, positionsTable, sitesTable } from "@/db/schema";
 import { eq, desc, and, ne, isNull } from "drizzle-orm";
 import LeaderClientPage from "./leaderClientPage";
 
-export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
+export const dynamic = "force-dynamic";
 
 export default async function LeaderPage() {
-  // 1. ดึงข้อมูล User จาก Session
   const userFromAuth = await getCurrentUser();
 
-  // 🛡️ Security Check
   if (!userFromAuth || userFromAuth.role !== "leader") {
     redirect("/api/auth/logout-cleanup");
   }
 
-  // 🔍 ดึง Profile ล่าสุด
+  // 1. ดึง Profile ของ Leader พร้อมชื่อตำแหน่งและชื่อไซต์งาน
   const userExists = await db
-    .select()
+    .select({
+      id: usersTable.id,
+      role: usersTable.role,
+      departmentId: usersTable.departmentId,
+      site_id: usersTable.site_id,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      avatarUrl: usersTable.avatarUrl,
+      positionName: positionsTable.name, // ดึงชื่อตำแหน่งจริงจาก DB
+      siteName: sitesTable.name,         // ดึงชื่อไซต์งานจริงจาก DB
+    })
     .from(usersTable)
+    .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
+    .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
     .where(and(eq(usersTable.id, userFromAuth.id), isNull(usersTable.deletedAt)))
     .limit(1);
 
@@ -33,107 +43,94 @@ export default async function LeaderPage() {
   const isAllSitesLeader = !currentSite;
 
   try {
-    // --- 2. ดึงประวัติการเข้างานของตัว Leader เอง ---
-    const myRecordsRaw = await db
-      .select()
-      .from(attendanceTable)
-      .where(eq(attendanceTable.user_id, user.id))
-      .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
-      .limit(31); // ดึงเผื่อไว้สำหรับ Filter รายเดือน
+    const siteCondition = isAllSitesLeader ? [] : [eq(usersTable.site_id, currentSite!)];
 
-    let allLeaveRequests: any[] = [];
-    let teamAttendanceRaw: any[] = [];
+    const [myRecordsRaw, allLeaveRequests, teamAttendanceRaw] = await Promise.all([
+      // 2. ดึงประวัติเข้างานของตัว Leader เอง
+      db.select()
+        .from(attendanceTable)
+        .where(eq(attendanceTable.user_id, user.id))
+        .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
+        .limit(31),
 
-    // --- 3. ดึงข้อมูลทีม ---
-    if (currentDept) {
-      const siteCondition = isAllSitesLeader ? [] : [eq(usersTable.site_id, currentSite!)];
-
-      allLeaveRequests = await db
-        .select({
-          id: leaveTable.id,
-          user_id: leaveTable.user_id,
-          firstName: usersTable.firstName,
-          lastName: usersTable.lastName,
-          type: leaveTable.type,
-          startDate: leaveTable.startDate,
-          endDate: leaveTable.endDate,
-          reason: leaveTable.reason,
-          status: leaveTable.status,
-          fileUrl: leaveTable.fileUrl,
-          site_id: leaveTable.site_id,
-        })
-        .from(leaveTable)
-        .innerJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
-        .where(
-          and(
+      // 3. ข้อมูลคำขอลาของทีม
+      currentDept 
+        ? db.select({
+            id: leaveTable.id,
+            user_id: leaveTable.user_id,
+            firstName: usersTable.firstName,
+            lastName: usersTable.lastName,
+            type: leaveTable.type,
+            startDate: leaveTable.startDate,
+            endDate: leaveTable.endDate,
+            reason: leaveTable.reason,
+            status: leaveTable.status,
+            fileUrl: leaveTable.fileUrl,
+          })
+          .from(leaveTable)
+          .innerJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
+          .where(and(
             eq(usersTable.departmentId, currentDept),
             ...siteCondition,
             isNull(usersTable.deletedAt)
-          )
-        )
-        .orderBy(desc(leaveTable.startDate));
+          ))
+          .orderBy(desc(leaveTable.startDate))
+        : Promise.resolve([]),
 
-      teamAttendanceRaw = await db
-        .select({
-          id: attendanceTable.id,
-          userId: attendanceTable.user_id, // เพิ่มเพื่อใช้ตรวจสอบใน Client
-          firstName: usersTable.firstName,
-          lastName: usersTable.lastName,
-          userName: usersTable.userName,
-          avatarUrl: usersTable.avatarUrl,
-          positionName: positionsTable.name,
-          date: attendanceTable.date,
-          checkIn: attendanceTable.checkIn,
-          checkOut: attendanceTable.checkOut,
-          locationIn: attendanceTable.locationIn,
-          locationOut: attendanceTable.locationOut,
-          imageIn: attendanceTable.imageIn,
-          imageOut: attendanceTable.imageOut,
-          site_id: attendanceTable.site_id,
-        })
-        .from(attendanceTable)
-        .innerJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
-        .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
-        .where(
-          and(
+      // 4. ประวัติเข้างานของทีม
+      currentDept
+        ? db.select({
+            id: attendanceTable.id,
+            userId: attendanceTable.user_id,
+            firstName: usersTable.firstName,
+            lastName: usersTable.lastName,
+            position: positionsTable.name,
+            site: sitesTable.name,
+            role: usersTable.role,
+            date: attendanceTable.date,
+            checkIn: attendanceTable.checkIn,
+            checkOut: attendanceTable.checkOut,
+            locationIn: attendanceTable.locationIn,
+            locationOut: attendanceTable.locationOut,
+            imageIn: attendanceTable.imageIn,
+            imageOut: attendanceTable.imageOut,
+          })
+          .from(attendanceTable)
+          .innerJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
+          .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
+          .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
+          .where(and(
             eq(usersTable.departmentId, currentDept),
             ...siteCondition,
             ne(usersTable.id, user.id),
             isNull(usersTable.deletedAt)
-          )
-        )
-        .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn));
-    }
+          ))
+          .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
+        : Promise.resolve([])
+    ]);
 
-    // --- 4. จัด Props (สำคัญ: ห้ามใส่ || "-" ที่นี่ เพื่อให้ Logic Client ทำงานได้) ---
+    // 5. จัดเตรียมข้อมูล (Mapping)
     const finalProps = {
       userProfile: {
-        id: user.id,
-        role: user.role,
-        departmentId: user.departmentId,
-        site_id: user.site_id,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        ...user,
         name: `${user.firstName} ${user.lastName}`,
-        avatarUrl: user.avatarUrl,
         isAllSites: isAllSitesLeader
       },
-      // ✅ ส่งค่าดิบเพื่อให้วันนี้สถานะ hasCheckedOut เช็คเจอว่าเป็น null จริงๆ
+      // ข้อมูลการเข้างานของ Leader เอง (ตารางที่ 1)
       myRecords: myRecordsRaw.map(r => ({
-        id: r.id,
-        date: r.date,
-        checkIn: r.checkIn, 
-        checkOut: r.checkOut, 
-        imageIn: r.imageIn,
-        imageOut: r.imageOut,
+        ...r,
         location: r.locationIn || r.locationOut || "ไม่ได้ระบุพิกัด",
-        position: user.role
+        // ส่ง Property ที่ UI เรียกใช้
+        position: user.positionName || "หัวหน้างาน", 
+        site: user.siteName || "สำนักงานใหญ่",
+        role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน" // ใช้เช็คสี Dot
       })),
-      // ✅ Mapping ข้อมูลทีมสำหรับ Filter
+      // ข้อมูลการเข้างานของทีม (ตารางที่ 2)
       initialAttendance: teamAttendanceRaw.map(t => ({
         ...t,
         employeeName: `${t.firstName || ''} ${t.lastName || ''}`.trim(),
-        location: t.locationIn || t.locationOut || "ไม่ได้ระบุพิกัด"
+        location: t.locationIn || t.locationOut || "ไม่ได้ระบุพิกัด",
+        role: t.role === "leader" ? "หัวหน้างาน" : "พนักงาน"
       })),
       initialLeaves: allLeaveRequests.map(l => ({
         ...l,
@@ -141,11 +138,10 @@ export default async function LeaderPage() {
       })),
     };
 
-    const serializedProps = JSON.parse(JSON.stringify(finalProps));
-    return <LeaderClientPage {...serializedProps} />;
+    return <LeaderClientPage {...JSON.parse(JSON.stringify(finalProps))} />;
 
   } catch (error) {
     console.error("Leader Page Critical Error:", error);
-    throw error; 
+    throw error;
   }
 }
