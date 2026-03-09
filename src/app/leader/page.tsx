@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/db/db";
-import { usersTable, attendanceTable, leaveTable, positionsTable, sitesTable } from "@/db/schema";
+import { usersTable, attendanceTable, leaveTable, positionsTable, sitesTable, departmentsTable } from "@/db/schema";
 import { eq, desc, and, ne, isNull } from "drizzle-orm";
 import LeaderClientPage from "./leaderClientPage";
 
@@ -16,22 +16,26 @@ export default async function LeaderPage() {
 
   // 1. ดึง Profile ของ Leader พร้อมชื่อตำแหน่งและชื่อไซต์งาน
   const userExists = await db
-    .select({
-      id: usersTable.id,
-      role: usersTable.role,
-      departmentId: usersTable.departmentId,
-      site_id: usersTable.site_id,
-      firstName: usersTable.firstName,
-      lastName: usersTable.lastName,
-      avatarUrl: usersTable.avatarUrl,
-      positionName: positionsTable.name, // ดึงชื่อตำแหน่งจริงจาก DB
-      siteName: sitesTable.name,         // ดึงชื่อไซต์งานจริงจาก DB
-    })
-    .from(usersTable)
-    .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
-    .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
-    .where(and(eq(usersTable.id, userFromAuth.id), isNull(usersTable.deletedAt)))
-    .limit(1);
+  .select({
+    id: usersTable.id,
+    role: usersTable.role,
+    departmentId: usersTable.departmentId,
+    site_id: usersTable.site_id,
+    firstName: usersTable.firstName,
+    lastName: usersTable.lastName,
+    avatarUrl: usersTable.avatarUrl,
+    userName: usersTable.userName, // เพิ่มชื่อผู้ใช้
+    position: positionsTable.name, // ชื่อตำแหน่ง
+    site: sitesTable.name,         // ชื่อไซต์งาน
+    department: departmentsTable.name, // ชื่อแผนก
+    role: usersTable.role,
+  })
+  .from(usersTable)
+  .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
+  .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
+  .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id)) // Join ตารางแผนก
+  .where(and(eq(usersTable.id, userFromAuth.id), isNull(usersTable.deletedAt)))
+  .limit(1);
 
   if (userExists.length === 0) {
     redirect("/api/auth/logout-cleanup");
@@ -121,8 +125,8 @@ export default async function LeaderPage() {
         ...r,
         location: r.locationIn || r.locationOut || "ไม่ได้ระบุพิกัด",
         // ส่ง Property ที่ UI เรียกใช้
-        position: user.positionName || "หัวหน้างาน", 
-        site: user.siteName || "สำนักงานใหญ่",
+        position: user.positionName || "ไม่ระบุ", 
+        site: user.siteName || "ทุกไซต์งาน",
         role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน" // ใช้เช็คสี Dot
       })),
       // ข้อมูลการเข้างานของทีม (ตารางที่ 2)
