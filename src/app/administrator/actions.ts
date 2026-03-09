@@ -26,10 +26,15 @@ import { uploadToDrive, deleteFromDrive } from "@/lib/uploadthing-server";
 /**
  * ดึงข้อมูล Admin/User ที่ Login อยู่จาก Session Cookie
  */
+/**
+ * ปรับปรุง getAdminContext ให้ปลอดภัยขึ้น
+ */
 async function getAdminContext() {
   try {
     const cookieStore = await cookies();
     const adminId = cookieStore.get("session_user_id")?.value;
+    
+    // 🛡️ ดักจับ: ถ้าไม่มี ID ให้คืน null ทันที ไม่ต้องไป Query ต่อให้พัง
     if (!adminId) return null;
 
     const adminData = await db
@@ -47,7 +52,10 @@ async function getAdminContext() {
       ))
       .limit(1);
 
-    return adminData[0] || null;
+    // 🛡️ ดักจับ: ถ้า Query แล้วไม่เจอ (เช่น Admin ถูกลบ หรือเปลี่ยน Role)
+    if (!adminData || adminData.length === 0) return null;
+
+    return adminData[0];
   } catch (error) {
     console.error("Context Error:", error);
     return null;
