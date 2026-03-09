@@ -550,11 +550,6 @@ export default function LeaderClientPage({
           </div>
 
           <div className="flex-1 text-center md:text-left pt-1">
-            {/* ป้ายระดับ */}
-            <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[15px] font-black uppercase tracking-widest mb-4">
-              ระดับหัวหน้า
-            </div>
-
             {/* ชื่อ-นามสกุล */}
             <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight mb-1">
               ชื่อ : {userProfile.firstName} {/*{userProfile.lastName}*/}
@@ -563,7 +558,7 @@ export default function LeaderClientPage({
             {/* ข้อมูลต่างๆ */}
             <div className="space-y-2 mb-6"> {/* ใช้ space-y เพื่อความเป็นระเบียบ */}
               <p className="text-gray-500 font-bold text-base sm:text-lg tracking-tight">
-                ระดับ : {userProfile.department || "หัวหน้า" }
+                ระดับ : {userProfile.role || "หัวหน้า" }
               </p>
               <p className="text-gray-500 font-bold text-base sm:text-lg tracking-tight">
                 ตำแหน่ง : {userProfile.position || "ไม่ได้ระบุตำแหน่ง" }
@@ -574,15 +569,19 @@ export default function LeaderClientPage({
             </div>
 
             {/* Badges ด้านล่าง */}
-            <div className="flex flex-wrap justify-center md:justify-start gap-2">
-              <span className="bg-gray-250 text-gray-400 text-[13px] px-4 py-2 rounded-xl font-black border border-gray-100 uppercase tracking-widest">
-                USERNAME: {userProfile.userName || "ไม่ได้ระบุชื่อผู้ใช้" }
-              </span>
-              {userProfile.department ? (
-                <span className="bg-blue-50 text-blue-500 text-[13px] px-4 py-2 rounded-xl font-black border border-blue-100 uppercase tracking-widest">
-                  {"แผนก"}: {userProfile.department}
+            <div className="flex flex-col justify-center md:justify-start items-center md:items-start gap-3 mt-4">
+              <div className="w-fit"> {/* ใช้ w-fit เพื่อให้พื้นหลังกว้างพอดีตัวอักษร */}
+                <span className="inline-flex items-center bg-gray-100 text-gray-500 text-[12px] px-4 py-2 rounded-xl font-black border border-gray-200 uppercase tracking-widest shadow-sm">
+                  USERNAME: {userProfile.userName || "ไม่ได้ระบุ"}
                 </span>
-              ):("")}
+              </div>
+              {userProfile.department && (
+                <div className="w-fit">
+                  <span className="inline-flex items-center bg-blue-50 text-blue-600 text-[12px] px-4 py-2 rounded-xl font-black border border-blue-100 uppercase tracking-widest shadow-sm">
+                    แผนก: {userProfile.department}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

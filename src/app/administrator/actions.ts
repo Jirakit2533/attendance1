@@ -73,18 +73,22 @@ export async function logoutAction() {
 }
 
 /* ==========================================================================
-   SITE, POSITION & DEPARTMENT ACTIONS
+   SITE ACTIONS
    ========================================================================== */
 
-export async function saveSiteAction(data: { name: string; address: string; coordinates: string }) {
+// ปรับปรุงให้รับค่า lat, lng แยกกันตามที่ส่งมาจาก UI ใหม่
+export async function saveSiteAction(data: { name: string; address: string; lat: string; lng: string }) {
   try {
     const admin = await getAdminContext();
     if (!admin || !admin.companyId) return { success: false, error: "เซสชันหมดอายุ" };
 
+    // นำ lat และ lng มาต่อกันเป็น "lat,lng" เพื่อลง field coodinates (ตาม schema ของคุณ)
+    const combinedCoordinates = `${data.lat},${data.lng}`;
+
     await db.insert(sitesTable).values({
       name: data.name,
       address: data.address,
-      coodinates: data.coordinates, // สะกดตาม schema: coodinates
+      coodinates: combinedCoordinates, // บันทึกเข้า field เดิมใน DB
       companyId: admin.companyId,
       createdBy: admin.id,
     });
@@ -92,10 +96,14 @@ export async function saveSiteAction(data: { name: string; address: string; coor
     revalidatePath("/administrator");
     return { success: true, message: "บันทึกไซต์งานสำเร็จ" };
   } catch (error) {
+    console.error("Save Site Error:", error);
     return { success: false, error: "ไม่สามารถบันทึกไซต์งานได้" };
   }
 }
 
+/* ==========================================================================
+   POSITION ACTIONS
+   ========================================================================== */
 export async function savePositionAction(data: { name: string }) {
   try {
     const admin = await getAdminContext();
@@ -113,6 +121,10 @@ export async function savePositionAction(data: { name: string }) {
     return { success: false, error: "ไม่สามารถบันทึกตำแหน่งได้" };
   }
 }
+
+/* ==========================================================================
+   DEPARTMENT ACTIONS
+   ========================================================================== */
 
 export async function createDepartmentAction(name: string) {
   try {
@@ -398,3 +410,82 @@ export async function getDepartmentsAction() {
       return { success: false, data: [] };
     }
   }
+
+  /* ==========================================================================
+   DELETE & UPDATE ACTIONS (SITES & POSITIONS)
+   ========================================================================== */
+
+/** * ลบไซต์งาน 
+ */
+export async function deleteSiteAction(id: string) {
+  try {
+    const admin = await getAdminContext();
+    if (!admin) return { success: false, error: "Unauthorized" };
+
+    await db.delete(sitesTable).where(eq(sitesTable.id, id));
+
+    revalidatePath("/administrator");
+    return { success: true, message: "ลบไซต์งานสำเร็จ" };
+  } catch (error) {
+    return { success: false, error: "ไม่สามารถลบได้ เนื่องจากมีการใช้งานไซต์งานนี้อยู่" };
+  }
+}
+
+/** * ลบตำแหน่ง 
+ */
+export async function deletePositionAction(id: string) {
+  try {
+    const admin = await getAdminContext();
+    if (!admin) return { success: false, error: "Unauthorized" };
+
+    await db.delete(positionsTable).where(eq(positionsTable.id, id));
+
+    revalidatePath("/administrator");
+    return { success: true, message: "ลบตำแหน่งสำเร็จ" };
+  } catch (error) {
+    return { success: false, error: "ไม่สามารถลบได้ เนื่องจากมีพนักงานใช้ตำแหน่งนี้อยู่" };
+  }
+}
+
+/** * แก้ไขไซต์งาน 
+ */
+export async function updateSiteAction(id: string, data: { name: string; address: string; lat: string; lng: string }) {
+  try {
+    const admin = await getAdminContext();
+    if (!admin) return { success: false, error: "Unauthorized" };
+
+    const combinedCoordinates = `${data.lat},${data.lng}`;
+
+    await db.update(sitesTable)
+      .set({
+        name: data.name,
+        address: data.address,
+        coodinates: combinedCoordinates,
+        updatedAt: new Date(),
+      })
+      .where(eq(sitesTable.id, id));
+
+    revalidatePath("/administrator");
+    return { success: true, message: "อัปเดตไซต์งานสำเร็จ" };
+  } catch (error) {
+    return { success: false, error: "ไม่สามารถอัปเดตข้อมูลได้" };
+  }
+}
+
+/** * แก้ไขตำแหน่ง 
+ */
+export async function updatePositionAction(id: string, name: string) {
+  try {
+    const admin = await getAdminContext();
+    if (!admin) return { success: false, error: "Unauthorized" };
+
+    await db.update(positionsTable)
+      .set({ name, updatedAt: new Date() })
+      .where(eq(positionsTable.id, id));
+
+    revalidatePath("/administrator");
+    return { success: true, message: "อัปเดตตำแหน่งสำเร็จ" };
+  } catch (error) {
+    return { success: false, error: "ไม่สามารถอัปเดตข้อมูลได้" };
+  }
+}

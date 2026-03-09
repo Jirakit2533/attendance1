@@ -8,7 +8,11 @@ import { saveSiteAction,
          updateLeaveStatusAction,
          saveStaffAction, 
          deleteStaffAction, 
-         logoutAction     
+         logoutAction,
+         deleteSiteAction,      // ✅ เพิ่มอันนี้
+         deletePositionAction,  // ✅ เพิ่มอันนี้ (สำหรับปุ่มลบตำแหน่ง)
+         updateSiteAction,      // ✅ เพิ่มอันนี้ (สำหรับปุ่มแก้ไขไซต์)
+         updatePositionAction,  
         } from "./actions"; 
         
  
@@ -82,9 +86,13 @@ export default function AdminClientPage({
   const reportDate = new Date().toLocaleDateString('th-TH');
   const reportTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
   
-  const [allSites, setAllSites] = useState(sites || []);
-  const [allPositions, setAllPositions] = useState(positions || []);
-  const [allDepartments, setAllDepartments] = useState(departments || []);
+  // ตรวจสอบว่าใช้ useState ไม่ใช่ดึงจาก props ตรงๆ ในตาราง
+  const [allSites, setAllSites] = useState(sites); 
+  const [allPositions, setAllPositions] = useState(positions);
+  const [allDepartments, setAllDepartments] = useState(departments);
+
+  const [coords, setCoords] = useState("");
+  const [isLocating, setIsLocating] = useState(false);
   
   const [showAddSite, setShowAddSite] = useState(false);
   const [showAddPosition, setShowAddPosition] = useState(false);
@@ -99,6 +107,13 @@ export default function AdminClientPage({
   const [previewImage, setPreviewImage] = useState(null);
   const [viewImage, setViewImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false); 
+
+  const [showManageModal, setShowManageModal] = useState(false);
+  const [editingSite, setEditingSite] = useState<any>(null);
+  const [editingPos, setEditingPos] = useState<any>(null);
+  
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
 
   // Filter State for Report
   const [filterSite, setFilterSite] = useState("");
@@ -190,6 +205,121 @@ export default function AdminClientPage({
 
   // --- HANDLERS ---
 
+
+/* ==========================================================================
+   ฟังก์ชันจัดการ ไซต์งาน
+   ========================================================================== */
+
+/* --- ฟังก์ชันแก้ไขไซต์งาน --- */
+const handleUpdateSite = (site: any) => {
+  setEditingSite(site); // เก็บข้อมูลไซต์ที่เลือกลง State
+  const [latVal, lngVal] = (site.coodinates || ",").split(","); // แยกพิกัด
+  setLat(latVal || "");
+  setLng(lngVal || "");
+  setShowAddSite(true); // เปิด Modal อันเดิมที่มีอยู่แล้ว
+  setShowManageModal(false)
+};
+
+/* --- ฟังก์ชันแก้ไขตำแหน่ง --- */
+const handleEditPos = (pos: any) => {
+  setEditingPos(pos); // เก็บข้อมูลตำแหน่งที่เลือก
+  setShowAddPosition(true); // เปิด Modal อันเดิม
+  setShowManageModal(false)
+};
+
+   const handleDeleteSite = async (id: string) => {
+    // 1. ถามยืนยันก่อนลบ
+    const isConfirmed = confirm("⚠️ ยืนยันการลบไซต์งานนี้?\nข้อมูลพนักงานที่ผูกอยู่กับไซต์นี้อาจได้รับผลกระทบ");
+    if (!isConfirmed) return;
+  
+    const prev = [...allSites];
+    // 🚀 Optimistic Update: หายทันทีจากหน้าจอและการ์ด
+    setAllSites(allSites.filter(s => s.id !== id));
+  
+    try {
+      const res = await deleteSiteAction(id);
+      if (res.success) {
+        // 2. แจ้งเมื่อลบสำเร็จ
+        alert("✅ ลบไซต์งานเรียบร้อยแล้ว");
+      } else {
+        // 3. แจ้งเมื่อเกิดข้อผิดพลาด (เช่น ติด Foreign Key)
+        alert("❌ ไม่สามารถลบได้: " + res.error);
+        setAllSites(prev); // คืนค่ากลับมาในตาราง
+      }
+    } catch (error) {
+      alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+      setAllSites(prev);
+    }
+  };
+  
+  /* ==========================================================================
+     ฟังก์ชันจัดการ ตำแหน่ง
+     ========================================================================== */
+  const handleUpdatePosition = async (id: string, name: string) => {
+    const prev = [...allPositions];
+    // 🚀 เปลี่ยนชื่อทันทีในตาราง
+    setAllPositions(allPositions.map(p => p.id === id ? { ...p, name } : p));
+  
+    try {
+      const res = await updatePositionAction(id, name);
+      if (res.success) {
+        alert("✅ อัปเดตชื่อตำแหน่งเรียบร้อยแล้ว");
+      } else {
+        alert("❌ ไม่สามารถแก้ไขได้: " + res.error);
+        setAllPositions(prev);
+      }
+    } catch (error) {
+      alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อ");
+      setAllPositions(prev);
+    }
+  };
+  
+  const handleDeletePos = async (id: string) => {
+    // 1. ถามยืนยันก่อนลบ
+    const isConfirmed = confirm("⚠️ ยืนยันการลบตำแหน่งนี้?\nพนักงานที่ใช้ตำแหน่งนี้จะไม่มีตำแหน่งระบุในระบบ");
+    if (!isConfirmed) return;
+  
+    const prev = [...allPositions];
+    // 🚀 หายทันทีจากตารางและการ์ด
+    setAllPositions(allPositions.filter(p => p.id !== id));
+  
+    try {
+      const res = await deletePositionAction(id);
+      if (res.success) {
+        // 2. แจ้งเมื่อลบสำเร็จ
+        alert("✅ ลบตำแหน่งเรียบร้อยแล้ว");
+      } else {
+        // 3. แจ้งเมื่อลบไม่สำเร็จ
+        alert("❌ ไม่สามารถลบได้: " + res.error);
+        setAllPositions(prev); // คืนค่าข้อมูลกลับมา
+      }
+    } catch (error) {
+      alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+      setAllPositions(prev);
+    }
+  };
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      alert("เบราว์เซอร์ของคุณไม่รองรับการดึงพิกัด");
+      return;
+    }
+  
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setCoords(`${latitude}, ${longitude}`); // เก็บลง State
+        setIsLocating(false);
+      },
+      (error) => {
+        console.error(error);
+        alert("ไม่สามารถดึงพิกัดได้ โปรดตรวจสอบการอนุญาตสิทธิ์ตำแหน่ง");
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true } // ใช้ความแม่นยำสูง
+    );
+  };
+
   const handleAddDepartment = async (e) => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -215,26 +345,65 @@ export default function AdminClientPage({
     }
   };
 
-  const handleAddSite = async (e) => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const name = formData.get("siteName");
+const handleGetCurrentLocation = () => {
+  setIsProcessing(true); // เริ่มกระบวนการโหลด
+  
+  if (!navigator.geolocation) {
+    alert("เบราว์เซอร์ของคุณไม่รองรับการดึงพิกัด");
+    setIsProcessing(false);
+    return;
+  }
 
-    if (!name) return;
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      setLat(position.coords.latitude.toString());
+      setLng(position.coords.longitude.toString());
+      setIsProcessing(false); // โหลดเสร็จแล้ว
+    },
+    (error) => {
+      alert("ไม่สามารถดึงพิกัดได้ กรุณาเปิด GPS หรืออนุญาตสิทธิ์");
+      setIsProcessing(false); // จบการโหลดแม้จะ Error
+    },
+    { enableHighAccuracy: true, timeout: 10000 } // เพิ่มความแม่นยำและ Timeout
+  );
+};
+  const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setIsProcessing(true);
+  
+    const formData = new FormData(e.currentTarget);
+    const siteData = {
+      name: formData.get("siteName") as string,
+      address: formData.get("address") as string,
+      lat: lat, // จาก State ที่เราดึง GPS มา
+      lng: lng,
+    };
+  
     try {
-      const result = await saveSiteAction({ name: name, address: "-", coordinates: "-" });
-      if (result.success) {
-        form.reset(); 
-        setAllSites((prev) => [...prev, { id: crypto.randomUUID(), name: name }]); 
-        setShowAddSite(false);
-        alert(`✅ เพิ่มไซต์ "${name}" เรียบร้อยแล้ว`);
+      let res;
+      
+      // 🔄 เช็คว่าเป็นการ "แก้ไข" หรือ "เพิ่มใหม่"
+      if (editingSite) {
+        // ถ้ามีข้อมูลใน editingSite แสดงว่ากำลัง "แก้ไข"
+        res = await updateSiteAction(editingSite.id, siteData);
       } else {
-        alert(result.error || "ไม่สามารถบันทึกไซต์งานได้");
+        // ถ้าไม่มี แสดงว่ากำลัง "เพิ่มใหม่"
+        res = await saveSiteAction(siteData);
+      }
+  
+      if (res.success) {
+        alert(res.message);
+        setShowAddSite(false); // ปิด Modal
+        setEditingSite(null);   // ล้างค่าข้อมูลที่แก้ไข
+        setShowManageModal(true);
+        setLat("");            // ล้างค่าพิกัด
+        setLng("");
+        // e.currentTarget.reset(); // รีเซ็ตฟอร์ม
+      } else {
+        alert(res.error);
       }
     } catch (error) {
-      alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
     } finally {
       setIsProcessing(false);
     }
@@ -254,6 +423,7 @@ export default function AdminClientPage({
         form.reset();
         setAllPositions((prev) => [...prev, { id: crypto.randomUUID(), name: name }]); 
         setShowAddPosition(false);
+        setShowManageModal(true);
         alert(`✅ เพิ่มตำแหน่งงาน "${name}" เรียบร้อยแล้ว`);
       } else {
         alert(result.error || "ไม่สามารถบันทึกตำแหน่งได้");
@@ -430,120 +600,184 @@ export default function AdminClientPage({
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
-{/* --- HEADER --- */}
-{isProcessing && <LoadingOverlay />}
-<header className="bg-white/95 backdrop-blur-md sticky top-0 z-[100] border-b border-slate-100 print:hidden transition-all">
-  <div className="max-w-7xl mx-auto px-4 sm:px-6">
-    
-    {/* --- แถวที่ 1 (Main Row): Logo + Logout --- */}
-    <div className="h-16 sm:h-24 flex items-center justify-between gap-4">
-      <Logo />
-      
-      <div className="flex items-center gap-2 sm:gap-3">
-        <div className="text-right hidden sm:block border-r border-slate-100 pr-4 mr-1">
-          <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1">
-            {admin.role === 'admin' ? 'Administrator' : 'Leader'}
-          </p>
-          <p className="font-black text-slate-900 text-sm leading-none truncate max-w-[120px]">
-            {admin.name}
-          </p>
+      {/* --- 💎 REFINED PROFESSIONAL ADMIN HEADER (STATIC - อยู่กับที่ ไม่เลื่อนตาม) --- */}
+      {isProcessing && <LoadingOverlay />}
+      <header className="bg-white border-b border-slate-200 shadow-lg shadow-slate-200/40 print:hidden relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          
+          {/* --- แถวที่ 1: Logo + Logout (Compact Height) --- */}
+          <div className="h-12 sm:h-14 flex items-center justify-between border-b border-slate-100 relative z-10">
+            <Logo />
+            
+            <button 
+              onClick={handleLogout}
+              className="group flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg border border-red-100 hover:bg-red-500 hover:text-white transition-all active:scale-95"
+            >
+              <span className="text-xs sm:text-sm">🚪</span>
+              <span className="text-[10px] sm:text-xs font-bold uppercase">ลงชื่อออก</span>
+            </button>
+          </div>
+
+          {/* --- แถวที่ 2: Profile & Actions (Reduced Padding) --- */}
+          <div className="py-6 sm:py-8">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              
+              {/* 👤 ส่วนข้อมูลโปรไฟล์: ดึงจากฐานข้อมูลตัวแปร admin */}
+              <div className="flex items-center gap-6 lg:pr-10 lg:border-r lg:border-slate-100">
+                <div className="relative shrink-0">
+                  <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-[2rem] bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black shadow-xl shadow-blue-100 border-4 border-white overflow-hidden relative group">
+                    {admin?.avatarUrl ? (
+                      <img src={admin.avatarUrl} alt="profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-3xl uppercase italic">{admin?.name?.substring(0, 2)}</span>
+                    )}
+                    <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer backdrop-blur-[1px]">
+                      <span className="text-xl">📷</span>
+                      <input type="file" className="hidden" onChange={(e) => {/* อัปโหลดรูป */}} />
+                    </label>
+                  </div>
+                  <div className="absolute bottom-1 right-1 w-7 h-7 bg-emerald-500 border-4 border-white rounded-full"></div>
+                </div>
+                
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 bg-slate-900 text-white text-[9px] font-black rounded uppercase tracking-widest">
+                      {admin?.role || 'Admin'}
+                    </span>
+                    <span className="text-[10px] font-bold text-blue-600 uppercase">ID: {admin?.id || '---'}</span>
+                  </div>
+                  
+                  <h2 className="font-black text-slate-900 text-xl sm:text-2xl tracking-tight leading-none mb-2">
+                    {admin?.name || 'ไม่พบชื่อผู้ใช้งาน'}
+                  </h2>
+                  
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-1">
+                    <div className="flex items-center gap-2 text-slate-500">
+                      <span className="text-xs">🏢</span>
+                      <p className="text-[11px] font-bold uppercase tracking-wider">{admin?.company || 'General Admin'}</p>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <span className="text-xs">📧</span>
+                      <p className="text-[11px]">{admin?.email || 'No email provided'}</p>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <span className="text-xs">📞</span>
+                      <p className="text-[11px] font-medium">{admin?.phone || 'No phone number'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* --- 🕹️ ส่วนปุ่ม (คงเดิมตามที่คุณต้องการ) --- */}
+              <div className="flex flex-col gap-4 w-full lg:max-w-[360px]">
+                <div className="grid grid-cols-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden w-full">
+                  <button 
+                    onClick={() => setShowAddSite(true)}
+                    className="flex items-center justify-center gap-2 py-3.5 sm:py-4 bg-emerald-50/30 hover:bg-emerald-50 border-r border-slate-200 group transition-colors"
+                  >
+                    <span className="text-base sm:text-lg">📍</span>
+                    <span className="text-[11px] sm:text-xs font-black text-emerald-800 uppercase tracking-tighter">ไซต์งาน</span>
+                  </button>
+
+                  <button 
+                    onClick={() => setShowAddPosition(true)}
+                    className="flex items-center justify-center gap-2 py-3.5 sm:py-4 bg-amber-50/30 hover:bg-amber-50 group transition-colors"
+                  >
+                    <span className="text-base sm:text-lg">💼</span>
+                    <span className="text-[11px] sm:text-xs font-black text-amber-800 uppercase tracking-tighter">ตำแหน่ง</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  <button 
+                    onClick={() => setShowRegister(true)} 
+                    className="h-12 sm:h-14 bg-slate-900 text-white rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-slate-200 hover:bg-slate-800 active:scale-95 transition-all"
+                  >
+                    <div className="flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 bg-white/10 rounded-lg border border-white/10">
+                      <span className="text-lg sm:text-xl">+</span>
+                    </div>
+                    <span>ลงทะเบียน</span>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setShowFilterModal(true)} 
+                    className="h-12 sm:h-14 bg-blue-600 text-white rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-blue-100 hover:bg-blue-500 active:scale-95 transition-all"
+                  >
+                    <div className="flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 bg-white/10 rounded-lg border border-white/10">
+                      <span className="text-sm sm:text-lg">📊</span>
+                    </div>
+                    <span>รายงาน</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
         </div>
-        
-        <button 
-          onClick={handleLogout}
-          disabled={isProcessing}
-          className="group flex items-center gap-2 px-3 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95"
-        >
-          <span className="text-base sm:text-lg">{isProcessing ? "⏳" : "🚪"}</span>
-          <span className="text-[10px] sm:text-sm font-bold uppercase tracking-tight">
-            {isProcessing ? "..." : "ลงชื่อออก"}
-          </span>
-        </button>
-      </div>
-    </div>
-
-    {/* --- แถวที่ 2 (Mobile Only): แถบเลื่อนรวมปุ่มทั้งหมด --- 
-        ซ่อนบน sm (640px) ขึ้นไป
-    */}
-    <div className="flex sm:hidden overflow-x-auto pb-4 gap-2 no-scrollbar">
-      {/* กลุ่ม Action หลัก (สีเด่น) */}
-      <button onClick={() => setShowRegister(true)} className="flex-none flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase">
-        <span>+</span> ลงทะเบียน
-      </button>
-      <button onClick={() => setShowFilterModal(true)} className="flex-none flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase">
-        <span>📊</span> รายงาน
-      </button>
-
-      {/* เส้นแบ่งเล็กๆ */}
-      <div className="w-[1px] bg-slate-200 shrink-0 my-1"></div>
-
-      {/* กลุ่มตั้งค่า */}
-      <button onClick={() => setShowAddDepartment(true)} className="flex-none flex items-center gap-2 bg-slate-100 text-slate-600 px-4 py-2.5 rounded-xl text-[10px] font-bold">
-        <span>🏢</span> แผนก
-      </button>
-      <button onClick={() => setShowAddSite(true)} className="flex-none flex items-center gap-2 bg-slate-100 text-slate-600 px-4 py-2.5 rounded-xl text-[10px] font-bold">
-        <span>📍</span> ไซต์งาน
-      </button>
-      <button onClick={() => setShowAddPosition(true)} className="flex-none flex items-center gap-2 bg-slate-100 text-slate-600 px-4 py-2.5 rounded-xl text-[10px] font-bold">
-        <span>💼</span> ตำแหน่ง
-      </button>
-    </div>
-
-    {/* --- แถวที่ 2 (Tablet & PC): จัดวางแบบคงที่สวยงาม --- 
-        แสดงตั้งแต่ sm (640px) ขึ้นไป
-    */}
-    <div className="hidden sm:flex items-center justify-between pb-6 border-t border-slate-50 pt-4">
-       <div className="flex items-center gap-2">
-         <div className="flex items-center gap-2 bg-slate-50/50 p-1 rounded-2xl border border-slate-100 shadow-inner">
-            <NavIconButton icon="🏢" label="แผนก" color="indigo" onClick={() => setShowAddDepartment(true)} />
-            <NavIconButton icon="📍" label="ไซต์งาน" color="emerald" onClick={() => setShowAddSite(true)} />
-            <NavIconButton icon="💼" label="ตำแหน่ง" color="amber" onClick={() => setShowAddPosition(true)} />
-         </div>
-       </div>
-
-       <div className="flex items-center gap-3">
-         <button onClick={() => setShowRegister(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-sm hover:bg-indigo-600 transition-all flex items-center gap-2 shadow-lg shadow-slate-200 active:scale-95">
-           <span className="text-xl leading-none">+</span> ลงทะเบียน
-         </button>
-         <button onClick={() => setShowFilterModal(true)} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-sm hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-100 active:scale-95">
-           <span>📊</span> รายงาน
-         </button>
-       </div>
-    </div>
-  </div>
-</header>
+      </header>
       <main className="max-w-7xl mx-auto px-6 pt-12">
         {/* --- STATS CARDS --- */}
         <div className="justify-center grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 print:hidden">
-          {[
-            { label: "พนักงานทั้งหมด", val: employees.length, unit: "คน", icon: "👥", color: "blue" },
-            { label: "ลงชื่อวันนี้", val: attendance.length, unit: "รายการ", icon: "📍", color: "emerald" },
-            { label: "คำขอลางาน", val: leaves.filter(l => l.status === 'pending').length, unit: "รอนุมัติ", icon: "📝", color: "orange" },
-            // ✅ เพิ่ม Card ที่ 4 เพื่อให้ Grid สมดุล (4 คอลัมน์)
-            { label: "ไซต์งานทั้งหมด", val: allSites.length, unit: "แห่ง", icon: "🏢", color: "purple" },
-          ].map((s, i) => (
-            <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
-              <div className="flex justify-between items-start mb-4">
-                {/* ✅ ปรับ Tailwind Class สำหรับ Dynamic Color ให้ถูกต้อง */}
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform ${
-                  s.color === 'blue' ? 'bg-blue-50 text-blue-600' :
-                  s.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
-                  s.color === 'orange' ? 'bg-orange-50 text-orange-600' :
-                  'bg-purple-50 text-purple-600'
-                }`}>
-                  {s.icon}
-                </div>
-                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest pt-2">Live Data</span>
-              </div>
-              <div className="space-y-1">
-                <p className="text-4xl font-black text-slate-900">{s.val}</p>
-                <p className="text-sm font-bold text-slate-400 uppercase tracking-tighter">
-                  {s.label} <span className="text-xs opacity-50">({s.unit})</span>
-                </p>
-              </div>
-            </div>
-          ))}
+  {[
+    { label: "พนักงานทั้งหมด", val: employees.length, unit: "คน", icon: "👥", color: "blue" },
+    { label: "ลงชื่อวันนี้", val: attendance.length, unit: "รายการ", icon: "📍", color: "emerald" },
+    { label: "คำขอลางาน", val: leaves.filter(l => l.status === 'pending').length, unit: "รอนุมัติ", icon: "📝"},  
+    ].map((s, i) => (
+    /* --- การ์ดปกติ 1-3 --- */
+    <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+      <div className="flex justify-between items-start mb-4">
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform ${
+          s.color === 'blue' ? 'bg-blue-50 text-blue-600' :
+          s.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'
+        }`}>
+          {s.icon}
         </div>
+        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest pt-2">Live Data</span>
+      </div>
+      <div className="space-y-1">
+        <p className="text-4xl font-black text-slate-900">{s.val}</p>
+        <p className="text-sm font-bold text-slate-400 uppercase tracking-tighter">
+          {s.label} <span className="text-xs opacity-50">({s.unit})</span>
+        </p>
+      </div>
+    </div>
+  ))}
+
+  {/* ✅ การ์ดที่ 4: แบบแบ่งครึ่งบน-ล่าง (ไซต์งาน & ตำแหน่ง) */}
+  <div 
+  onClick={() => setShowManageModal(true)} 
+  className="relative bg-white rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer overflow-hidden group flex flex-col h-full"
+>
+  {/* 🏷️ Badge มุมขวาบน */}
+  <div className="absolute top-4 right-5 z-10 flex items-center gap-1.5">
+    <span className="relative flex h-2 w-2">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+    </span>
+    <span className="text-[10px] font-black text-blue-600 uppercase tracking-tighter bg-blue-50 px-3 py-1 rounded-full border border-blue-100 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+      กดเพื่อแก้ไข
+    </span>
+  </div>
+
+  {/* ครึ่งบน: ไซต์งาน */}
+  <div className="flex-1 p-6 flex items-center gap-4 hover:bg-purple-50/50 transition-colors border-b border-slate-50 pt-10"> {/* เพิ่ม pt-10 เพื่อไม่ให้ทับกับ Badge */}
+    <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center text-xl group-hover:scale-110 transition-transform">🏢</div>
+    <div>
+      <p className="text-2xl font-black text-slate-900 leading-none">{allSites.length}</p>
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ไซต์งานทั้งหมด</p>
+    </div>
+  </div>
+
+  {/* ครึ่งล่าง: ตำแหน่ง */}
+  <div className="flex-1 p-6 flex items-center gap-4 hover:bg-pink-50/50 transition-colors">
+    <div className="w-12 h-12 bg-pink-50 text-pink-600 rounded-xl flex items-center justify-center text-xl group-hover:scale-110 transition-transform">💼</div>
+    <div>
+      <p className="text-2xl font-black text-slate-900 leading-none">{positions.length}</p>
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ตำแหน่งทั้งหมด</p>
+    </div>
+  </div>
+</div>
+</div>
 
       {/* --- 1. EMPLOYEES TABLE --- */}
         <div className="print:hidden">
@@ -594,7 +828,22 @@ export default function AdminClientPage({
                           </td>
                           <td className="py-4 px-6 font-bold text-gray-600">{e.departmentName || "ไม่ระบุแผนก"}</td>
                           <td className="py-4 px-6">
-                            <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-full font-bold text-[11px] uppercase tracking-wider">{e.siteName || e.site }</span>
+                            {(() => {
+                              // 1. เช็คว่าเป็น Leader หรือไม่
+                              const isLeader = e.role?.toLowerCase() === "leader";
+                              
+                              // 2. ดึงค่าไซต์มาเช็ค (ถ้าเป็น "ไม่ระบุ" ให้ถือว่าเป็นค่าว่าง)
+                              const displaySite = (e.site === "ไม่ระบุ" || !e.site) ? null : e.site;
+
+                              return (
+                                <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-full font-bold text-[11px] uppercase tracking-wider">
+                                  {displaySite 
+                                    ? displaySite 
+                                    : (isLeader ? "ทุกไซต์" : "ไม่ระบุ")
+                                  }
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="py-4 px-6">
                             <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full font-bold text-[11px] uppercase tracking-wider">{e.position || "พนักงาน"}</span>
@@ -878,7 +1127,7 @@ export default function AdminClientPage({
         </div>
       </main>
 
-      {/* --- 💼 MODAL: ADD DEPARTMENT --- */}
+      {/* --- 💼 MODAL: ADD DEPARTMENT ---
       {showAddDepartment && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
@@ -892,45 +1141,138 @@ export default function AdminClientPage({
             </form>
           </div>
         </div>
-      )}
+      )} */}
 
-      {/* --- 📍 MODAL: ADD SITE --- */}
-      {showAddSite && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
-            <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic">📍 เพิ่มไซต์งานใหม่</h3>
-            <form onSubmit={handleAddSite} className="space-y-4">
-              <input name="siteName" placeholder="ชื่อไซต์งาน..." required className="w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
-              <input name="address" placeholder="ที่อยู่ไซต์งาน..." className="w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none" />
-              <input name="coordinates" placeholder="พิกัด (Lat, Lng)..." className="w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none" />
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setShowAddSite(false)} className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px]">ยกเลิก</button>
-                <button type="submit" disabled={isProcessing} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-emerald-100 disabled:bg-slate-300">
-                  {isProcessing ? "กำลังบันทึก..." : "บันทึกไซต์"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* --- 💼 MODAL: ADD POSITION --- */}
-      {showAddPosition && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
-            <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic">💼 เพิ่มตำแหน่งงาน</h3>
-            <form onSubmit={handleAddPosition} className="space-y-4">
-              <input name="posName" placeholder="ระบุชื่อตำแหน่ง..." required className="w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-amber-500" />
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setShowAddPosition(false)} className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px]">ยกเลิก</button>
-                <button type="submit" disabled={isProcessing} className="flex-1 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 disabled:bg-slate-300">
-                  {isProcessing ? "กำลังบันทึก..." : "บันทึกตำแหน่ง"}
-                </button>
-              </div>
-            </form>
-          </div>
+{/* --- 📍 MODAL: ADD SITE --- */}
+{showAddSite && (
+  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+      <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic flex items-center gap-2">
+        <span className={`${editingSite ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'} p-2 rounded-lg text-sm not-italic`}>
+          {editingSite ? '✏️' : '📍'}
+        </span>
+        {editingSite ? "แก้ไขไซต์งาน" : "เพิ่มไซต์งานใหม่"}
+      </h3>
+      
+      <form onSubmit={handleAddSite} className="space-y-5">
+        <div className="space-y-3">
+          <input 
+            name="siteName" 
+            defaultValue={editingSite?.name || ""} 
+            placeholder="ชื่อไซต์งาน..." 
+            required 
+            className="w-full border-none p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300" 
+          />
+          <input 
+            name="address" 
+            defaultValue={editingSite?.address || ""} 
+            placeholder="ที่อยู่ไซต์งาน..." 
+            className="w-full border-none p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300" 
+          />
         </div>
-      )}
+
+        {/* 📍 ส่วนพิกัด: เพิ่มระบบกันกดซ้ำและ Loading Overlay */}
+        <div className="space-y-3 relative">
+          <button
+            type="button"
+            disabled={isProcessing}
+            onClick={handleGetCurrentLocation}
+            className={`w-full py-4 relative overflow-hidden text-white rounded-2xl font-black uppercase text-[12px] shadow-lg transition-all flex items-center justify-center gap-3 border-b-4 
+              ${isProcessing 
+                ? 'bg-slate-400 border-slate-500 cursor-not-allowed' 
+                : 'bg-blue-600 border-blue-800 hover:bg-blue-700 active:scale-95 shadow-blue-100'
+              }`}
+          >
+            {isProcessing ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>กำลังประมวลผล...</span>
+              </>
+            ) : (
+              <>
+                <span className="text-lg">🎯</span> 
+                กดเพื่อดึงพิกัดจากเครื่อง
+              </>
+            )}
+          </button>
+
+          <div className={`flex gap-2 transition-opacity duration-300 ${isProcessing ? 'opacity-30' : 'opacity-60'}`}>
+            <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 p-2">
+              <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">Lat</span>
+              <input 
+                name="latitude" 
+                value={lat} 
+                readOnly={isProcessing}
+                onChange={(e) => setLat(e.target.value)}
+                placeholder="0.0000"
+                className="w-full bg-transparent outline-none font-bold text-xs px-1" 
+              />
+            </div>
+            <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 p-2">
+              <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">Lng</span>
+              <input 
+                name="longitude" 
+                value={lng} 
+                readOnly={isProcessing}
+                onChange={(e) => setLng(e.target.value)}
+                placeholder="0.0000"
+                className="w-full bg-transparent outline-none font-bold text-xs px-1" 
+              />
+            </div>
+          </div>
+          <p className="text-center text-[9px] text-slate-400 font-bold uppercase italic">* หากดึงพิกัดไม่ได้ กรุณาอนุญาตสิทธิ์เข้าถึงตำแหน่ง</p>
+        </div>
+
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+          <button 
+            type="button" 
+            disabled={isProcessing}
+            onClick={() => { setShowAddSite(false); setEditingSite(null); }} 
+            className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px] disabled:opacity-30"
+          >
+            ยกเลิก
+          </button>
+          <button 
+            type="submit" 
+            disabled={isProcessing} 
+            className={`flex-[2] py-4 ${editingSite ? 'bg-blue-600 shadow-blue-100' : 'bg-emerald-600 shadow-emerald-100'} text-white rounded-2xl font-black uppercase text-[10px] shadow-xl disabled:bg-slate-300`}
+          >
+            {isProcessing ? "กำลังบันทึก..." : editingSite ? "ยืนยันการแก้ไข" : "ยืนยันเพิ่มไซต์งาน"}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+      {/* --- 🎯 MODAL: ADD POSITION --- */}
+{showAddPosition && (
+  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
+      <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic">
+        {editingPos ? "✏️ แก้ไขตำแหน่งงาน" : "💼 เพิ่มตำแหน่งงาน"}
+      </h3>
+      <form onSubmit={handleAddPosition} className="space-y-4">
+        <input 
+          name="posName" 
+          defaultValue={editingPos?.name || ""} 
+          placeholder="ระบุชื่อตำแหน่ง..." 
+          required 
+          className="w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-amber-500" 
+        />
+        <div className="flex gap-2 pt-2">
+          <button type="button" onClick={() => { setShowAddPosition(false); setEditingPos(null); }} className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px]">ยกเลิก</button>
+          <button type="submit" disabled={isProcessing} className="flex-1 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 disabled:bg-slate-300">
+            {isProcessing ? "กำลังบันทึก..." : editingPos ? "อัปเดตตำแหน่ง" : "บันทึกตำแหน่ง"}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
 
       {/* --- 👤 MODAL: REGISTRATION & EDIT --- */}
       {showRegister && (
@@ -1187,6 +1529,76 @@ export default function AdminClientPage({
           </div>
         </div>
       )}
+
+{/* --- 🖨️ MODAL: EDIT SITE & POSITION --- */}
+{showManageModal && (
+  <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[600] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[3rem] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+      {/* Header */}
+      <div className="p-8 border-b flex justify-between items-center bg-slate-50/50">
+        <h3 className="text-2xl font-black text-slate-900 uppercase italic flex items-center gap-3">
+          <span className="bg-slate-900 text-white p-2 rounded-xl not-italic text-sm">⚙️</span>
+          จัดการระบบ (ไซต์งาน & ตำแหน่ง)
+        </h3>
+        <button onClick={() => setShowManageModal(false)} className="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all font-black">✕</button>
+      </div>
+
+      <div className="p-8 overflow-y-auto space-y-10 custom-scrollbar">
+        {/* --- ตารางที่ 1: ไซต์งาน --- */}
+        <section>
+          <h4 className="text-sm font-black text-purple-600 mb-4 uppercase tracking-widest flex items-center gap-2">🏢 รายการไซต์งาน ({allSites.length})</h4>
+          <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-100">
+            <table className="w-full text-left text-sm font-bold">
+              <thead className="bg-slate-100 text-slate-400 text-[10px] uppercase">
+                <tr>
+                  <th className="p-4">ชื่อไซต์งาน</th>
+                  <th className="p-4 text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {allSites.map(site => (
+                  <tr key={site.id} className="hover:bg-white transition-colors group">
+                    <td className="p-4 text-slate-700">{site.name}</td>
+                    <td className="p-4 flex justify-center gap-2">
+                      <button onClick={() => handleUpdateSite(site)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">📝</button>
+                      <button onClick={() => handleDeleteSite(site.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">🗑️</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* --- ตารางที่ 2: ตำแหน่ง --- --- */}
+        <section>
+          <h4 className="text-sm font-black text-pink-600 mb-4 uppercase tracking-widest flex items-center gap-2">💼 รายการตำแหน่ง ({positions.length})</h4>
+          <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-100">
+            <table className="w-full text-left text-sm font-bold">
+              <thead className="bg-slate-100 text-slate-400 text-[10px] uppercase">
+                <tr>
+                  <th className="p-4">ชื่อตำแหน่ง</th>
+                  <th className="p-4 text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {positions.map(pos => (
+                  <tr key={pos.id} className="hover:bg-white transition-colors">
+                    <td className="p-4 text-slate-700">{pos.name}</td>
+                    <td className="p-4 flex justify-center gap-2">
+                      <button onClick={() => handleEditPos(pos)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">📝</button>
+                      <button onClick={() => handleDeletePos(pos.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">🗑️</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

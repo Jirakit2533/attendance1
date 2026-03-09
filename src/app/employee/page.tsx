@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import EmployeeClientPage from "./employeeClientPage";
 import { redirect } from "next/navigation";
 import { db } from "@/db/db"; // นำเข้า db เพื่อเช็คความมีตัวตน
-import { usersTable, positionsTable, sitesTable } from "@/db/schema";
+import { usersTable, positionsTable, sitesTable, departmentsTable } from "@/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 
 export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
@@ -26,12 +26,16 @@ export default async function Page() {
     lastName: usersTable.lastName,
     avatarUrl: usersTable.avatarUrl,
     role: usersTable.role,
-    positionName: positionsTable.name, // ✅ ดึงชื่อตำแหน่ง
-    siteName: sitesTable.name,         // ✅ ดึงชื่อไซต์
+    userName: usersTable.userName,      // ✅ เพิ่ม: เพื่อให้ Username Badge แสดงผล
+    positionName: positionsTable.name, 
+    siteName: sitesTable.name,         
+    departmentName: departmentsTable.name // ✅ เพิ่ม: เพื่อให้ชื่อแผนกแสดงผล
   })
   .from(usersTable)
-  .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id)) // ✅ Join Position
-  .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))             // ✅ Join Site
+  .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
+  .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
+  // ✅ ต้อง Join ตารางแผนกเพิ่มเพื่อให้ได้ชื่อแผนก (ไม่ใช่แค่ ID)
+  .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id)) 
   .where(and(
     eq(usersTable.id, userFromAuth.id),
     isNull(usersTable.deletedAt)
@@ -60,6 +64,7 @@ export default async function Page() {
     position: user.positionName || "-",
     site: user.siteName || "-",
     role: user.roleName === "leader" ? "หัวหน้างาน" : "พนักงาน" // ปรับตาม role จริงจาก DB
+
   }));
 
   const initialLeaves = dbLeaves.map(l => ({
@@ -74,14 +79,17 @@ export default async function Page() {
   }));
 
   // เตรียมโปรไฟล์ให้ Client Page
-  const userProfile = {
+const userProfile = {
     id: user.id,
     name: `${user.firstName} ${user.lastName}`,
     firstName: user.firstName,
     lastName: user.lastName,
     avatarUrl: user.avatarUrl,
     role: user.role,
-    // เพิ่ม field อื่นๆ ที่ EmployeeClientPage จำเป็นต้องใช้
+    userName: user.userName,     // ✅ เพิ่มเพื่อให้ Badge Username แสดงผล
+    position: user.positionName, // ✅ ส่งชื่อตำแหน่งเข้าไป
+    site: user.siteName,         // ✅ ส่งชื่อไซต์เข้าไป
+    department: user.departmentName // ✅ อย่าลืม Join แผนกใน Query ด้านบนด้วยถ้าต้องการโชว์
   };
 
   return (
