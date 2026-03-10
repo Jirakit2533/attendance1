@@ -772,7 +772,6 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                     <span className="px-2 py-0.5 bg-slate-900 text-white text-[9px] font-black rounded uppercase tracking-widest">
                       {admin?.role || 'Admin'}
                     </span>
-                    <span className="text-[10px] font-bold text-blue-600 uppercase">ID: {admin?.id || '---'}</span>
                   </div>
                   
                   <h2 className="font-black text-slate-900 text-xl sm:text-2xl tracking-tight leading-none mb-2">
@@ -1738,7 +1737,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
           {isProcessing ? <span className="animate-spin text-lg">⏳</span> : "📊"}
         </div>
         <div>
-          <h3 className="text-lg font-black text-slate-900 leading-none mb-1 uppercase italic">Report Generator</h3>
+          <h3 className="text-lg font-black text-slate-900 leading-none mb-1 uppercase italic">สร้างรายงาน</h3>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             {isProcessing ? "กำลังประมวลผลข้อมูล..." : "ระบบสร้างรายงานและคัดกรองรายชื่อ"}
           </p>
@@ -2004,11 +2003,14 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                   {exportFormat === 'pdf' ? "พิมพ์รายงาน / Save PDF 🖨️" : "ยืนยันดาวน์โหลด EXCEL 📥"}
                 </button>
                 <button 
-                  onClick={() => setShowReport(false)} 
-                  className="bg-slate-100 hover:bg-red-50 hover:text-red-500 px-8 py-4 rounded-2xl font-black text-[10px] uppercase transition-all text-slate-400"
-                >
-                  ย้อนกลับ
-                </button>
+  onClick={() => {
+    setShowReport(false);      // 1. ปิดหน้า Report Preview
+    setShowFilterModal(true); // 2. เปิดหน้า Modal ตัวกรองขึ้นมาใหม่
+  }} 
+  className="bg-slate-100 hover:bg-red-50 hover:text-red-500 px-8 py-4 rounded-2xl font-black text-[10px] uppercase transition-all text-slate-400"
+>
+  ย้อนกลับ
+</button>
               </div>
             </div>
 

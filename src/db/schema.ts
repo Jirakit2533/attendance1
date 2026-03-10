@@ -1,7 +1,5 @@
-import { pgTable, varchar, timestamp, uuid, text, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm"; 
-import { emailAddress } from "effect/FastCheck";
-
 
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
 export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected"]);
@@ -77,6 +75,46 @@ export const positionsTable = pgTable("positions", {
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
 });
 
+export const shiftsTable = pgTable("shifts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => usersTable.id),
+  name: varchar("name", { length: 100 }).notNull(), // เช่น "กะเช้า", "กะบ่าย"
+  startTime: time("start_time").notNull(), // 08:00:00
+  endTime: time("end_time").notNull(),     // 17:00:00
+  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),          // แยกตามบริษัท
+  siteId: uuid("site_id").references(() => sitesTable.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const overtimeTable = pgTable("overtime", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => usersTable.id),
+  userName: varchar("user_name", { length: 255 }).notNull(),
+  shiftId: uuid("shift_id").references(() => shiftsTable.id),
+  attendanceId: uuid("attendance_id").references(() => attendanceTable.id), // เชื่อมกับบันทึกเวลาวันนั้น
+  status: varchar("status", { length: 20 }).default("pending"), // 'pending', 'approved', 'rejected'
+  date: date("date").notNull(),
+  hours: integer("hours").notNull().default(0), 
+  approvedBy: uuid("approved_by").references(() => usersTable.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const temporaryShiftsTable = pgTable("temporary_shifts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
+  targetDate: date("target_date").notNull(), 
+  name: varchar("name", { length: 100 }).notNull(),
+  startTime: time("start_time").notNull(),
+  endTime: time("end_time").notNull(),
+  siteId: uuid("site_id").references(() => sitesTable.id),
+  status: varchar("status", { length: 20 }).default("pending").notNull(), 
+  overtimeId: uuid("overtime_id").references(() => overtimeTable.id),
+  remark: text("remark"),
+  createdBy: uuid("created_by_id").references(() => usersTable.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`),
+});
+
 export const usersTable = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   userName: varchar("user_name", { length: 255 }).notNull().unique(),
@@ -112,6 +150,8 @@ export const attendanceTable = pgTable("attendance", {
   imageOut: text("image_out"),
   imageOutId: text("image_out_id"),
   locationOut: varchar("location_out", { length: 255 }),
+  isLate: integer("is_late").default(0),      // 0 = ปกติ, 1 = สาย
+  isEarlyExit: integer("is_early_exit").default(0), // 0 = ปกติ, 1 = ออกสาย
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
 });
 
