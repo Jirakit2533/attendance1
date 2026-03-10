@@ -440,30 +440,30 @@ const handleEditPos = (pos: any) => {
     );
   };
 
-  const handleAddDepartment = async (e) => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const name = formData.get("name");
+  // const handleAddDepartment = async (e) => {
+  //   e.preventDefault();
+  //   const form = e.currentTarget;
+  //   const formData = new FormData(form);
+  //   const name = formData.get("name");
   
-    if (!name) return;
-    setIsProcessing(true);
-    try {
-      const result = await createDepartmentAction(name);
-      if (result.success) {
-        form.reset();
-        setAllDepartments((prev) => [...prev, { id: crypto.randomUUID(), name: name }]); 
-        setShowAddDepartment(false);
-        alert(`✅ เพิ่มแผนก "${name}" เรียบร้อยแล้ว`);
-      } else {
-        alert(result.error || "ไม่สามารถบันทึกแผนกได้");
-      }
-    } catch (error) {
-      alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  //   if (!name) return;
+  //   setIsProcessing(true);
+  //   try {
+  //     const result = await createDepartmentAction(name);
+  //     if (result.success) {
+  //       form.reset();
+  //       setAllDepartments((prev) => [...prev, { id: crypto.randomUUID(), name: name }]); 
+  //       setShowAddDepartment(false);
+  //       alert(`✅ เพิ่มแผนก "${name}" เรียบร้อยแล้ว`);
+  //     } else {
+  //       alert(result.error || "ไม่สามารถบันทึกแผนกได้");
+  //     }
+  //   } catch (error) {
+  //     alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+  //   } finally {
+  //     setIsProcessing(false);
+  //   }
+  // };
 
 const handleGetCurrentLocation = () => {
   setIsProcessing(true); // เริ่มกระบวนการโหลด
@@ -1681,13 +1681,13 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                 <input name="lastName" defaultValue={editingEmployee?.lastName} required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all" />
               </div>
 
-              <div className="space-y-1">
+              {/* <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">แผนก</label>
                 <select name="departmentId" defaultValue={editingEmployee?.departmentId || ""} required className="w-full bg-slate-50 p-4 rounded-2xl font-bold outline-none border border-transparent focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer">
                   <option value="" disabled hidden>เลือกแผนก...</option>
                   {departments?.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
-              </div>
+              </div> */}
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ระดับสิทธิ์ (Role)</label>
