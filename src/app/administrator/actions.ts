@@ -11,7 +11,7 @@ import {
   positionsTable,
   departmentsTable 
 } from "@/db/schema";
-import { eq, and, desc, isNull, or } from "drizzle-orm";
+import { eq, and, desc, isNull, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
@@ -490,92 +490,105 @@ export async function updatePositionAction(id: string, name: string) {
   }
 }
 
-/* ==========================================================================
-   ADMIN PROFILE UPDATE ACTIONS (เวอร์ชันสมบูรณ์ตาม Schema)
+  /* ==========================================================================
+   UPDATE ADMIN
    ========================================================================== */
 
-   export async function updateAdminProfileAction(adminId: string, formData: FormData) {
-    try {
-      // 1. ตรวจสอบสิทธิ์ (adminContext) 
-      const adminContext = await getAdminContext();
-      if (!adminContext || adminContext.id !== adminId) {
-        return { success: false, error: "Unauthorized: เซสชันหมดอายุหรือสิทธิ์ไม่ถูกต้อง" };
-      }
-  
-      const name = formData.get("name") as string;
-      const email = formData.get("email") as string;
-      const phone = formData.get("phone") as string;
-      const currentPassword = formData.get("currentPassword") as string;
-      const newPassword = formData.get("newPassword") as string;
-  
-      // 2. ดึงข้อมูลผู้ใช้เพื่อตรวจสอบ Password และหา Company ID
-      const userWithAdmin = await db
-        .select({
-          id: usersTable.id,
-          passwordHash: usersTable.passwordHash,
-          companyId: adminsTable.company,
-        })
-        .from(usersTable)
-        .innerJoin(adminsTable, eq(usersTable.id, adminsTable.user_id))
-        .where(and(eq(usersTable.id, adminId), isNull(usersTable.deletedAt)))
-        .limit(1);
-  
-      const targetUser = userWithAdmin[0];
-      if (!targetUser) return { success: false, error: "ไม่พบข้อมูลผู้ดูแลในระบบ" };
-  
-      // 3. Security Check: ตรวจสอบรหัสผ่านเดิม (ห้ามข้ามเด็ดขาด)
-      if (!currentPassword) {
-        return { success: false, error: "กรุณาระบุรหัสผ่านเดิมเพื่อยืนยันตัวตน" };
-      }
-      
-      const isPasswordValid = await bcrypt.compare(currentPassword, targetUser.passwordHash);
-      if (!isPasswordValid) {
-        return { success: false, error: "รหัสผ่านเดิมไม่ถูกต้อง ไม่สามารถบันทึกข้อมูลได้" };
-      }
-  
-      // 4. เตรียมข้อมูลชื่อ-นามสกุล
-      const nameParts = name.trim().split(/\s+/);
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(" ");
-  
-      // 5. ดำเนินการ Update แบบทีละขั้นตอน (เนื่องจาก neon-http ไม่รองรับ transaction)
-      
-      // A. อัปเดตข้อมูลพื้นฐานที่ usersTable
-      const userUpdateData: any = {
-        firstName: firstName,
-        lastName: lastName || "",
-        updatedAt: new Date(),
-        updateBy: adminId
-      };
-  
-      // ถ้ามีการเปลี่ยนรหัสผ่านใหม่ ให้ทำการ Hash
-      if (newPassword && newPassword.trim() !== "") {
-        userUpdateData.passwordHash = await bcrypt.hash(newPassword, 10);
-      }
-  
-      await db.update(usersTable)
-        .set(userUpdateData)
-        .where(eq(usersTable.id, adminId));
-  
-      // B. อัปเดต Email ที่ adminsTable
-      await db.update(adminsTable)
-        .set({ email: email || null })
-        .where(eq(adminsTable.user_id, adminId));
-  
-      // C. อัปเดต Phone ที่ companyTable
-      if (targetUser.companyId) {
-        await db.update(companyTable)
-          .set({ phone: phone || null })
-          .where(eq(companyTable.id, targetUser.companyId));
-      }
-  
-      // 6. ล้าง Cache เพื่อให้หน้าจอแสดงผลข้อมูลใหม่
-      revalidatePath("/administrator");
-      
-      return { success: true, message: "อัปเดตข้อมูลโปรไฟล์และรหัสผ่านสำเร็จ" };
-  
-    } catch (error: any) {
-      console.error("Update Admin Profile Error:", error);
-      return { success: false, error: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" };
+
+
+export async function updateAdminProfileAction(adminId: string, formData: FormData) {
+  try {
+    const adminContext = await getAdminContext();
+    if (!adminContext || adminContext.id !== adminId) {
+      return { success: false, error: "Unauthorized: สิทธิ์ไม่ถูกต้อง" };
     }
+
+    // --- 1. ดึงข้อมูลจาก FormData ---
+    const name = formData.get("name") as string;
+    const email = formData.get("email") as string;
+    const phone = formData.get("phone") as string;
+    const currentPassword = formData.get("currentPassword") as string;
+    const newPassword = formData.get("newPassword") as string;
+    
+    // รับค่า avatarUrl มาเช็คว่าเป็น Base64 หรือไม่
+    let avatarUrlInput = formData.get("avatarUrl") as string;
+    let finalAvatarUrl = avatarUrlInput; // ค่าเริ่มต้นเป็นค่าเดิมที่ส่งมา
+    let finalAvatarId = formData.get("avatarId") as string;
+
+    // --- 2. ดึงข้อมูลเดิมเพื่อตรวจสอบ Security และหาไฟล์เก่า ---
+    const userWithAdmin = await db
+      .select({
+        id: usersTable.id,
+        passwordHash: usersTable.passwordHash,
+        companyId: adminsTable.company,
+        oldAvatarId: usersTable.avatarId,
+      })
+      .from(usersTable)
+      .innerJoin(adminsTable, eq(usersTable.id, adminsTable.user_id))
+      .where(and(eq(usersTable.id, adminId), isNull(usersTable.deletedAt)))
+      .limit(1);
+
+    const targetUser = userWithAdmin[0];
+    if (!targetUser) return { success: false, error: "ไม่พบข้อมูลผู้ดูแล" };
+
+    // --- 3. Security Check: รหัสผ่านเดิม ---
+    if (!currentPassword) return { success: false, error: "กรุณาระบุรหัสผ่านเดิม" };
+    const isPasswordValid = await bcrypt.compare(currentPassword, targetUser.passwordHash);
+    if (!isPasswordValid) return { success: false, error: "รหัสผ่านเดิมไม่ถูกต้อง" };
+
+    // --- 4. Logic การจัดการรูปภาพ (ยกมาจาก saveStaffAction) ---
+    // เช็คว่า avatarUrl ที่ส่งมาเป็น Base64 หรือไม่ (ถ้าเลือกรูปใหม่จาก Client มักจะเป็นแบบนี้)
+    if (avatarUrlInput && avatarUrlInput.startsWith("data:image")) {
+      try {
+        // ลบรูปเก่า (ถ้ามี)
+        if (targetUser.oldAvatarId) {
+          await deleteFromDrive(targetUser.oldAvatarId).catch(() => null);
+        }
+
+        // กระบวนการอัปโหลดเหมือน saveStaffAction
+        const base64Data = avatarUrlInput.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const fileName = `admin_profile_${adminId}_${Date.now()}.jpg`;
+        
+        const uploadResult = await uploadToDrive(buffer, fileName, "", "image/jpeg");
+        
+        finalAvatarUrl = uploadResult.ufsUrl || uploadResult.url;
+        finalAvatarId = uploadResult.fileId;
+        
+        console.log("✅ Admin Upload Success:", finalAvatarUrl);
+      } catch (uploadError) {
+        console.error("❌ Admin Upload Error:", uploadError);
+      }
+    }
+
+    // --- 5. เตรียม Payload สำหรับการ Update ---
+    const nameParts = name.trim().split(/\s+/);
+    const userUpdateData: any = {
+      firstName: nameParts[0],
+      lastName: nameParts.slice(1).join(" "),
+      updateBy: adminId,
+      updatedAt: sql`timezone('Asia/Bangkok', now())`,
+      // บันทึก URL และ ID ที่อัปโหลดใหม่ลงไป
+      avatarUrl: finalAvatarUrl,
+      avatarId: finalAvatarId,
+    };
+
+    if (newPassword && newPassword.trim() !== "") {
+      userUpdateData.passwordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    // --- 6. ดำเนินการอัปเดต Database ---
+    await db.update(usersTable).set(userUpdateData).where(eq(usersTable.id, adminId));
+    await db.update(adminsTable).set({ email: email || null }).where(eq(adminsTable.user_id, adminId));
+    if (targetUser.companyId) {
+      await db.update(companyTable).set({ phone: phone || null }).where(eq(companyTable.id, targetUser.companyId));
+    }
+
+    revalidatePath("/administrator");
+    return { success: true, message: "อัปเดตโปรไฟล์และรูปภาพสำเร็จ" };
+
+  } catch (error: any) {
+    console.error("Update Admin Profile Error:", error);
+    return { success: false, error: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" };
   }
+}
