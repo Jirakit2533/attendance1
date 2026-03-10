@@ -26,12 +26,16 @@ export default async function AdminDashboardPage() {
       redirect('/api/auth/logout-cleanup');
     }
 
-    // 2. ดึงข้อมูลแอดมิน
+    // 2. ดึงข้อมูลแอดมิน (ดึงฟิลด์ที่จำเป็นสำหรับ Modal Profile ตามที่บอก)
     const adminData = await db
       .select({
         id: usersTable.id,
+        userName: usersTable.userName, 
         firstName: usersTable.firstName,
         lastName: usersTable.lastName,
+        email: adminsTable.email,       // ดึงจาก adminsTable ตาม Schema
+        phone: companyTable.phone,     
+        avatarUrl: usersTable.avatarUrl,
         companyId: adminsTable.company, 
         companyName: companyTable.name,
       })
@@ -44,14 +48,14 @@ export default async function AdminDashboardPage() {
       ))
       .limit(1);
 
-    const currentAdmin = adminData[0];
+    const currentAdmin = adminData?.[0]; // 🛡️ แก้ไข: เพิ่ม ? ป้องกัน null
     if (!currentAdmin) {
       redirect('/api/auth/logout-cleanup');
     }
 
     const companyId = currentAdmin.companyId;
 
-    // 3. Fetch ข้อมูลแบบ Parallel พร้อมทำการ Join
+    // 3. Fetch ข้อมูลแบบ Parallel พร้อมทำการ Join (ห้ามลบ ห้ามเปลี่ยน)
     const [
       rawEmployees, 
       rawAttendance, 
@@ -63,13 +67,13 @@ export default async function AdminDashboardPage() {
       // --- พนักงาน ---
       db.select({
         id: usersTable.id,
-        userName: usersTable.userName, // ดึงมาใช้แก้ปัญหา UUID
+        userName: usersTable.userName, 
         firstName: usersTable.firstName,
         lastName: usersTable.lastName,
         role: usersTable.role,
         departmentId: usersTable.departmentId,
         positionName: positionsTable.name,
-        siteName: sitesTable.name, // ชื่อไซต์ที่ Join มา
+        siteName: sitesTable.name, 
         siteId: usersTable.site_id,
         positionId: usersTable.positionId,
         avatarUrl: usersTable.avatarUrl,
@@ -131,62 +135,69 @@ export default async function AdminDashboardPage() {
 
     // 4. Mapping ข้อมูลให้ตรงกับ Client Page
     const employees = (rawEmployees || []).map(emp => {
-      // ตรวจสอบ UserName: ถ้าเป็น UUID หรือค่าว่าง ให้ Fallback ไปที่ชื่อจริง
-      const isUuid = emp.userName && emp.userName.length > 30;
-      const finalUserName = isUuid ? emp.firstName?.toLowerCase() : (emp.userName || "user");
+      const isUuid = emp?.userName && emp.userName.length > 30;
+      const finalUserName = isUuid ? emp.firstName?.toLowerCase() : (emp?.userName || "user");
 
       return {
-        id: String(emp.id || ""),
-        userName: finalUserName, // แก้ไข: ใช้ชื่อตัวแปรที่ตรงกับที่ Client เรียก
-        username: finalUserName, // ใส่เผื่อไว้ทั้งสองแบบป้องกัน Case Sensitive
-        firstName: String(emp.firstName || ""),
-        lastName: String(emp.lastName || ""),
-        employeeName: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
-        role: String(emp.role || "employee"),
-        departmentId: emp.departmentId ? String(emp.departmentId) : null,
-        positionId: emp.positionId ? String(emp.positionId) : null,
-        siteId: emp.siteId ? String(emp.siteId) : null,
-        site: String(emp.siteName || "ไม่ระบุ"), // แก้ไข: ส่งค่าชื่อไซต์ไปที่ e.site
-        siteName: emp.siteName || "ไม่ระบุ",
-        position: String(emp.positionName || "ไม่ระบุ"),
-        avatarUrl: emp.avatarUrl || null,
+        id: String(emp?.id || ""),
+        userName: finalUserName,
+        username: finalUserName,
+        firstName: String(emp?.firstName || ""),
+        lastName: String(emp?.lastName || ""),
+        employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
+        role: String(emp?.role || "employee"),
+        departmentId: emp?.departmentId ? String(emp.departmentId) : null,
+        positionId: emp?.positionId ? String(emp.positionId) : null,
+        siteId: emp?.siteId ? String(emp.siteId) : null,
+        site: String(emp?.siteName || "ไม่ระบุ"),
+        siteName: emp?.siteName || "ไม่ระบุ",
+        position: String(emp?.positionName || "ไม่ระบุ"),
+        avatarUrl: emp?.avatarUrl || null,
       };
     });
 
     const attendance = (rawAttendance || []).map(at => ({
-      id: String(at.id || ""),
-      date: at.date ? String(at.date) : "",
-      // ✅ ส่งค่าเดิมไปเลย ไม่ต้องสั่ง toLocaleTimeString ที่นี่
-      checkIn: at.checkIn, 
-      checkOut: at.checkOut,
-      userId: String(at.user_id || ""),
-      employeeName: `${at.firstName || ''} ${at.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
-      siteName: at.siteName || "General Site",
-      locationIn: String(at.locationIn || "-"),
-      imageIn: at.imageIn || null
+      id: String(at?.id || ""),
+      date: at?.date ? String(at.date) : "",
+      checkIn: at?.checkIn || null, 
+      checkOut: at?.checkOut || null,
+      userId: String(at?.user_id || ""),
+      employeeName: `${at?.firstName || ''} ${at?.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
+      siteName: at?.siteName || "General Site",
+      locationIn: String(at?.locationIn || "-"),
+      imageIn: at?.imageIn || null
     }));
 
     const leaves = (rawLeaves || []).map(l => ({
-      id: String(l.id || ""),
-      type: String(l.type || "ลากิจ"),
-      startDate: l.startDate ? String(l.startDate) : "",
-      endDate: l.endDate ? String(l.endDate) : "",
-      status: String(l.status || "pending"),
-      reason: String(l.reason || ""),
-      fileUrl: l.fileUrl || null,
-      fileName: l.fileName || null,
-      employeeName: `${l.firstName || ''} ${l.lastName || ''}`.trim() || "ไม่ระบุพนักงาน",
-      userName: String(l.userName || ""),
-      avatarUrl: l.avatarUrl || null
+      id: String(l?.id || ""),
+      type: String(l?.type || "ลากิจ"),
+      startDate: l?.startDate ? String(l.startDate) : "",
+      endDate: l?.endDate ? String(l.endDate) : "",
+      status: String(l?.status || "pending"),
+      reason: String(l?.reason || ""),
+      fileUrl: l?.fileUrl || null,
+      fileName: l?.fileName || null,
+      employeeName: `${l?.firstName || ''} ${l?.lastName || ''}`.trim() || "ไม่ระบุพนักงาน",
+      userName: String(l?.userName || ""),
+      avatarUrl: l?.avatarUrl || null
     }));
 
-    const sites = (sitesData || []).map(s => ({ id: String(s.id), name: String(s.name) }));
-    const positions = (positionsData || []).map(p => ({ id: String(p.id), name: String(p.name) }));
-    const departments = (departmentsData || []).map(d => ({ id: String(d.id), name: String(d.name) }));
+    const sites = (sitesData || []).map(s => ({ id: String(s?.id || ""), name: String(s?.name || "") }));
+    const positions = (positionsData || []).map(p => ({ id: String(p?.id || ""), name: String(p?.name || "") }));
+    const departments = (departmentsData || []).map(d => ({ id: String(d?.id || ""), name: String(d?.name || "") }));
 
+    // ✅ ปรับปรุง Admin Profile: ส่งข้อมูลให้ครบถ้วนเพื่อใช้ใน Modal แก้ไขข้อมูล (ห้ามลบ)
     const adminProfile = {
-      name: `${currentAdmin.firstName || ''} ${currentAdmin.lastName || ''}`.trim(),
-      company: String(currentAdmin.companyName || "บริษัท"),
+      id: currentAdmin?.id || "",
+      name: `${currentAdmin?.firstName || ''} ${currentAdmin?.lastName || ''}`.trim(),
+      firstName: currentAdmin?.firstName || "",
+      lastName: currentAdmin?.lastName || "",
+      userName: currentAdmin?.userName || "",
+      username: currentAdmin?.userName || "", // ส่งไปทั้งสองแบบกันพลาด
+      email: currentAdmin?.email || "",
+      phone: currentAdmin?.phone || "",
+      avatarUrl: currentAdmin?.avatarUrl || null,
+      company: String(currentAdmin?.companyName || "บริษัท"),
       role: "admin"
     };
 
@@ -200,6 +211,7 @@ export default async function AdminDashboardPage() {
       departments: departments
     };
 
+    // 🛡️ ป้องกัน Error undefined ในขั้นตอนสุดท้าย
     const safeProps = JSON.parse(
       JSON.stringify(rawProps, (key, value) => (value === undefined ? null : value))
     );
@@ -207,16 +219,11 @@ export default async function AdminDashboardPage() {
     return <AdminClientPage {...safeProps} />;
 
   } catch (error: any) {
-    // 🛡️ 1. เช็คว่าเป็นคำสั่ง Redirect ของ Next.js หรือไม่
-    // ถ้าใช่ ให้ปล่อยมันทำงาน (throw ต่อไป) เพื่อให้หน้าเว็บเปลี่ยนได้จริง
     if (error.message === 'NEXT_REDIRECT' || error.digest?.includes('NEXT_REDIRECT')) {
       throw error;
     }
 
-    // 2. ถ้าไม่ใช่ Redirect (เป็น Error จริงๆ เช่น DB พัง) ให้ Log ออกมา
     console.error("Critical Dashboard Error:", error);
-    
-    // 3. ส่งไปหน้า Logout Cleanup เพื่อล้าง Session
     redirect('/api/auth/logout-cleanup');
   }
 }

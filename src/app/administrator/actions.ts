@@ -489,3 +489,93 @@ export async function updatePositionAction(id: string, name: string) {
     return { success: false, error: "ไม่สามารถอัปเดตข้อมูลได้" };
   }
 }
+
+/* ==========================================================================
+   ADMIN PROFILE UPDATE ACTIONS (เวอร์ชันสมบูรณ์ตาม Schema)
+   ========================================================================== */
+
+   export async function updateAdminProfileAction(adminId: string, formData: FormData) {
+    try {
+      // 1. ตรวจสอบสิทธิ์ (adminContext) 
+      const adminContext = await getAdminContext();
+      if (!adminContext || adminContext.id !== adminId) {
+        return { success: false, error: "Unauthorized: เซสชันหมดอายุหรือสิทธิ์ไม่ถูกต้อง" };
+      }
+  
+      const name = formData.get("name") as string;
+      const email = formData.get("email") as string;
+      const phone = formData.get("phone") as string;
+      const currentPassword = formData.get("currentPassword") as string;
+      const newPassword = formData.get("newPassword") as string;
+  
+      // 2. ดึงข้อมูลผู้ใช้เพื่อตรวจสอบ Password และหา Company ID
+      const userWithAdmin = await db
+        .select({
+          id: usersTable.id,
+          passwordHash: usersTable.passwordHash,
+          companyId: adminsTable.company,
+        })
+        .from(usersTable)
+        .innerJoin(adminsTable, eq(usersTable.id, adminsTable.user_id))
+        .where(and(eq(usersTable.id, adminId), isNull(usersTable.deletedAt)))
+        .limit(1);
+  
+      const targetUser = userWithAdmin[0];
+      if (!targetUser) return { success: false, error: "ไม่พบข้อมูลผู้ดูแลในระบบ" };
+  
+      // 3. Security Check: ตรวจสอบรหัสผ่านเดิม (ห้ามข้ามเด็ดขาด)
+      if (!currentPassword) {
+        return { success: false, error: "กรุณาระบุรหัสผ่านเดิมเพื่อยืนยันตัวตน" };
+      }
+      
+      const isPasswordValid = await bcrypt.compare(currentPassword, targetUser.passwordHash);
+      if (!isPasswordValid) {
+        return { success: false, error: "รหัสผ่านเดิมไม่ถูกต้อง ไม่สามารถบันทึกข้อมูลได้" };
+      }
+  
+      // 4. เตรียมข้อมูลชื่อ-นามสกุล
+      const nameParts = name.trim().split(/\s+/);
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(" ");
+  
+      // 5. ดำเนินการ Update แบบทีละขั้นตอน (เนื่องจาก neon-http ไม่รองรับ transaction)
+      
+      // A. อัปเดตข้อมูลพื้นฐานที่ usersTable
+      const userUpdateData: any = {
+        firstName: firstName,
+        lastName: lastName || "",
+        updatedAt: new Date(),
+        updateBy: adminId
+      };
+  
+      // ถ้ามีการเปลี่ยนรหัสผ่านใหม่ ให้ทำการ Hash
+      if (newPassword && newPassword.trim() !== "") {
+        userUpdateData.passwordHash = await bcrypt.hash(newPassword, 10);
+      }
+  
+      await db.update(usersTable)
+        .set(userUpdateData)
+        .where(eq(usersTable.id, adminId));
+  
+      // B. อัปเดต Email ที่ adminsTable
+      await db.update(adminsTable)
+        .set({ email: email || null })
+        .where(eq(adminsTable.user_id, adminId));
+  
+      // C. อัปเดต Phone ที่ companyTable
+      if (targetUser.companyId) {
+        await db.update(companyTable)
+          .set({ phone: phone || null })
+          .where(eq(companyTable.id, targetUser.companyId));
+      }
+  
+      // 6. ล้าง Cache เพื่อให้หน้าจอแสดงผลข้อมูลใหม่
+      revalidatePath("/administrator");
+      
+      return { success: true, message: "อัปเดตข้อมูลโปรไฟล์และรหัสผ่านสำเร็จ" };
+  
+    } catch (error: any) {
+      console.error("Update Admin Profile Error:", error);
+      return { success: false, error: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" };
+    }
+  }
