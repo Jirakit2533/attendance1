@@ -2,12 +2,12 @@
   "name": "attendance",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev -p 4000",
-    "build": "next build",
-    "start": "next start -p 4000",
-    "lint": "next lint"
-  },
+"scripts": {
+  "dev": "next dev -p 4000 --webpack",
+  "build": "next build",
+  "start": "next start -p 4000",
+  "lint": "next lint"
+},
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
     "@uploadthing/react": "^7.3.3",
@@ -22,7 +22,8 @@
     "next": "^16.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "uploadthing": "^7.7.4"
+    "uploadthing": "^7.7.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

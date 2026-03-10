@@ -8,19 +8,23 @@ const nextConfig = {
       { protocol: 'https', hostname: 'ui-avatars.com' }
     ],
   },
-  // ✅ วิธีปิดการเช็ค Error ตอน Build ที่ถูกต้องสำหรับเวอร์ชันใหม่
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // 💡 เพิ่มตรงนี้เพื่อช่วยเรื่อง Root Directory ที่ระบบบ่น
   logging: {
     fetches: {
       fullUrl: true,
     },
   },
+  // 🚀 เพิ่มส่วนนี้เพื่อปิดการทำงานของ Turbopack ที่ทำให้เกิด Fatal Error
+  experimental: {
+    turbo: {
+      enabled: false
+    }
+  }
 };
 
 module.exports = nextConfig;
