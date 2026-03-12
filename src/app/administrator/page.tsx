@@ -7,9 +7,10 @@ import {
   adminsTable, 
   companyTable,
   positionsTable,
-  departmentsTable 
+  departmentsTable,
+  shiftsTable,
 } from "@/db/schema";
-import { desc, eq, and, or, isNull } from "drizzle-orm";
+import { desc, eq, and, or, isNull, is } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation"; 
 import AdminClientPage from "./adminClientPage";
@@ -62,7 +63,8 @@ export default async function AdminDashboardPage() {
       rawLeaves, 
       sitesData, 
       positionsData, 
-      departmentsData
+      departmentsData,
+      defaultShiftData // ✅ เพิ่มการ Query กะเวลามาตรฐาน 1 รอบตามสั่ง
     ] = await Promise.all([
       // --- พนักงาน ---
       db.select({
@@ -77,10 +79,14 @@ export default async function AdminDashboardPage() {
         siteId: usersTable.site_id,
         positionId: usersTable.positionId,
         avatarUrl: usersTable.avatarUrl,
+        // ✅ ดึงเวลาเข้า-ออกงานรายบุคคลมาด้วย
+        startTime: shiftsTable.startTime,
+        endTime: shiftsTable.endTime,
       })
       .from(usersTable)
       .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
       .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
+      .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId)) // Join เพื่อเอาเวลาพนักงาน
       .where(
         and(
           or(eq(usersTable.role, 'employee'), eq(usersTable.role, 'leader')),
@@ -101,11 +107,14 @@ export default async function AdminDashboardPage() {
         imageIn: attendanceTable.imageIn,
         firstName: usersTable.firstName,
         lastName: usersTable.lastName,
-        siteName: sitesTable.name
+        siteName: sitesTable.name,
+        startTime: shiftsTable.startTime,
+        endTime: shiftsTable.endTime
       })
       .from(attendanceTable)
       .leftJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
       .leftJoin(sitesTable, eq(attendanceTable.site_id, sitesTable.id))
+      .leftJoin(shiftsTable, eq(attendanceTable.shift_id, shiftsTable.id))
       .orderBy(desc(attendanceTable.date)),
 
       // --- การลางาน ---
@@ -130,7 +139,19 @@ export default async function AdminDashboardPage() {
       // --- ข้อมูลพื้นฐาน ---
       db.select().from(sitesTable).where(eq(sitesTable.companyId, companyId || "")),
       db.select().from(positionsTable).where(eq(positionsTable.company_id, companyId || "")),
-      db.select().from(departmentsTable).where(eq(departmentsTable.companyId, companyId || ""))
+      db.select().from(departmentsTable).where(eq(departmentsTable.companyId, companyId || "")),
+
+      // ✅ ดึงเวลาเริ่มต้นกลางของบริษัท (Query 1 รอบ)
+      db.select({
+        startTime: shiftsTable.startTime,
+        endTime: shiftsTable.endTime
+      })
+      .from(shiftsTable)
+      .where(and(
+        eq(shiftsTable.companyId, companyId || ""),
+        isNull(shiftsTable.userId) // ดึงกะที่เป็นค่ากลางของบริษัท (ถ้ามี)
+      ))
+      .limit(1)
     ]);
 
     // 4. Mapping ข้อมูลให้ตรงกับ Client Page
@@ -153,20 +174,45 @@ export default async function AdminDashboardPage() {
         siteName: emp?.siteName || "ไม่ระบุ",
         position: String(emp?.positionName || "ไม่ระบุ"),
         avatarUrl: emp?.avatarUrl || null,
+        // ✅ เพิ่มเวลาสำหรับการแก้ไขพนักงาน
+        startTime: emp?.startTime || null,
+        endTime: emp?.endTime || null,
       };
     });
 
-    const attendance = (rawAttendance || []).map(at => ({
-      id: String(at?.id || ""),
-      date: at?.date ? String(at.date) : "",
-      checkIn: at?.checkIn || null, 
-      checkOut: at?.checkOut || null,
-      userId: String(at?.user_id || ""),
-      employeeName: `${at?.firstName || ''} ${at?.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
-      siteName: at?.siteName || "General Site",
-      locationIn: String(at?.locationIn || "-"),
-      imageIn: at?.imageIn || null
-    }));
+    // ✅ จัดการเวลามาตรฐาน (Standard Time) สำหรับพนักงานใหม่
+    const standardTime = {
+      startTime: defaultShiftData?.[0]?.startTime || "08:00",
+      endTime: defaultShiftData?.[0]?.endTime || "17:00"
+    };
+
+    const attendance = (rawAttendance || []).map(at => {
+      // 🕒 Logic ตรวจสอบการมาสายรายวัน
+      let isLate = 0;
+      if (at?.checkIn && at?.startTime) {
+        const checkInTime = parseInt(at.checkIn.replace(':', ''), 10);
+        const startTime = parseInt(at.startTime.replace(':', ''), 10);
+        if (checkInTime > startTime) {
+          isLate = 1;
+        }
+      }
+    
+      return {
+        id: String(at?.id || ""),
+        date: at?.date ? String(at.date) : "",
+        checkIn: at?.checkIn || null, 
+        checkOut: at?.checkOut || null,
+        userId: String(at?.user_id || ""),
+        employeeName: `${at?.firstName || ''} ${at?.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
+        siteName: at?.siteName || "ทุกไซต์",
+        locationIn: String(at?.locationIn || "-"),
+        imageIn: at?.imageIn || null,
+        startTime: at?.startTime || null,
+        endTime: at?.endTime || null,
+        // ✅ ใส่ไว้ตรงนี้เพื่อให้ UI ในตารางลงเวลาใช้งานได้
+        isLate: isLate, 
+      };
+    });
 
     const leaves = (rawLeaves || []).map(l => ({
       id: String(l?.id || ""),
@@ -208,7 +254,8 @@ export default async function AdminDashboardPage() {
       admin: adminProfile,
       sites: sites,
       positions: positions,
-      departments: departments
+      departments: departments,
+      standardTime: standardTime // ✅ ส่งเวลามาตรฐานไปใช้ใน Client Page
     };
 
     // 🛡️ ป้องกัน Error undefined ในขั้นตอนสุดท้าย

@@ -16,6 +16,7 @@ import { saveSiteAction,
          updatePositionAction,  
          updateAdminProfileAction,
         } from "./actions"; 
+import { usersTable } from '@/db/schema';
         
  
 export const dynamic = "force-dynamic";
@@ -440,30 +441,30 @@ const handleEditPos = (pos: any) => {
     );
   };
 
-  // const handleAddDepartment = async (e) => {
-  //   e.preventDefault();
-  //   const form = e.currentTarget;
-  //   const formData = new FormData(form);
-  //   const name = formData.get("name");
+  const handleAddDepartment = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const name = formData.get("name");
   
-  //   if (!name) return;
-  //   setIsProcessing(true);
-  //   try {
-  //     const result = await createDepartmentAction(name);
-  //     if (result.success) {
-  //       form.reset();
-  //       setAllDepartments((prev) => [...prev, { id: crypto.randomUUID(), name: name }]); 
-  //       setShowAddDepartment(false);
-  //       alert(`✅ เพิ่มแผนก "${name}" เรียบร้อยแล้ว`);
-  //     } else {
-  //       alert(result.error || "ไม่สามารถบันทึกแผนกได้");
-  //     }
-  //   } catch (error) {
-  //     alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
-  //   } finally {
-  //     setIsProcessing(false);
-  //   }
-  // };
+    if (!name) return;
+    setIsProcessing(true);
+    try {
+      const result = await createDepartmentAction(name);
+      if (result.success) {
+        form.reset();
+        setAllDepartments((prev) => [...prev, { id: crypto.randomUUID(), name: name }]); 
+        setShowAddDepartment(false);
+        alert(`✅ เพิ่มแผนก "${name}" เรียบร้อยแล้ว`);
+      } else {
+        alert(result.error || "ไม่สามารถบันทึกแผนกได้");
+      }
+    } catch (error) {
+      alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
 const handleGetCurrentLocation = () => {
   setIsProcessing(true); // เริ่มกระบวนการโหลด
@@ -547,6 +548,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
     setEditingEmployee(emp);
     setPreviewImage(emp.avatarUrl || null); 
     setShowRegister(true);
+    setSelectedRole(emp.role || "employee");
   };
 
   const handleImageChange = (e) => {
@@ -652,6 +654,9 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         positionId: data.positionId,
         siteId: (siteInput === "all_sites" || siteInput === "") ? null : siteInput,
         departmentId: data.departmentId, 
+        // ✅ เพิ่มข้อมูลเวลาทำงานส่งไปยัง Action (ห้ามลบ/ห้ามลด logic เดิม)
+        startTime: data.startTime,
+        endTime: data.endTime,
       };
   
       const result = await saveStaffAction(payload); 
@@ -795,15 +800,24 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                 </div>
               </div>
 
-              {/* --- 🕹️ ส่วนปุ่ม (คงเดิมตามที่คุณต้องการ) --- */}
+              {/* --- 🕹️ ส่วนปุ่ม --- */}
               <div className="flex flex-col gap-4 w-full lg:max-w-[360px]">
-                <div className="grid grid-cols-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden w-full">
+                {/* แก้ไขส่วนนี้: เพิ่มปุ่มแผนกเข้าไปใน Grid เป็น 3 คอลัมน์ชั่วคราว */}
+                <div className="grid grid-cols-3 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden w-full">
                   <button 
                     onClick={() => setShowAddSite(true)}
                     className="flex items-center justify-center gap-2 py-3.5 sm:py-4 bg-emerald-50/30 hover:bg-emerald-50 border-r border-slate-200 group transition-colors"
                   >
                     <span className="text-base sm:text-lg">📍</span>
                     <span className="text-[11px] sm:text-xs font-black text-emerald-800 uppercase tracking-tighter">ไซต์งาน</span>
+                  </button>
+
+                  <button 
+                    onClick={() => setShowAddDepartment(true)}
+                    className="flex items-center justify-center gap-2 py-3.5 sm:py-4 bg-indigo-50/30 hover:bg-indigo-50 border-r border-slate-200 group transition-colors"
+                  >
+                    <span className="text-base sm:text-lg">🏢</span>
+                    <span className="text-[11px] sm:text-xs font-black text-indigo-800 uppercase tracking-tighter">แผนก</span>
                   </button>
 
                   <button 
@@ -1032,6 +1046,10 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                       <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">รูป</th>
                       <th className="py-5 px-6 text-left bg-white border-b border-gray-100">พนักงาน</th>
                       <th className="py-5 px-6 text-left bg-white border-b border-gray-100">วันที่</th>
+                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">ไซต์งาน</th>
+                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">รอบเข้างาน</th>
+                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">สถานะการเข้างาน</th>
+                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">สถานะการออกงาน</th>
                       <th className="py-5 px-6 text-center bg-white border-b border-gray-100">เวลาเข้า</th>
                       <th className="py-5 px-6 text-center bg-white border-b border-gray-100">เวลาออก</th>
                       <th className="py-5 px-6 text-center bg-white border-b border-gray-100">รูปเข้างาน</th>
@@ -1064,21 +1082,48 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                             {a.date ? new Date(a.date).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit' }) : "-"}
                           </td>
                           <td className="py-4 px-6 text-center font-black text-green-600 text-base">
-                            {a.checkIn && !isNaN(new Date(a.checkIn).getTime()) ? (
-                              new Date(a.checkIn).toLocaleTimeString('th-TH', { 
-                                hour: '2-digit', 
-                                minute: '2-digit', 
-                                hour12: false 
-                              })
+                            <div className="font-black text-gray-600">{a.siteName || "ไม่ระบุชื่อ"}</div>
+                          </td>
+                          <td className="py-4 px-6 font-bold text-gray-600">
+                            <div className="flex flex-col">
+                              {a.startTime && a.endTime && (
+                                <span className="text-[15px] text-black-600">
+                                  {a.startTime.slice(0, 5)} - {a.endTime.slice(0, 5)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          {/* ส่วนสถานะการเข้างานตามเงื่อนไขที่สั่ง */}
+                          <td className="p-6 font-bold whitespace-nowrap">
+                            {a.isLate === 1 ? (
+                              <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
+                                ⚠️ สาย
+                              </span>
+                            ) : (
+                              <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
+                                ✅ ปกติ
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-6 font-bold whitespace-nowrap">
+                            {a.isEarlyExit === 1 ? (
+                              <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
+                                ⚠️ ออกก่อนเวลา
+                              </span>
+                            ) : (
+                              <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
+                                ✅ ปกติ
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-6 text-center font-black text-green-600 text-base">
+                            {a.checkIn ? (
+                              a.checkIn.split(':').slice(0, 2).join(':')
                             ) : "-"}
                           </td>
                           <td className="py-4 px-6 text-center font-black text-red-600 text-base">
-                            {a.checkIn && !isNaN(new Date(a.checkIn).getTime()) ? (
-                              new Date(a.checkOut).toLocaleTimeString('th-TH', { 
-                                hour: '2-digit', 
-                                minute: '2-digit', 
-                                hour12: false 
-                              })
+                            {a.checkOut ? (
+                              a.checkOut.split(':').slice(0, 2).join(':')
                             ) : "-"}
                           </td>
                           <td className="py-4 px-6 text-center">
@@ -1254,7 +1299,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         </div>
       </main>
 
-      {/* --- 💼 MODAL: ADD DEPARTMENT ---
+      {/* --- 💼 MODAL: ADD DEPARTMENT --- */}
       {showAddDepartment && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
@@ -1268,7 +1313,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             </form>
           </div>
         </div>
-      )} */}
+      )}
 
 
 {/* --- 📍 MODAL: ADD SITE --- */}
@@ -1609,124 +1654,206 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
   </div>
 )}
 
-      {/* --- 👤 MODAL: REGISTRATION & EDIT --- */}
-      {showRegister && (
-        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[500] p-4 backdrop-blur-md animate-in fade-in duration-300">
-          <form onSubmit={handleSaveEmployee} className="bg-white p-8 rounded-[3.5rem] w-full max-w-2xl space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl custom-scrollbar">
-            <h2 className="font-black text-2xl text-slate-900 uppercase italic border-b pb-4">
-              {editingEmployee ? "✏️ แก้ไขข้อมูลพนักงาน" : "👤 ลงทะเบียนพนักงานใหม่"}
-            </h2>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="col-span-1 sm:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">รูปโปรไฟล์)</label>
-                <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
-                  <div className="w-16 h-16 rounded-full bg-slate-200 overflow-hidden flex-shrink-0 border-2 border-white shadow-sm relative">
-                    <img 
-                      src={previewImage || editingEmployee?.avatarUrl || "https://ui-avatars.com/api/?name=User"} 
-                      className="w-full h-full object-cover"
-                      alt="Preview"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <input 
-                      type="file" 
-                      name="avatar" 
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-700 cursor-pointer"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Username {editingEmployee && "(แก้ไขไม่ได้)"}</label>
-                <input 
-                  name="userName" 
-                  defaultValue={editingEmployee?.userName} 
-                  placeholder="ชื่อผู้ใช้งาน...(ภาษาอังกฤษ/ตัวเลข)" 
-                  required 
-                  disabled={!!editingEmployee}
-                  // ✅ เพิ่มบรรทัดนี้เพื่อดักจับและลบตัวอักษรที่ไม่ใช่ภาษาอังกฤษ/ตัวเลข
-                  onInput={(e) => {
-                    e.currentTarget.value = e.currentTarget.value.replace(/[^a-zA-Z0-9]/g, '');
-                  }}
-                  className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${
-                    editingEmployee 
-                      ? 'bg-slate-100 text-slate-400 border-transparent' 
-                      : 'bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white'
-                  }`} 
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Password {editingEmployee && "(ล็อคไว้)"}</label>
-                <input 
-                  name="password" 
-                  type="password" 
-                  placeholder={editingEmployee ? "••••••••" : "รหัสผ่าน"} 
-                  required={!editingEmployee} 
-                  disabled={!!editingEmployee}
-                  className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${editingEmployee ? 'bg-slate-100 text-slate-400 border-transparent' : 'bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white'}`} 
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ชื่อจริง</label>
-                <input name="firstName" defaultValue={editingEmployee?.firstName} required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">นามสกุล</label>
-                <input name="lastName" defaultValue={editingEmployee?.lastName} required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all" />
-              </div>
-
-              {/* <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">แผนก</label>
-                <select name="departmentId" defaultValue={editingEmployee?.departmentId || ""} required className="w-full bg-slate-50 p-4 rounded-2xl font-bold outline-none border border-transparent focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer">
-                  <option value="" disabled hidden>เลือกแผนก...</option>
-                  {departments?.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-              </div> */}
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ระดับสิทธิ์ (Role)</label>
-                <select name="role" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)} className="w-full bg-slate-50 p-4 rounded-2xl font-bold outline-none border border-transparent focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer">
-                  <option value="employee">Employee</option>
-                  <option value="leader">Leader</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ตำแหน่ง</label>
-                <select name="positionId" defaultValue={editingEmployee?.positionId} required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all appearance-none cursor-pointer">
-                  <option value="">เลือกตำแหน่ง...</option>
-                  {positions.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ไซต์งาน</label>
-                <select name="site_id" defaultValue={editingEmployee?.siteId} required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all appearance-none cursor-pointer">
-                  <option value="">เลือกไซต์งาน...</option>
-                  {selectedRole === 'leader' && (
-                    <option value="all_sites" className="text-blue-600 font-extrabold bg-blue-50">🌐 ทุกไซต์งาน (ALL SITES)</option>
-                  )}
-                  {sites.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
+{/* --- 👤 MODAL: REGISTRATION & EDIT --- */}
+{showRegister && (
+  <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[500] p-4 backdrop-blur-md animate-in fade-in duration-300">
+    <form onSubmit={handleSaveEmployee} className="bg-white p-8 rounded-[3.5rem] w-full max-w-2xl space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl custom-scrollbar">
+      <h2 className="font-black text-2xl text-slate-900 uppercase italic border-b pb-4">
+        {editingEmployee ? "✏️ แก้ไขข้อมูลพนักงาน" : "👤 ลงทะเบียนพนักงานใหม่"}
+      </h2>
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* รูปโปรไฟล์ */}
+        <div className="col-span-1 sm:col-span-2 space-y-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">รูปโปรไฟล์</label>
+          <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
+            <div className="w-16 h-16 rounded-full bg-slate-200 overflow-hidden flex-shrink-0 border-2 border-white shadow-sm relative">
+              <img 
+                src={previewImage || editingEmployee?.avatarUrl || "https://ui-avatars.com/api/?name=User"} 
+                className="w-full h-full object-cover"
+                alt="Preview"
+              />
             </div>
-
-            <div className="flex justify-end gap-3 pt-6 border-t mt-4">
-              <button type="button" disabled={isProcessing} onClick={() => { setShowRegister(false); setEditingEmployee(null); setPreviewImage(null); setSelectedRole("employee"); }} className="px-6 py-4 font-bold text-slate-400 uppercase text-xs hover:text-slate-600 transition-colors disabled:opacity-50">ยกเลิก</button>
-              <button type="submit" disabled={isProcessing} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 hover:bg-slate-800 transition-all disabled:bg-slate-300 flex items-center gap-2">
-                {isProcessing ? "กำลังบันทึก..." : editingEmployee ? "💾 บันทึกการแก้ไข" : "➕ ลงทะเบียนพนักงาน"}
-              </button>
+            <div className="flex-1">
+              <input 
+                type="file" 
+                name="avatar" 
+                accept="image/*"
+                onChange={handleImageChange}
+                className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-700 cursor-pointer"
+              />
             </div>
-          </form>
+          </div>
         </div>
-      )}
 
-{/* --- 📊 หน้าจัดการรายงานแบบเต็มจอ (Report Generator) --- */}
+        {/* Username */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Username {editingEmployee && "(แก้ไขไม่ได้)"}</label>
+          <input 
+            name="userName" 
+            defaultValue={editingEmployee?.userName} 
+            placeholder="ชื่อผู้ใช้งาน..." 
+            required 
+            disabled={!!editingEmployee}
+            onInput={(e) => {
+              e.currentTarget.value = e.currentTarget.value.replace(/[^a-zA-Z0-9]/g, '');
+            }}
+            className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${
+              editingEmployee 
+                ? 'bg-slate-100 text-slate-400 border-transparent' 
+                : 'bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white'
+            }`} 
+          />
+        </div>
+
+        {/* Password */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Password {editingEmployee && "(ล็อคไว้)"}</label>
+          <input 
+            name="password" 
+            type="password" 
+            placeholder={editingEmployee ? "••••••••" : "รหัสผ่าน"} 
+            required={!editingEmployee} 
+            disabled={!!editingEmployee}
+            className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${editingEmployee ? 'bg-slate-100 text-slate-400 border-transparent' : 'bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white'}`} 
+          />
+        </div>
+
+        {/* ชื่อ-นามสกุล */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ชื่อจริง</label>
+          <input name="firstName" defaultValue={editingEmployee?.firstName} required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">นามสกุล</label>
+          <input name="lastName" defaultValue={editingEmployee?.lastName} required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all" />
+        </div>
+
+        {/* ✨ ส่วนที่จะแสดงเฉพาะในโหมดแก้ไข (Edit Mode) เท่านั้น ✨ */}
+        {editingEmployee && (
+          <>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-blue-500 uppercase ml-2">เวลาเข้างาน</label>
+              <input 
+                type="time" 
+                name="startTime" 
+                defaultValue={editingEmployee?.startTime || standardTime.startTime} 
+                className="w-full bg-blue-50/50 p-4 rounded-2xl font-bold border border-blue-100 focus:border-blue-500 outline-none transition-all" 
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-blue-500 uppercase ml-2">เวลาเลิกงาน</label>
+              <input 
+                type="time" 
+                name="endTime" 
+                defaultValue={editingEmployee?.endTime || standardTime.endTime} 
+                className="w-full bg-blue-50/50 p-4 rounded-2xl font-bold border border-blue-100 focus:border-blue-500 outline-none transition-all" 
+              />
+            </div>
+          </>
+        )}
+
+        {/* ระดับสิทธิ์ (Role) */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ระดับสิทธิ์ (Role)</label>
+          <select 
+            name="role" 
+            value={selectedRole} 
+            onChange={(e) => setSelectedRole(e.target.value)} 
+            className="w-full bg-slate-50 p-4 rounded-2xl font-bold outline-none border border-transparent focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
+          >
+            <option value="employee">Employee</option>
+            <option value="leader">Leader</option>
+          </select>
+        </div>
+
+        {/* แผนก (Department) - เก็บไว้ 1 อันตามสั่ง */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">แผนก (Department)</label>
+          <select 
+            name="departmentId" 
+            key={editingEmployee ? `edit-dept-${editingEmployee.id}` : 'reg-dept'} 
+            defaultValue={editingEmployee?.departmentId || ""} 
+            required 
+            className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all appearance-none cursor-pointer"
+          >
+            <option value="">เลือกแผนก...</option>
+            {departments?.map((d: any) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* ตำแหน่งงาน (Position) */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ตำแหน่งงาน (Position)</label>
+          <select 
+            name="positionId" 
+            key={editingEmployee ? `edit-pos-${editingEmployee.id}` : 'reg-pos'} 
+            defaultValue={editingEmployee?.positionId || ""} 
+            required 
+            className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all appearance-none cursor-pointer"
+          >
+            <option value="">เลือกตำแหน่ง...</option>
+            {positions?.map((p: any) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* ไซต์งาน */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">ไซต์งาน</label>
+          <select 
+            name="site_id" 
+            key={editingEmployee ? `edit-site-${editingEmployee.id}` : 'reg-site'} 
+            defaultValue={
+              (selectedRole === 'leader' && !editingEmployee?.siteId) 
+                ? "all_sites" 
+                : (editingEmployee?.siteId || "")
+            }
+            required 
+            className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all appearance-none cursor-pointer"
+          >
+            <option value="">เลือกไซต์งาน...</option>
+            {selectedRole === 'leader' && (
+              <option value="all_sites" className="text-blue-600 font-extrabold bg-blue-50">🌐 ทุกไซต์งาน (ALL SITES)</option>
+            )}
+            {sites.map((s: any) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-3 pt-6 border-t mt-4">
+        <button 
+          type="button" 
+          disabled={isProcessing} 
+          onClick={() => { 
+            setShowRegister(false); 
+            setEditingEmployee(null); 
+            setPreviewImage(null); 
+            setSelectedRole("employee"); 
+          }} 
+          className="px-6 py-4 font-bold text-slate-400 uppercase text-xs hover:text-slate-600 transition-colors disabled:opacity-50"
+        >
+          ยกเลิก
+        </button>
+        <button 
+          type="submit" 
+          disabled={isProcessing} 
+          className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 hover:bg-slate-800 transition-all disabled:bg-slate-300 flex items-center gap-2"
+        >
+          {isProcessing ? "กำลังบันทึก..." : editingEmployee ? "💾 บันทึกการแก้ไข" : "➕ ลงทะเบียนพนักงาน"}
+        </button>
+      </div>
+    </form>
+  </div>
+)}
+
+
+{/* --- 📊 MODAL (Report Generator) --- */}
 {showFilterModal && (
   <div className="fixed inset-0 bg-slate-100 z-[500] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 font-sans">
     

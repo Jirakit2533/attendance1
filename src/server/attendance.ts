@@ -1,17 +1,33 @@
 "use server";
 
-import { db } from "@/db/db"; // ปรับ path ตามโปรเจกต์คุณ
-import { attendanceTable } from "@/db/schema";
-import { and, eq, desc } from "drizzle-orm";
+import { db } from "@/db/db"; 
+import { attendanceTable, shiftsTable, temporaryShiftsTable } from "@/db/schema";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-// ดึงข้อมูลประวัติการเข้างาน (ใช้ใน Server Component)
+// ดึงข้อมูลประวัติการเข้างานพร้อมข้อมูลกะงาน
 export async function getAttendanceHistory(userId: string) {
-  return await db.query.attendanceTable.findMany({
-    where: eq(attendanceTable.user_id, userId),
-    orderBy: [desc(attendanceTable.date)],
-    limit: 30, // ดึงย้อนหลัง 30 รายการ
-  });
+  return await db
+    .select({
+      id: attendanceTable.id,
+      date: attendanceTable.date,
+      checkIn: attendanceTable.checkIn,
+      checkOut: attendanceTable.checkOut,
+      imageIn: attendanceTable.imageIn,
+      imageOut: attendanceTable.imageOut,
+      locationIn: attendanceTable.locationIn,
+      isLate: attendanceTable.isLate,
+      isEarlyExit: attendanceTable.isEarlyExit,
+      // ดึงเวลาจากกะปกติหรือกะพิเศษ
+      startTime: sql`COALESCE(${temporaryShiftsTable.endTime}, ${shiftsTable.startTime})`,
+      endTime: sql`COALESCE(${temporaryShiftsTable.endTime}, ${shiftsTable.endTime})`,
+    })
+    .from(attendanceTable)
+    .leftJoin(shiftsTable, eq(attendanceTable.shift_id, shiftsTable.id))
+    .leftJoin(temporaryShiftsTable, eq(attendanceTable.temp_shift_id, temporaryShiftsTable.id))
+    .where(eq(attendanceTable.user_id, userId))
+    .orderBy(desc(attendanceTable.date))
+    .limit(30);
 }
 
 // บันทึกเข้างาน
@@ -22,7 +38,7 @@ export async function checkInAction(userId: string, imageIn: string, locationIn:
     await db.insert(attendanceTable).values({
       user_id: userId,
       date: today,
-      checkIn: new Date(),
+      checkIn: sql`timezone('Asia/Bangkok', now())::time`,
       imageIn,
       locationIn,
     });
@@ -42,7 +58,7 @@ export async function checkOutAction(userId: string, imageOut: string, locationO
 
     await db.update(attendanceTable)
       .set({
-        checkOut: new Date(),
+        checkOut: sql`timezone('Asia/Bangkok', now())::time`,
         imageOut,
         locationOut,
       })
@@ -56,6 +72,7 @@ export async function checkOutAction(userId: string, imageOut: string, locationO
     revalidatePath("/employee");
     return { success: true };
   } catch (error) {
+    console.error("Check-out Error:", error);
     return { success: false, message: "ไม่สามารถบันทึกเวลาออกงานได้" };
   }
 }

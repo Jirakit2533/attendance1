@@ -47,6 +47,7 @@ export default async function LeaderPage() {
   const isAllSitesLeader = !currentSite;
 
   try {
+    // ปรับเงื่อนไข siteCondition ให้เป็นค่าว่างถ้าเป็น Leader ทุกไซต์ (isAllSitesLeader)
     const siteCondition = isAllSitesLeader ? [] : [eq(usersTable.site_id, currentSite!)];
 
     const [myRecordsRaw, allLeaveRequests, teamAttendanceRaw] = await Promise.all([
@@ -76,18 +77,21 @@ export default async function LeaderPage() {
           .where(and(
             eq(usersTable.departmentId, currentDept),
             ...siteCondition,
+            ne(usersTable.id, user.id), // ไม่เห็นการลาของตัวเองในตารางทีม
             isNull(usersTable.deletedAt)
           ))
           .orderBy(desc(leaveTable.startDate))
         : Promise.resolve([]),
 
-      // 4. ประวัติเข้างานของทีม
+      // 4. ประวัติเข้างานของทีม (ใช้ leftJoin เพื่อให้ข้อมูลแสดงผลได้ชัวร์ขึ้น)
       currentDept
         ? db.select({
             id: attendanceTable.id,
             userId: attendanceTable.user_id,
             firstName: usersTable.firstName,
             lastName: usersTable.lastName,
+            userName: usersTable.userName, 
+            avatarUrl: usersTable.avatarUrl, 
             position: positionsTable.name,
             site: sitesTable.name,
             role: usersTable.role,
@@ -98,15 +102,18 @@ export default async function LeaderPage() {
             locationOut: attendanceTable.locationOut,
             imageIn: attendanceTable.imageIn,
             imageOut: attendanceTable.imageOut,
+            isLate: attendanceTable.isLate, 
+            startTime: attendanceTable.startTime, 
+            endTime: attendanceTable.endTime, 
           })
           .from(attendanceTable)
-          .innerJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
+          .leftJoin(usersTable, eq(attendanceTable.user_id, usersTable.id)) 
           .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
           .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
           .where(and(
             eq(usersTable.departmentId, currentDept),
             ...siteCondition,
-            ne(usersTable.id, user.id),
+            ne(usersTable.id, user.id), // ห้ามเห็นชื่อตัวเองในตารางนี้
             isNull(usersTable.deletedAt)
           ))
           .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
@@ -124,10 +131,9 @@ export default async function LeaderPage() {
       myRecords: myRecordsRaw.map(r => ({
         ...r,
         location: r.locationIn || r.locationOut || "ไม่ได้ระบุพิกัด",
-        // ส่ง Property ที่ UI เรียกใช้
-        position: user.positionName || "ไม่ระบุ", 
-        site: user.siteName || "ทุกไซต์งาน",
-        role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน" // ใช้เช็คสี Dot
+        position: user.position || "ไม่ระบุ", 
+        site: user.site || "ทุกไซต์งาน",
+        role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน"
       })),
       // ข้อมูลการเข้างานของทีม (ตารางที่ 2)
       initialAttendance: teamAttendanceRaw.map(t => ({

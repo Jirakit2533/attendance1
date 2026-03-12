@@ -162,12 +162,12 @@ export default function EmployeeClientPage({
     }).format(now);
 
     const todayRecord = records.find((r: any) => r.date === todayStr);
+    
     return {
-      hasCheckedIn: !!todayRecord?.checkIn && todayRecord.checkIn !== "-",
-      hasCheckedOut:
-        !!todayRecord?.checkOut &&
-        todayRecord.checkOut !== "-" &&
-        todayRecord.checkOut !== null,
+      // เช็คว่ามีค่า checkIn และไม่ใช่ค่าว่าง/ขีด
+      hasCheckedIn: !!todayRecord?.checkIn && todayRecord.checkIn !== "-" && todayRecord.checkIn !== null,
+      // เช็คว่ามีค่า checkOut และไม่ใช่ค่าว่าง/ขีด
+      hasCheckedOut: !!todayRecord?.checkOut && todayRecord.checkOut !== "-" && todayRecord.checkOut !== null,
       record: todayRecord,
     };
   }, [records]);
@@ -495,6 +495,11 @@ export default function EmployeeClientPage({
               <p className="text-gray-500 font-bold text-base sm:text-lg tracking-tight">
                 ไซต์งาน : {userProfile.site || "ทุกไซต์งาน" }
               </p>
+              <p className="text-gray-500 font-bold text-base sm:text-lg tracking-tight">
+                รอบเข้างาน : {userProfile.startTime && userProfile.endTime 
+                  ? `${userProfile.startTime.slice(0, 5)} - ${userProfile.endTime.slice(0, 5)}` 
+                  : "ยังไม่ระบุ"}
+              </p>
             </div>
 
             {/* Badges ด้านล่าง */}
@@ -628,132 +633,165 @@ export default function EmployeeClientPage({
           {!showLeaveForm && (
             <>
               <div className="space-y-6">
-                <div className="flex items-center justify-between border-b border-gray-50 pb-6">
+  <div className="flex items-center justify-between border-b border-gray-50 pb-6">
+    <div className="flex items-center gap-3">
+      <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
+      <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">
+        ประวัติ <span className="text-gray-300">การเข้างาน</span>
+      </h2>
+    </div>
+  </div>
+  <div className="overflow-x-auto rounded-[2rem] border border-gray-50">
+    {/* ปรับ min-w เพิ่มขึ้นเป็น 1200px เพื่อให้มีพื้นที่พอสำหรับทุกคอลัมน์ */}
+    <table className="w-full text-sm min-w-[1200px] table-auto">
+      <thead className="bg-gray-50/50 text-gray-400 uppercase text-[10px] font-black tracking-widest">
+        <tr>
+          <th className="p-6 text-left">วันที่</th>
+          <th className="p-6 text-left">รอบเข้างาน</th>
+          <th className="p-6 text-left">สถานะการเข้า-ออก</th>
+          <th className="p-6 text-left">เวลาเข้า / รูปถ่าย</th>
+          <th className="p-6 text-left">เวลาออก / รูปถ่าย</th>
+          <th className="p-6 text-center">
+            ตำแหน่ง / เขตรับผิดชอบ / ระดับสิทธิ์
+          </th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-50">
+        {records.length === 0 ? (
+          <tr>
+            <td
+              colSpan={6}
+              className="p-20 text-center text-gray-300 font-bold italic"
+            >
+              ยังไม่มีข้อมูลการเข้างานในระบบ
+            </td>
+          </tr>
+        ) : (
+          records.map((r, i) => (
+            <tr
+              key={i}
+              className="hover:bg-blue-50/10 transition-colors"
+            >
+              <td className="p-6 font-bold text-gray-800 whitespace-nowrap">
+                {r.date}
+              </td>
+              <td className="py-4 px-6 font-bold text-gray-600">
+                <div className="flex flex-col gap-1 whitespace-nowrap">
+                  {r.startTime && r.endTime ? (
+                    <span className="text-[15px] text-gray-800">
+                      {r.startTime.slice(0, 5)} - {r.endTime.slice(0, 5)}
+                    </span>
+                  ) : (
+                    <span className="text-[14px] font-normal text-gray-400">ไม่มีกะงาน</span>
+                  )}
+                </div>
+              </td>
+              {/* ส่วนสถานะการเข้างานแบบเรียงซ้ายขวาพร้อมขีดคั่น */}
+              <td className="p-6 font-bold whitespace-nowrap">
+                <div className="flex items-center gap-0 border border-slate-200 rounded-lg overflow-hidden shadow-sm w-fit">
+                  
+                  {/* 1. ส่วนการเข้างาน (Check-in) */}
+                  <div className="px-3 py-1.5 flex items-center justify-center min-w-[80px]">
+                    {r.isLate === 1 ? (
+                      <span className="text-red-600 text-sm">⚠️ สาย</span>
+                    ) : (
+                      <span className="text-emerald-600 text-sm">✅ ปกติ</span>
+                    )}
+                  </div>
+
+                  {/* เส้นขีดคั่นแนวตั้ง */}
+                  <div className="h-4 w-[1px] bg-slate-300"></div>
+
+                  {/* 2. ส่วนการออกงาน (Check-out) */}
+                  <div className="px-3 py-1.5 flex items-center justify-center min-w-[100px]">
+                    {!r.checkOut || r.checkOut === "-" ? (
+                      <span className="text-slate-400 text-sm font-normal">-</span>
+                    ) : r.isEarlyExit === 1 ? (
+                      <span className="text-orange-600 text-sm">🏃 เลิกก่อนเวลา</span>
+                    ) : (
+                      <span className="text-emerald-600 text-sm">✅ ปกติ</span>
+                    )}
+                  </div>
+
+                </div>
+              </td>
+              <td className="p-6">
+                <div className="flex items-center gap-3 whitespace-nowrap">
+                  <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl">
+                    {r.checkIn}
+                  </span>
+                  {r.imageUrl && (
+                    <Image
+                      src={r.imageUrl}
+                      alt="In"
+                      width={40}
+                      height={40}
+                      className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10"
+                      unoptimized
+                    />
+                  )}
+                </div>
+              </td>
+              <td className="p-6">
+                <div className="flex items-center gap-3 whitespace-nowrap">
+                  <span
+                    className={
+                      r.checkOut === "-"
+                        ? "text-gray-300 font-black"
+                        : "text-slate-900 font-black bg-slate-100 px-3 py-1.5 rounded-xl"
+                    }
+                  >
+                    {r.checkOut}
+                  </span>
+                  {r.checkOutImageUrl && (
+                    <Image
+                      src={r.checkOutImageUrl}
+                      alt="Out"
+                      width={40}
+                      height={40}
+                      className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10"
+                      unoptimized
+                    />
+                  )}
+                </div>
+              </td>
+              <td className="p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-center gap-3 py-1 whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight bg-indigo-600 text-white px-3 py-1 rounded-xl shadow-sm">
+                      {r.position}
+                    </span>
+                  </div>
                   <div className="flex items-center gap-3">
-                    <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
-                    <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">
-                      ประวัติ <span className="text-gray-300">การเข้างาน</span>
-                    </h2>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-lg border border-gray-200">
+                      <span className="text-base">📍</span>
+                      <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
+                        {r.site}
+                      </span>
+                    </div>
+                    <span className="hidden sm:block text-gray-300">|</span>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-2.5 h-2.5 rounded-full shadow-inner ${
+                          r.role === "หัวหน้างาน"
+                            ? "bg-amber-400"
+                            : "bg-emerald-400"
+                        }`}
+                      ></div>
+                      <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
+                        {r.role}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="overflow-x-auto rounded-[2rem] border border-gray-50">
-                  <table className="w-full text-sm min-w-[800px]">
-                    <thead className="bg-gray-50/50 text-gray-400 uppercase text-[10px] font-black tracking-widest">
-                      <tr>
-                        <th className="p-6 text-left">วันที่</th>
-                        <th className="p-6 text-left">เวลาเข้า / รูปถ่าย</th>
-                        <th className="p-6 text-left">เวลาออก / รูปถ่าย</th>
-                        <th className="p-6 text-left">
-                          ตำแหน่ง / เขตรับผิดชอบ / ระดับสิทธิ์
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {records.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="p-20 text-center text-gray-300 font-bold italic"
-                          >
-                            ยังไม่มีข้อมูลการเข้างานในระบบ
-                          </td>
-                        </tr>
-                      ) : (
-                        records.map((r, i) => (
-                          <tr
-                            key={i}
-                            className="hover:bg-blue-50/10 transition-colors"
-                          >
-                            <td className="p-6 font-bold text-gray-800">
-                              {r.date}
-                            </td>
-                            <td className="p-6">
-                              <div className="flex items-center gap-3">
-                                <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl">
-                                  {r.checkIn}
-                                </span>
-                                {r.imageUrl && (
-                                  <Image
-                                    src={r.imageUrl}
-                                    alt="In"
-                                    width={40}
-                                    height={40}
-                                    className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10"
-                                    unoptimized
-                                  />
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-6">
-                              <div className="flex items-center gap-3">
-                                <span
-                                  className={
-                                    r.checkOut === "-"
-                                      ? "text-gray-300 font-black"
-                                      : "text-slate-900 font-black bg-slate-100 px-3 py-1.5 rounded-xl"
-                                  }
-                                >
-                                  {r.checkOut}
-                                </span>
-                                {r.checkOutImageUrl && (
-                                  <Image
-                                    src={r.checkOutImageUrl}
-                                    alt="Out"
-                                    width={40}
-                                    height={40}
-                                    className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10"
-                                    unoptimized
-                                  />
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-6">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-1">
-                                {/* แถวที่ 1: ตำแหน่ง (เน้นใหญ่สุด) */}
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-black text-gray-900 uppercase tracking-tight bg-indigo-600 text-white px-3 py-1 rounded-xl shadow-sm">
-                                    {r.position}
-                                  </span>
-                                </div>
-
-                                {/* แถวที่ 2: ไซต์งาน และ Role (เน้นดูง่าย) */}
-                                <div className="flex items-center gap-3">
-                                  {/* ไซต์งาน */}
-                                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-lg border border-gray-200">
-                                    <span className="text-base">📍</span>
-                                    <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
-                                      {r.site}
-                                    </span>
-                                  </div>
-
-                                  {/* เส้นแบ่ง (แสดงเฉพาะบนจอใหญ่) */}
-                                  <span className="hidden sm:block text-gray-300">
-                                    |
-                                  </span>
-
-                                  {/* ระดับ/Role */}
-                                  <div className="flex items-center gap-2">
-                                    <div
-                                      className={`w-2.5 h-2.5 rounded-full shadow-inner ${
-                                        r.role === "หัวหน้างาน"
-                                          ? "bg-amber-400"
-                                          : "bg-emerald-400"
-                                      }`}
-                                    ></div>
-                                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
-                                      {r.role}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
 
               <div className="pt-10 border-t border-gray-50">
                 <div className="flex items-center gap-3 mb-8">

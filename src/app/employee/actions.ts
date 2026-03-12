@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db/db";
-import { attendanceTable, leaveTable, usersTable } from "@/db/schema"; // ✅ เพิ่ม usersTable
+import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable } from "@/db/schema"; // ✅ เพิ่ม usersTable
 import { eq, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { uploadToDrive } from "@/lib/uploadthing-server"; 
@@ -9,44 +9,65 @@ import * as bcrypt from "bcryptjs";
 
 
 /* -------------------------------------------------------------------------- */
-/* ATTENDANCE ACTIONS (เข้า/ออกงาน)                                           */
+/* ATTENDANCE ACTIONS (เข้า/ออกงาน)                                             */
 /* -------------------------------------------------------------------------- */
 
 export async function checkInAction(userId: string, base64Image: string, location: string) {
   try {
-    // 1. ดึงข้อมูลแผนกและไซต์ของ User ก่อน
-    const user = await db.query.usersTable.findFirst({
-      where: eq(usersTable.id, userId),
-      columns: {
-        departmentId: true,
-        site_id: true,
-      },
-    });
+    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
 
+    // 1. ดึงข้อมูล User และตรวจสอบกะงาน (ลำดับความสำคัญ: กะพิเศษ > กะปกติจาก shiftsTable)
+    const [userData, tempShift] = await Promise.all([
+      db.select({
+        departmentId: usersTable.departmentId,
+        siteId: usersTable.site_id,
+        shiftId: shiftsTable.id,
+        startTime: shiftsTable.startTime,
+      })
+      .from(usersTable)
+      .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId))
+      .where(eq(usersTable.id, userId))
+      .limit(1),
+
+      db.select()
+      .from(temporaryShiftsTable)
+      .where(and(
+        eq(temporaryShiftsTable.userId, userId),
+        eq(temporaryShiftsTable.targetDate, dateStr),
+        eq(temporaryShiftsTable.status, "approved")
+      ))
+      .limit(1)
+    ]);
+
+    const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
+
+    // กำหนดกะและเวลาเริ่มงานที่ต้องใช้เทียบ (ดึงมาจาก shiftsTable ผ่าน user.startTime)
+    const activeStartTime = tempShift[0]?.startTime || user.startTime;
+    const activeShiftId = tempShift[0] ? null : user.shiftId;
+    const activeTempShiftId = tempShift[0]?.id || null;
 
     // 2. จัดการรูปภาพ
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
-    
-    const uploadRes = await uploadToDrive(
-      buffer, 
-      `checkin_${userId}_${Date.now()}.png`, 
-      "image/png"
-    );
+    const uploadRes = await uploadToDrive(buffer, `checkin_${userId}_${Date.now()}.png`, "image/png");
 
-    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+    const checkInTimeSql = sql`timezone('Asia/Bangkok', now())::time`;
 
-    // 3. บันทึกลง Database พร้อม department_id และ site_id
+    // 3. บันทึกลง Database พร้อม Logic ตรวจสอบการมาสายเทียบกับ startTime จาก shiftsTable
     await db.insert(attendanceTable).values({
       user_id: userId,
-      department_id: user.departmentId, // ✅ เพิ่มการบันทึกแผนก
-      site_id: user.site_id,           // ✅ เพิ่มการบันทึกไซต์
+      department_id: user.departmentId, 
+      site_id: user.siteId,           
+      shift_id: activeShiftId,
+      temp_shift_id: activeTempShiftId,
       date: dateStr,
-      checkIn: sql`timezone('Asia/Bangkok', now())::text`, 
+      checkIn: checkInTimeSql, 
       imageIn: uploadRes.url, 
       imageInId: uploadRes.fileId,
       locationIn: location,
+      isLate: activeStartTime ? sql`CASE WHEN ${checkInTimeSql} > ${activeStartTime}::time THEN 1 ELSE 0 END` : 0,
+      lateMinutes: activeStartTime ? sql`CASE WHEN ${checkInTimeSql} > ${activeStartTime}::time THEN EXTRACT(EPOCH FROM (${checkInTimeSql} - ${activeStartTime}::time)) / 60 ELSE 0 END` : 0,
     });
 
     revalidatePath("/employee");
@@ -60,36 +81,49 @@ export async function checkInAction(userId: string, base64Image: string, locatio
 
 export async function checkOutAction(userId: string, base64Image: string, location: string) {
   try {
+    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+
+    // 1. ดึงข้อมูลกะงาน (endTime) จากทั้ง shiftsTable และกะพิเศษ เพื่อใช้เทียบการออกก่อนเวลา
+    const [userRecord, shiftData, tempShift] = await Promise.all([
+      db.select({ firstName: usersTable.firstName, lastName: usersTable.lastName }).from(usersTable).where(eq(usersTable.id, userId)).limit(1),
+      db.select({ id: shiftsTable.id, endTime: shiftsTable.endTime }).from(shiftsTable).where(eq(shiftsTable.userId, userId)).limit(1),
+      db.select({ id: temporaryShiftsTable.id, endTime: temporaryShiftsTable.endTime }).from(temporaryShiftsTable).where(and(eq(temporaryShiftsTable.userId, userId), eq(temporaryShiftsTable.targetDate, dateStr))).limit(1)
+    ]);
+
+    // กำหนดเวลาเลิกงานจริงที่ต้องใช้เทียบ
+    const activeEndTime = tempShift[0]?.endTime || shiftData[0]?.endTime;
+
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
     const uploadRes = await uploadToDrive(buffer, `checkout_${userId}_${Date.now()}.png`, "image/png");
 
-    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+    const checkOutTimeSql = sql`timezone('Asia/Bangkok', now())::time`;
 
-    await db
+    // 2. อัปเดตตาราง Attendance (ตรวจสอบเฉพาะการออกก่อนเวลา isEarlyExit)
+    const result = await db
       .update(attendanceTable)
       .set({
-        checkOut: sql`timezone('Asia/Bangkok', now())::text`, 
+        checkOut: checkOutTimeSql, 
         imageOut: uploadRes.url, 
         imageOutId: uploadRes.fileId,
         locationOut: location,
+        // ✅ ตรวจสอบ: ก่อนเวลา = 1, ปกติ (รวมถึงหลังเวลา) = 0
+        isEarlyExit: activeEndTime ? sql`CASE WHEN ${checkOutTimeSql} < ${activeEndTime}::time THEN 1 ELSE 0 END` : 0,
+        earlyExitMinutes: activeEndTime ? sql`CASE WHEN ${checkOutTimeSql} < ${activeEndTime}::time THEN EXTRACT(EPOCH FROM (${activeEndTime}::time - ${checkOutTimeSql})) / 60 ELSE 0 END` : 0,
       })
-      .where(
-        and(
-          eq(attendanceTable.user_id, userId),
-          eq(attendanceTable.date, dateStr)
-        )
-      );
+      .where(and(eq(attendanceTable.user_id, userId), eq(attendanceTable.date, dateStr)))
+      .returning({ id: attendanceTable.id });
 
     revalidatePath("/employee");
     revalidatePath("/leader");
+    
     return { success: true };
+
   } catch (error: any) {
     console.error("Check-out error:", error);
     return { success: false, error: "บันทึกเลิกงานล้มเหลว" };
   }
 }
-
 /* -------------------------------------------------------------------------- */
 /* LEAVE ACTIONS (การลางาน)                                                  */
 /* -------------------------------------------------------------------------- */

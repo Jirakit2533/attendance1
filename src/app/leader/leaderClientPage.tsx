@@ -395,50 +395,66 @@ export default function LeaderClientPage({
     if (!videoRef.current || !streamRef.current) return;
     setIsProcessing(true);
 
+    // 1. สร้าง Canvas และบีบอัดเป็น JPEG (คุณภาพ 70%)
     const canvas = document.createElement("canvas");
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     canvas.getContext("2d")!.drawImage(videoRef.current, 0, 0);
-    const capturedImage = canvas.toDataURL("image/png");
+    const capturedImage = canvas.toDataURL("image/jpeg", 0.7);
 
+    // ปิดกล้องคืนทรัพยากร
     streamRef.current.getTracks().forEach((t) => t.stop());
     setShowCamera(false);
     setReadyToCapture(false);
 
     try {
+      // 2. ดึงพิกัด (High Accuracy)
       const pos = await new Promise<GeolocationPosition>((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 })
-      );
-
-      const blob = await (await fetch(capturedImage)).blob();
-      const file = new File([blob], `attendance_${userProfile.id}.png`, {
-        type: "image/png",
+        navigator.geolocation.getCurrentPosition(res, rej, { 
+          enableHighAccuracy: true, 
+          timeout: 10000, // ปรับเป็น 10 วิ เพื่อไม่ให้ User รอนานเกินไป
+          maximumAge: 0 
+        })
+      ).catch((err) => {
+        console.warn("Geolocation error:", err.message);
+        return null; 
       });
 
+      const blob = await (await fetch(capturedImage)).blob();
+      const file = new File([blob], `attendance_${userProfile.id}_${Date.now()}.jpg`, {
+        type: "image/jpeg",
+      });
+
+      // 3. อัปโหลดรูปภาพ (ใช้ UploadThing หรือ Library ของคุณ)
       const uploadRes = await uploadAttendance([file]);
-      if (!uploadRes) throw new Error("อัปโหลดรูปภาพไม่สำเร็จ");
+      if (!uploadRes || uploadRes.length === 0) throw new Error("อัปโหลดรูปภาพไม่สำเร็จ");
 
       const uploadedFile = uploadRes[0];
+      
+      // 4. เรียก Action บันทึกข้อมูล (Logic สาย/ออกก่อน จะถูกคำนวณที่ตัว saveAttendanceAction)
       const result = await saveAttendanceAction({
         userId: userProfile.id,
         type: isCheckingOut ? "OUT" : "IN",
-        image: uploadedFile.ufsUrl || uploadedFile.url, // ใช้ ufsUrl ถ้ามี
+        image: uploadedFile.ufsUrl || uploadedFile.url,
         fileId: uploadedFile.key,
-        location: `${pos.coords.latitude.toFixed(
-          6
-        )}, ${pos.coords.longitude.toFixed(6)}`,
-        departmentId: userProfile.departmentId,
-        siteId: userProfile.site_id,
+        location: pos 
+          ? `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`
+          : "ไม่ทราบพิกัด (GPS ปิด)", 
+        departmentId: userProfile.departmentId, 
+        siteId: userProfile.site_id,           
       });
 
       if (result.success) {
-        alert("บันทึกเวลาสำเร็จ");
-        router.refresh();
+        alert(isCheckingOut ? "บันทึกออกงานสำเร็จ" : "บันทึกเข้างานสำเร็จ");
+        // ✅ ใช้ window.location.reload() หรือ router.refresh() 
+        // เพื่อให้ข้อมูลในตาราง (isLate/isEarlyExit) อัปเดตล่าสุดจาก DB
+        router.refresh(); 
       } else {
-        alert("Error: " + result.error);
+        alert("ข้อผิดพลาดจากระบบ: " + result.error);
       }
     } catch (err: any) {
-      alert(err.message || "เกิดข้อผิดพลาดในการบันทึกพิกัดหรือข้อมูล");
+      alert(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+      console.error("Capture Error:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -683,14 +699,17 @@ export default function LeaderClientPage({
                 </div>
 
                 <div className="overflow-x-auto rounded-[1.5rem] -mx-6 px-6 sm:mx-0 sm:px-0">
-                  <table className="w-full text-sm min-w-[800px]">
+                  {/* ปรับ min-w เป็น 1100px เพื่อให้มีพื้นที่กว้างขึ้น ไม่ทับซ้อน */}
+                  <table className="w-full text-sm min-w-[1100px] border-collapse">
                     <thead className="bg-gray-50/50 text-gray-400 uppercase text-[10px] font-black tracking-widest">
                       <tr>
-                        <th className="p-6 text-left">วันที่</th>
-                        <th className="p-6 text-left">เวลาเข้า / รูปถ่าย</th>
-                        <th className="p-6 text-left">เวลาออก / รูปถ่าย</th>
-                        <th className="p-6 text-left">
-                          ต่ำแหน่ง/เขตรับผิดชอบ/ระดับสิทธิ์
+                        <th className="p-4 text-left">วันที่</th>
+                        <th className="p-4 text-left">รอบเข้างาน</th>
+                        <th className="p-4 text-left">สถานะการเข้างาน</th>
+                        <th className="p-4 text-left">เวลาเข้า / รูปถ่าย</th>
+                        <th className="p-4 text-left">เวลาออก / รูปถ่าย</th>
+                        <th className="p-4 text-center">
+                          ตำแหน่ง  /  เขตรับผิดชอบ  /  ระดับสิทธิ์
                         </th>
                       </tr>
                     </thead>
@@ -698,7 +717,7 @@ export default function LeaderClientPage({
                       {records.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={4}
+                            colSpan={6}
                             className="p-20 text-center text-gray-300 font-bold italic"
                           >
                             ยังไม่มีข้อมูลการเข้างาน
@@ -706,22 +725,15 @@ export default function LeaderClientPage({
                         </tr>
                       ) : (
                         records.map((r, i) => {
-                          // 🔍 ดักจับค่าเวลา: รองรับทั้ง String ที่ส่งมาจาก Action ใหม่ และ Date Object เก่า
                           const formatTime = (time: any) => {
                             if (!time || time === "-" || time === "null")
                               return "-";
-
-                            // กรณีข้อมูลมาเป็น String (เช่น "2026-03-04 17:30:00" หรือ "17:30:00")
                             if (typeof time === "string") {
-                              // ถ้ามีช่องว่าง (มีวันที่ติดมา) ให้แยกเอาเฉพาะส่วนหลัง
                               const timePart = time.includes(" ")
                                 ? time.split(" ")[1]
                                 : time;
-                              // ตัดเอาเฉพาะ HH:mm (เอาแค่ 5 ตัวแรก เช่น 17:30)
                               return timePart.split(":").slice(0, 2).join(":");
                             }
-
-                            // กรณีข้อมูลมาเป็น Date Object
                             return new Date(time).toLocaleTimeString("th-TH", {
                               hour: "2-digit",
                               minute: "2-digit",
@@ -729,12 +741,6 @@ export default function LeaderClientPage({
                             });
                           };
 
-                          const displayCheckIn =
-                            formatTime(r.checkIn || r.check_in) || "--:--";
-                          const displayCheckOut =
-                            formatTime(r.checkOut || r.check_out) || "-";
-
-                          // รูปภาพ
                           const displayImageIn = r.imageIn || r.image_in;
                           const displayImageOut = r.imageOut || r.image_out;
 
@@ -744,12 +750,38 @@ export default function LeaderClientPage({
                               className="hover:bg-blue-50/10 transition-colors"
                             >
                               {/* วันที่ */}
-                              <td className="p-6 font-bold text-gray-800">
+                              <td className="p-4 font-bold text-gray-800 whitespace-nowrap">
                                 {r.date || "-"}
                               </td>
 
-                             {/* เช็คอิน */}
-                              <td className="p-6">
+                              {/* รอบเข้างาน */}
+                              <td className="p-4 font-bold text-gray-600 whitespace-nowrap">
+                                <div className="flex flex-col gap-1">
+                                  {r.startTime && r.endTime ? (
+                                    <span className="text-[15px] text-gray-800">
+                                      {r.startTime.slice(0, 5)} - {r.endTime.slice(0, 5)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[14px] font-normal text-gray-400">ไม่มีกะงาน</span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* สถานะ */}
+                              <td className="p-4 font-bold whitespace-nowrap">
+                                {r.isLate === 1 ? (
+                                  <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
+                                    ⚠️ สาย
+                                  </span>
+                                ) : (
+                                  <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
+                                    ✅ ปกติ
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* เช็คอิน */}
+                              <td className="p-4 whitespace-nowrap">
                                 <div className="flex items-center gap-3">
                                   <span className="text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100">
                                     {r.checkIn && r.checkIn !== "-"
@@ -767,7 +799,6 @@ export default function LeaderClientPage({
                                       alt="In"
                                       width={40}
                                       height={40}
-                                      // เพิ่ม cursor-zoom-in และฟังก์ชันเปิด Modal เมื่อคลิก
                                       onClick={() => setViewImage(displayImageIn)}
                                       className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10 cursor-zoom-in hover:border-blue-400 active:scale-95 transition-all"
                                       unoptimized
@@ -777,7 +808,7 @@ export default function LeaderClientPage({
                               </td>
 
                               {/* เช็คเอาท์ */}
-                              <td className="p-6">
+                              <td className="p-4 whitespace-nowrap">
                                 <div className="flex items-center gap-3">
                                   <span
                                     className={
@@ -801,7 +832,6 @@ export default function LeaderClientPage({
                                       alt="Out"
                                       width={40}
                                       height={40}
-                                      // เพิ่ม cursor-zoom-in และฟังก์ชันเปิด Modal เมื่อคลิก
                                       onClick={() => setViewImage(displayImageOut)}
                                       className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10 cursor-zoom-in hover:border-blue-400 active:scale-95 transition-all"
                                       unoptimized
@@ -810,46 +840,31 @@ export default function LeaderClientPage({
                                 </div>
                               </td>
 
-                              {/* รายละเอียด */}
-                              <td className="p-6">
-                                <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-1">
-                                  {/* แถวที่ 1: ตำแหน่ง (เน้นใหญ่สุด) */}
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight bg-indigo-600 text-white px-3 py-1 rounded-xl shadow-sm">
-                                      {userProfile.position}
+                              {/* รายละเอียด - ปรับให้ใช้พื้นที่เต็มที่ */}
+                              <td className="p-4">
+                                <div className="flex items-center gap-3 whitespace-nowrap">
+                                  <span className="text-sm font-black text-gray-900 uppercase tracking-tight bg-indigo-600 text-white px-3 py-1 rounded-xl shadow-sm">
+                                    {userProfile.position}
+                                  </span>
+
+                                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-lg border border-gray-200">
+                                    <span className="text-base">📍</span>
+                                    <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
+                                      {userProfile.siteName || "ทุกไซต์งาน"}
                                     </span>
                                   </div>
 
-                                  {/* แถวที่ 2: ไซต์งาน และ Role (เน้นดูง่าย) */}
-                                  <div className="flex items-center gap-3">
-                                    {/* ไซต์งาน */}
-                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-lg border border-gray-200">
-                                      <span className="text-base">📍</span>
-                                      <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
-                                        {userProfile.siteName ||  "ทุกไซต์งาน"}
-                                      </span>
-                                    </div>
-
-                                    {/* เส้นแบ่ง (แสดงเฉพาะบนจอใหญ่) */}
-                                    <span className="hidden sm:block text-gray-300">
-                                      |
+                                  <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
+                                    <div
+                                      className={`w-2.5 h-2.5 rounded-full shadow-inner ${
+                                        userProfile.role === "leader" || userProfile.role === "หัวหน้างาน"
+                                          ? "bg-amber-400"
+                                          : "bg-emerald-400"
+                                      }`}
+                                    ></div>
+                                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
+                                      {userProfile.role === "leader" ? "หัวหน้างาน" : "พนักงาน"}
                                     </span>
-
-                                    {/* ระดับ/Role */}
-                                    <div className="flex items-center gap-2">
-                                      <div
-                                        className={`w-2.5 h-2.5 rounded-full shadow-inner ${
-                                          // เช็คจาก role ใน userProfile เพื่อกำหนดสี
-                                          userProfile.role === "leader" || userProfile.role === "หัวหน้างาน"
-                                            ? "bg-amber-400"
-                                            : "bg-emerald-400"
-                                        }`}
-                                      ></div>
-                                      <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
-                                        {/* แก้ไขสระอีที่เกินมา และแสดงชื่อบทบาท */}
-                                        {userProfile.role === "leader" ? "หัวหน้างาน" : "พนักงาน"}
-                                      </span>
-                                    </div>
                                   </div>
                                 </div>
                               </td>
@@ -968,7 +983,7 @@ export default function LeaderClientPage({
 
               {/* ตารางที่ 3: การเข้างานของพนักงานในทีม */}
               <div className="print:hidden mt-12">
-                <Section title="ตารางเข้า-ออกงาน">
+                <Section title="ตารางเข้า-ออกงาน ของพนักงาน">
                   {/* Search Bar */}
                   <div className="mb-6 relative max-w-md group">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-blue-500">
@@ -992,10 +1007,19 @@ export default function LeaderClientPage({
                               พนักงาน
                             </th>
                             <th className="py-6 px-6 text-left border-b border-slate-100">
+                              วันที่
+                            </th>
+                            <th className="py-6 px-6 text-left border-b border-slate-100">
+                              รอบเข้างาน
+                            </th>
+                            <th className="py-6 px-6 text-left border-b border-slate-100">
+                              สถานะากรเข้างาน
+                            </th>
+                            <th className="py-6 px-6 text-left border-b border-slate-100">
                               ตำแหน่ง
                             </th>
                             <th className="py-6 px-6 text-left border-b border-slate-100">
-                              วันที่
+                              ไซต์งาน
                             </th>
                             <th className="py-6 px-6 text-center border-b border-slate-100">
                               เวลาเข้า
@@ -1039,11 +1063,6 @@ export default function LeaderClientPage({
                                     </div>
                                   </div>
                                 </td>
-                                <td className="py-5 px-6">
-                                  <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase">
-                                    {a.positionName || "พนักงาน"}
-                                  </span>
-                                </td>
                                 <td className="py-5 px-6 font-bold text-slate-600">
                                   {/* แสดงวันที่แบบ 04/03/2026 */}
                                   {a.date
@@ -1056,6 +1075,36 @@ export default function LeaderClientPage({
                                         }
                                       )
                                     : "-"}
+                                </td>
+                                {/* รอบเข้างาน */}
+                                <td className="p-4 font-bold text-gray-600 whitespace-nowrap">
+                                  <div className="flex flex-col gap-1">
+                                    {a.startTime && a.endTime ? (
+                                      <span className="text-[15px] text-gray-800">
+                                        {a.startTime.slice(0, 5)} - {a.endTime.slice(0, 5)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[14px] font-normal text-gray-400">ไม่มีกะงาน</span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* สถานะ */}
+                                <td className="p-4 font-bold whitespace-nowrap">
+                                  {a.isLate === 1 ? (
+                                    <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
+                                      ⚠️ สาย
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
+                                      ✅ ปกติ
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-5 px-6">
+                                  <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase">
+                                    {a.positionName || "พนักงาน"}
+                                  </span>
                                 </td>
                                 <td className="py-5 px-6 text-center font-black text-green-600 text-lg italic">
                                   {a.checkIn
