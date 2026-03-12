@@ -141,12 +141,23 @@ export const attendanceTable = pgTable("attendance", {
   department_id: uuid("department_id").references(() => departmentsTable.id),
   site_id: uuid("site_id").references(() => sitesTable.id),
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   date: date("date").notNull(),
   checkIn: text("check_in"),
   imageIn: text("image_in").notNull(),   
   imageInId: text("image_in_id"), 
   locationIn: varchar("location_in", { length: 255 }).notNull(),
   checkOut: text("check_out"),
+=======
+  shift_id: uuid("shift_id").references(() => shiftsTable.id),
+  temp_shift_id: uuid("temp_shift_id").references(() => temporaryShiftsTable.id),
+  date: date("date").notNull(), // วันที่ของกะการทำงานนั้นๆ
+  checkIn: time("check_in"),
+  imageIn: text("image_in").notNull(),   
+  imageInId: text("image_in_id"), 
+  locationIn: varchar("location_in", { length: 255 }).notNull(),
+  checkOut: time("check_out"),
+>>>>>>> Stashed changes
 =======
   shift_id: uuid("shift_id").references(() => shiftsTable.id),
   temp_shift_id: uuid("temp_shift_id").references(() => temporaryShiftsTable.id),
