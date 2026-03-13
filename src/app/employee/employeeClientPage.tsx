@@ -706,7 +706,7 @@ export default function EmployeeClientPage({
                   <div className="px-3 py-1.5 flex items-center justify-center min-w-[100px]">
                     {!r.checkOut || r.checkOut === "-" ? (
                       <span className="text-slate-400 text-sm font-normal">-</span>
-                    ) : r.isEarlyExit === 1 ? (
+                    ) : r.isEarlyExit === "1" ? (
                       <span className="text-orange-600 text-sm">🏃 เลิกก่อนเวลา</span>
                     ) : (
                       <span className="text-emerald-600 text-sm">✅ ปกติ</span>

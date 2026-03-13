@@ -1122,11 +1122,11 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                             )}
                           </td>
                           <td className="p-6 font-bold whitespace-nowrap">
-                            {a.isEarlyExit === 2 ? (
+                            {a.isEarlyExit === "1" ? (
                               <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
                                 ⚠️ ออกก่อนเวลา
                               </span>
-                            ) : a.isEarlyExit === 1 ? (
+                            ) : a.isEarlyExit === "0" ? (
                               <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
                                 ✅ ปกติ
                               </span>
@@ -2194,134 +2194,134 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
 )}
 {/* --- 🖨️ MODAL: REPORT PREVIEW --- */}
 {showReport && (
-        <div className="fixed inset-0 bg-slate-900/95 flex items-start justify-center z-[600] p-4 overflow-y-auto custom-scrollbar font-sans">
-          <div id="report-content" className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl flex flex-col p-12 print:p-0 min-h-[80vh] relative">
-            
-            {/* Header Controller (ซ่อนเมื่อพิมพ์) */}
-            <div className="flex justify-between items-center mb-10 print:hidden border-b border-slate-100 pb-6">
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-lg ${exportFormat === 'excel' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
-                  {exportFormat === 'excel' ? "📗" : "📕"}
-                </div>
-                <div>
-                  <h2 className="font-black text-xl tracking-tighter text-slate-800 uppercase italic">
-                    {exportFormat === 'excel' ? "Spreadsheet Preview Mode" : "Official PDF Preview Mode"}
-                  </h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">
-                    {exportFormat === 'excel' ? "ร่างข้อมูลสำหรับไฟล์ Excel" : "ร่างตัวอย่างเอกสารสำหรับไฟล์ PDF"} • {reportData.length} รายการ
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => exportFormat === 'pdf' ? window.print() : handleDownloadExcel(reportData)} 
-                  className={`px-10 py-4 rounded-2xl font-black text-[10px] uppercase shadow-xl transition-all active:scale-95 text-white ${exportFormat === 'excel' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-900 hover:bg-blue-600'}`}
-                >
-                  {exportFormat === 'pdf' ? "พิมพ์รายงาน / Save PDF 🖨️" : "ยืนยันดาวน์โหลด EXCEL 📥"}
-                </button>
-                <button 
-  onClick={() => {
-    setShowReport(false);      // 1. ปิดหน้า Report Preview
-    setShowFilterModal(true); // 2. เปิดหน้า Modal ตัวกรองขึ้นมาใหม่
-  }} 
-  className="bg-slate-100 hover:bg-red-50 hover:text-red-500 px-8 py-4 rounded-2xl font-black text-[10px] uppercase transition-all text-slate-400"
->
-  ย้อนกลับ
-</button>
-              </div>
-            </div>
-
-            {/* เนื้อหาใบรายงาน - ส่วนหัว */}
-            <div className="border-b-8 border-slate-900 pb-8 mb-8 flex justify-between items-end">
-              <div>
-                <h2 className="text-4xl font-black tracking-tighter text-slate-900 uppercase leading-none">{admin.company || "Company Name"}</h2>
-                <p className="text-blue-600 font-black text-sm tracking-widest mt-3 uppercase italic">
-                  Attendance Summary Report: {formattedStartDate} — {formattedEndDate}
-                </p>
-              </div>
-              <div className="text-right text-[10px] font-bold text-slate-400 leading-relaxed uppercase italic">
-                Generated on: {reportDate} {reportTime}<br/>
-                Ref: {Math.random().toString(36).substring(2, 11).toUpperCase()}
-              </div>
-            </div>
-
-            {/* ตารางข้อมูลรายงาน */}
-            <div className={`overflow-hidden rounded-[2.5rem] border border-slate-200 shadow-sm ${exportFormat === 'excel' ? 'bg-slate-50/50' : 'bg-white'}`}>
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className={exportFormat === 'excel' ? "bg-emerald-700 text-white" : "bg-slate-900 text-white"}>
-                    <th className="p-5 font-black text-[10px] uppercase tracking-wider border-r border-white/10 w-32 text-center">Date</th>
-                    <th className="p-5 font-black text-[10px] uppercase tracking-wider border-r border-white/10">Employee Info</th>
-                    <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-28">Check In</th>
-                    <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-28">Check Out</th>
-                    <th className="p-5 font-black text-[10px] uppercase tracking-wider text-right w-40">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 italic font-medium text-slate-700">
-                  {reportData.length > 0 ? reportData.map((a: any, i: number) => {
-                    const empInfo = initialEmployees?.find((e: any) => String(e.id) === String(a.userId || a.user_id));
-                    return (
-                      <tr key={i} className="hover:bg-white transition-colors page-break-inside-avoid">
-                        <td className="p-5 font-bold text-slate-500 text-xs text-center border-r border-slate-100">{a.date}</td>
-                        <td className="p-5 border-r border-slate-100">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 flex-shrink-0">
-                              {a.avatarUrl || empInfo?.avatarUrl ? (
-                                <img src={a.avatarUrl || empInfo?.avatarUrl} className="w-full h-full object-cover" alt="" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-slate-300 font-bold text-lg">?</div>
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-black text-slate-900 text-sm uppercase truncate leading-none mb-1">
-                                {a.employeeName || (empInfo ? `${empInfo.firstName} ${empInfo.lastName}` : "Unknown")}
-                              </div>
-                              <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter italic">
-                                ID: {a.userId || a.user_id} | Site: {a.siteName || "General"}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-5 text-center text-emerald-600 font-black text-sm border-r border-slate-100">{a.checkIn || "--:--"}</td>
-                        <td className="p-5 text-center text-red-500 font-black text-sm border-r border-slate-100">{a.checkOut || "--:--"}</td>
-                        <td className="p-5 text-right bg-slate-50/30">
-                          <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter ${a.checkOut ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
-                            {a.checkOut ? 'Completed' : 'On Duty'}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  }) : (
-                    <tr>
-                      <td colSpan={5} className="p-20 text-center font-bold text-slate-300 italic uppercase tracking-widest">ไม่พบข้อมูลการลงเวลา</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* ส่วนท้ายรายงาน (Signature & Stamp) */}
-            <div className="mt-16 grid grid-cols-2 gap-20 px-10 pb-10">
-              <div className="text-center">
-                <div className="border-t-2 border-slate-200 pt-6">
-                  <p className="text-[11px] font-black text-slate-900 uppercase">({admin.name || "Manager Name"})</p>
-                  <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest italic leading-none">Authorized Signature</p>
-                  <p className="text-[8px] text-slate-300 mt-10 italic uppercase">Date: ____ / ____ / ____</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-center border-2 border-dashed border-slate-100 rounded-[2.5rem] h-32 relative">
-                <span className="text-[10px] font-black text-slate-200 uppercase tracking-[0.4em] rotate-12 select-none">Official Digital Stamp</span>
-              </div>
-            </div>
-
-            {/* Footer Print Only */}
-            <div className="mt-auto pt-8 text-center border-t border-slate-50 hidden print:block">
-              <p className="text-[8px] text-slate-300 font-medium uppercase tracking-[0.5em]">This is a system generated report and does not require a physical signature if stamped.</p>
-            </div>
+  <div className="fixed inset-0 bg-slate-900/95 flex items-start justify-center z-[600] p-4 overflow-y-auto custom-scrollbar font-sans">
+    <div id="report-content" className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl flex flex-col p-12 print:p-0 min-h-[80vh] relative">
+      
+      {/* Header Controller (ซ่อนเมื่อพิมพ์) */}
+      <div className="flex justify-between items-center mb-10 print:hidden border-b border-slate-100 pb-6">
+        <div className="flex items-center gap-4">
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-lg ${exportFormat === 'excel' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+            {exportFormat === 'excel' ? "📗" : "📕"}
+          </div>
+          <div>
+            <h2 className="font-black text-xl tracking-tighter text-slate-800 uppercase italic">
+              {exportFormat === 'excel' ? "ตัวอย่างเอกสาร" : "โหมดพรีวิวไฟล์ PDF ทางการ"}
+            </h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">
+              {exportFormat === 'excel' ? "ร่างข้อมูลสำหรับไฟล์ Excel" : "ร่างตัวอย่างเอกสารสำหรับไฟล์ PDF"} • {reportData.length} รายการ
+            </p>
           </div>
         </div>
-      )}
+        
+        <div className="flex gap-3">
+          <button 
+            onClick={() => exportFormat === 'pdf' ? window.print() : handleDownloadExcel(reportData)} 
+            className={`px-10 py-4 rounded-2xl font-black text-[10px] uppercase shadow-xl transition-all active:scale-95 text-white ${exportFormat === 'excel' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-900 hover:bg-blue-600'}`}
+          >
+            {exportFormat === 'pdf' ? "พิมพ์รายงาน / บันทึก PDF 🖨️" : "ยืนยันดาวน์โหลด EXCEL 📥"}
+          </button>
+          <button 
+            onClick={() => {
+              setShowReport(false);      // 1. ปิดหน้า Report Preview
+              setShowFilterModal(true); // 2. เปิดหน้า Modal ตัวกรองขึ้นมาใหม่
+            }} 
+            className="bg-slate-100 hover:bg-red-50 hover:text-red-500 px-8 py-4 rounded-2xl font-black text-[10px] uppercase transition-all text-slate-400"
+          >
+            ย้อนกลับ
+          </button>
+        </div>
+      </div>
+
+      {/* เนื้อหาใบรายงาน - ส่วนหัว */}
+      <div className="border-b-8 border-slate-900 pb-8 mb-8 flex justify-between items-end">
+        <div>
+          <h2 className="text-4xl font-black tracking-tighter text-slate-900 uppercase leading-none">{admin.company || "ชื่อบริษัท"}</h2>
+          <p className="text-blue-600 font-black text-sm tracking-widest mt-3 uppercase italic">
+            รายงานสรุปการลงเวลาทำงาน: {formattedStartDate} — {formattedEndDate}
+          </p>
+        </div>
+        <div className="text-right text-[10px] font-bold text-slate-400 leading-relaxed uppercase italic">
+          ออกรายงานเมื่อ: {reportDate} {reportTime}<br/>
+          เลขที่อ้างอิง: {Math.random().toString(36).substring(2, 11).toUpperCase()}
+        </div>
+      </div>
+
+      {/* ตารางข้อมูลรายงาน */}
+      <div className={`overflow-hidden rounded-[2.5rem] border border-slate-200 shadow-sm ${exportFormat === 'excel' ? 'bg-slate-50/50' : 'bg-white'}`}>
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className={exportFormat === 'excel' ? "bg-emerald-700 text-white" : "bg-slate-900 text-white"}>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider border-r border-white/10 w-32 text-center">วันที่</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider border-r border-white/10">ข้อมูลพนักงาน</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-28">เวลาเข้า</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-28">เวลาออก</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-right w-40">สถานะ</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200 italic font-medium text-slate-700">
+            {reportData.length > 0 ? reportData.map((a: any, i: number) => {
+              const empInfo = initialEmployees?.find((e: any) => String(e.id) === String(a.userId || a.user_id));
+              return (
+                <tr key={i} className="hover:bg-white transition-colors page-break-inside-avoid">
+                  <td className="p-5 font-bold text-slate-500 text-xs text-center border-r border-slate-100">{a.date}</td>
+                  <td className="p-5 border-r border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 flex-shrink-0">
+                        {a.avatarUrl || empInfo?.avatarUrl ? (
+                          <img src={a.avatarUrl || empInfo?.avatarUrl} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-300 font-bold text-lg">?</div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-black text-slate-900 text-sm uppercase truncate leading-none mb-1">
+                          {a.employeeName || (empInfo ? `${empInfo.firstName} ${empInfo.lastName}` : "ไม่ทราบชื่อ")}
+                        </div>
+                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter italic">
+                          รหัส: {a.userId || a.user_id} | ไซต์งาน: {a.siteName || "ทั่วไป"}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-5 text-center text-emerald-600 font-black text-sm border-r border-slate-100">{a.checkIn || "--:--"}</td>
+                  <td className="p-5 text-center text-red-500 font-black text-sm border-r border-slate-100">{a.checkOut || "--:--"}</td>
+                  <td className="p-5 text-right bg-slate-50/30">
+                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter ${a.checkOut ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                      {a.checkOut ? 'เสร็จสมบูรณ์' : 'กำลังปฏิบัติงาน'}
+                    </span>
+                  </td>
+                </tr>
+              );
+            }) : (
+              <tr>
+                <td colSpan={5} className="p-20 text-center font-bold text-slate-300 italic uppercase tracking-widest">ไม่พบข้อมูลการลงเวลา</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ส่วนท้ายรายงาน (Signature & Stamp) */}
+      <div className="mt-16 grid grid-cols-2 gap-20 px-10 pb-10">
+        <div className="text-center">
+          <div className="border-t-2 border-slate-200 pt-6">
+            <p className="text-[11px] font-black text-slate-900 uppercase">({admin.name || "ชื่อผู้จัดการ"})</p>
+            <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest italic leading-none">ลายมือชื่อผู้มีอำนาจลงนาม</p>
+            <p className="text-[8px] text-slate-300 mt-10 italic uppercase">วันที่: ____ / ____ / ____</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center border-2 border-dashed border-slate-100 rounded-[2.5rem] h-32 relative">
+          <span className="text-[10px] font-black text-slate-200 uppercase tracking-[0.4em] rotate-12 select-none">ตราประทับดิจิทัลทางการ</span>
+        </div>
+      </div>
+
+      {/* Footer Print Only */}
+      <div className="mt-auto pt-8 text-center border-t border-slate-50 hidden print:block">
+        <p className="text-[8px] text-slate-300 font-medium uppercase tracking-[0.5em]">รายงานนี้ได้รับการสร้างโดยระบบโดยอัตโนมัติ ไม่จำเป็นต้องใช้ลายมือชื่อหากมีการประทับตรา</p>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* --- CSS สำหรับพิมพ์ --- */}
       <style dangerouslySetInnerHTML={{ __html: `

@@ -2,11 +2,10 @@
 
 import { db } from "@/db/db";
 import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable } from "@/db/schema"; // ✅ เพิ่ม usersTable
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { uploadToDrive } from "@/lib/uploadthing-server"; 
 import * as bcrypt from "bcryptjs";
-
 
 /* -------------------------------------------------------------------------- */
 /* ATTENDANCE ACTIONS (เข้า/ออกงาน)                                             */
@@ -14,9 +13,12 @@ import * as bcrypt from "bcryptjs";
 
 export async function checkInAction(userId: string, base64Image: string, location: string) {
   try {
-    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+    const now = new Date();
+    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
+    // ✅ 1. จัดรูปแบบเวลาจากเครื่องให้เป็น "HH:mm:ss" เหมือนฝั่ง Check-out
+    const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false });
 
-    // 1. ดึงข้อมูล User และตรวจสอบกะงาน (ลำดับความสำคัญ: กะพิเศษ > กะปกติจาก shiftsTable)
+    // ดึงข้อมูล User และตรวจสอบกะงาน
     const [userData, tempShift] = await Promise.all([
       db.select({
         departmentId: usersTable.departmentId,
@@ -42,7 +44,6 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-    // กำหนดกะและเวลาเริ่มงานที่ต้องใช้เทียบ (ดึงมาจาก shiftsTable ผ่าน user.startTime)
     const activeStartTime = tempShift[0]?.startTime || user.startTime;
     const activeShiftId = tempShift[0] ? null : user.shiftId;
     const activeTempShiftId = tempShift[0]?.id || null;
@@ -52,9 +53,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const buffer = Buffer.from(base64Data, "base64");
     const uploadRes = await uploadToDrive(buffer, `checkin_${userId}_${Date.now()}.png`, "image/png");
 
-    const checkInTimeSql = sql`timezone('Asia/Bangkok', now())::time`;
-
-    // 3. บันทึกลง Database พร้อม Logic ตรวจสอบการมาสายเทียบกับ startTime จาก shiftsTable
+    // 3. บันทึกลง Database (เปลี่ยนจาก sql timezone เป็น currentTimeStr ที่จัดรูปแบบแล้ว)
     await db.insert(attendanceTable).values({
       user_id: userId,
       department_id: user.departmentId, 
@@ -62,12 +61,18 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       shift_id: activeShiftId,
       temp_shift_id: activeTempShiftId,
       date: dateStr,
-      checkIn: checkInTimeSql, 
+      checkIn: currentTimeStr, // ✅ ใช้ตัวแปรที่จัดรูปแบบ "HH:mm:ss" แล้ว
       imageIn: uploadRes.url, 
       imageInId: uploadRes.fileId,
       locationIn: location,
-      isLate: activeStartTime ? sql`CASE WHEN ${checkInTimeSql} > ${activeStartTime}::time THEN 1 ELSE 0 END` : 0,
-      lateMinutes: activeStartTime ? sql`CASE WHEN ${checkInTimeSql} > ${activeStartTime}::time THEN EXTRACT(EPOCH FROM (${checkInTimeSql} - ${activeStartTime}::time)) / 60 ELSE 0 END` : 0,
+      // คำนวณสายโดยใช้ currentTimeStr เทียบกับ activeStartTime
+      isLate: activeStartTime ? (currentTimeStr > activeStartTime ? 1 : 0) : 0,
+      lateMinutes: activeStartTime ? (() => {
+          const [currH, currM] = currentTimeStr.split(':').map(Number);
+          const [startH, startM] = activeStartTime.split(':').map(Number);
+          const diff = (currH * 60 + currM) - (startH * 60 + startM);
+          return diff > 0 ? diff : 0;
+      })() : 0,
     });
 
     revalidatePath("/employee");
@@ -78,25 +83,43 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     return { success: false, error: "บันทึกเข้างานล้มเหลว: " + error.message };
   }
 }
-
 export async function checkOutAction(userId: string, base64Image: string, location: string) {
   try {
     const now = new Date();
     // 1. เตรียมรูปแบบเวลาและวันที่ (Asia/Bangkok)
-    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
     const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false }); // รูปแบบ "HH:mm:ss"
 
-    // 2. ดึงข้อมูลกะงาน (endTime)
+    // --- ส่วนที่ปรับปรุง: ค้นหา Record ล่าสุดที่ยังไม่ได้ Check-out เพื่อรองรับกะข้ามคืน ---
+    const lastCheckIn = await db
+      .select()
+      .from(attendanceTable)
+      .where(
+        and(
+          eq(attendanceTable.user_id, userId),
+          isNull(attendanceTable.checkOut)
+        )
+      )
+      .orderBy(desc(attendanceTable.createdAt))
+      .limit(1);
+
+    if (lastCheckIn.length === 0) {
+      return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ค้างอยู่" };
+    }
+
+    const currentRecord = lastCheckIn[0];
+    const checkInDate = currentRecord.date; // ใช้วันที่ที่เช็คอินจริงมาดึงข้อมูลกะงาน
+
+    // 2. ดึงข้อมูลกะงาน (endTime) โดยอ้างอิงจากวันที่เช็คอิน
     const [shiftData, tempShift] = await Promise.all([
       db.select({ id: shiftsTable.id, endTime: shiftsTable.endTime }).from(shiftsTable).where(eq(shiftsTable.userId, userId)).limit(1),
-      db.select({ id: temporaryShiftsTable.id, endTime: temporaryShiftsTable.endTime }).from(temporaryShiftsTable).where(and(eq(temporaryShiftsTable.userId, userId), eq(temporaryShiftsTable.targetDate, dateStr))).limit(1)
+      db.select({ id: temporaryShiftsTable.id, endTime: temporaryShiftsTable.endTime }).from(temporaryShiftsTable).where(and(eq(temporaryShiftsTable.userId, userId), eq(temporaryShiftsTable.targetDate, checkInDate))).limit(1)
     ]);
 
     // กำหนดเวลาเลิกงานจริง
     const activeEndTime = tempShift[0]?.endTime || shiftData[0]?.endTime;
 
-    // 3. คำนวณสถานะการออก (1 = ปกติ, 2 = ออกก่อน)
-    let isEarlyExit = 1; // Default ปกติ
+    // 3. คำนวณสถานะการออก (0 = ปกติ, 1 = ออกก่อน)
+    let isEarlyExit = 0; // Default ปกติ เป็น 0
     let earlyExitMinutes = 0;
 
     if (activeEndTime) {
@@ -104,11 +127,27 @@ export async function checkOutAction(userId: string, base64Image: string, locati
       const [currH, currM] = currentTimeStr.split(':').map(Number);
       const [endH, endM] = activeEndTime.split(':').map(Number);
       
-      const currentTotalMinutes = currH * 60 + currM;
-      const endTotalMinutes = endH * 60 + endM;
+      let currentTotalMinutes = currH * 60 + currM;
+      let endTotalMinutes = endH * 60 + endM;
 
+      // --- โลจิกแก้ไขสำหรับกะกลางคืน ---
+      // ดึงเวลาเช็คอินมาเปรียบเทียบ (ถ้าไม่มีให้ถือว่าเป็น 0)
+      const [inH, inM] = (currentRecord.checkIn || "00:00").split(':').map(Number);
+      const checkInTotalMinutes = inH * 60 + inM;
+
+      // ถ้าเวลาเลิกงาน (endTime) น้อยกว่าเวลาเข้างาน (checkIn) แสดงว่าเป็นกะข้ามคืน
+      // และถ้าเวลาปัจจุบัน (ตอนเช้า) น้อยกว่าเวลาเข้างาน (เมื่อคืน) ให้บวก 1440 นาที (24 ชม.) เข้าไปเพื่อให้เปรียบเทียบได้
+      if (endTotalMinutes < checkInTotalMinutes) {
+        if (currentTotalMinutes < checkInTotalMinutes) {
+          currentTotalMinutes += 1440;
+        }
+        endTotalMinutes += 1440;
+      }
+      // -----------------------------
+
+      // ตรวจสอบเปรียบเทียบเวลากับข้อมูลเอ็นไทม์
       if (currentTotalMinutes < endTotalMinutes) {
-        isEarlyExit = 2; // ออกก่อนเวลา
+        isEarlyExit = 1; // ออกก่อนเวลา บันทึกเป็นเลข 1
         earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
       }
     }
@@ -118,7 +157,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
     const buffer = Buffer.from(base64Data, "base64");
     const uploadRes = await uploadToDrive(buffer, `checkout_${userId}_${Date.now()}.png`, "image/png");
 
-    // 5. อัปเดตตาราง Attendance โดยส่งค่าที่คำนวณแล้วเข้าไปตรงๆ
+    // 5. อัปเดตตาราง Attendance โดยใช้ ID ของ Record ที่เจอ
     const result = await db
       .update(attendanceTable)
       .set({
@@ -129,10 +168,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
         isEarlyExit: isEarlyExit,
         earlyExitMinutes: earlyExitMinutes,
       })
-      .where(and(
-        eq(attendanceTable.user_id, userId), 
-        eq(attendanceTable.date, dateStr)
-      ))
+      .where(eq(attendanceTable.id, currentRecord.id)) // เปลี่ยนมาใช้ ID แทนวันที่เพื่อให้แม่นยำและรองรับกะข้ามคืน
       .returning({ id: attendanceTable.id });
 
     revalidatePath("/employee");

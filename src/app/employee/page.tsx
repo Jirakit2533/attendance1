@@ -72,7 +72,7 @@ export default async function Page() {
     role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
     // ✅ เพิ่มสถานะเพื่อให้ Client Page ตรวจสอบการแสดงสี/ไอคอนได้เหมือน Admin
     isLate: r.isLate ?? 0,
-    isEarlyExit: r.isEarlyExit ?? 0,
+    isEarlyExit: r.isEarlyExit ?? "-",
     startTime: user.startTime, 
     endTime: user.endTime,
   }));

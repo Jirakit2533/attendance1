@@ -73,16 +73,40 @@ export async function saveAttendanceAction(data: {
       let isEarlyExit = 1; // Default เป็น ปกติ
       let earlyExitMinutes = 0;
 
-      if (shift) {
-        const [currH, currM] = currentTimeStr.split(':').map(Number);
-        const [endH, endM] = shift.endTime.split(':').map(Number);
-        
-        const currentTotalMinutes = currH * 60 + currM;
-        const endTotalMinutes = endH * 60 + endM;
+      // ค้นหารายการเช็คอินล่าสุดที่ยังไม่ได้เช็คเอาท์
+      const lastCheckIn = await db
+        .select()
+        .from(attendanceTable)
+        .where(
+          and(
+            eq(attendanceTable.user_id, data.userId),
+            isNull(attendanceTable.checkOut)
+          )
+        )
+        .orderBy(desc(attendanceTable.createdAt))
+        .limit(1);
 
-        if (currentTotalMinutes < endTotalMinutes) {
+      if (lastCheckIn.length === 0) {
+        return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ค้างอยู่" };
+      }
+
+      const currentRecord = lastCheckIn[0];
+
+      if (shift) {
+        // --- ปรับปรุงโลจิกกะกลางคืนด้วย Absolute Timeline ---
+        const deadline = new Date(`${currentRecord.date}T${shift.endTime}`);
+        const checkInDateTime = new Date(`${currentRecord.date}T${currentRecord.checkIn || "00:00"}`);
+
+        // ถ้าเวลาเลิกงานน้อยกว่าเวลาเข้างาน แสดงว่าเป็นกะข้ามคืน
+        if (deadline < checkInDateTime) {
+          deadline.setDate(deadline.getDate() + 1);
+        }
+
+        // เปรียบเทียบ Timestamp ปัจจุบันกับเส้นตาย
+        if (now.getTime() < deadline.getTime()) {
           isEarlyExit = 2; // เปลี่ยนเป็น ออกก่อน
-          earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
+          const diffMs = deadline.getTime() - now.getTime();
+          earlyExitMinutes = Math.floor(diffMs / 60000);
         }
       }
 
@@ -92,19 +116,14 @@ export async function saveAttendanceAction(data: {
           imageOut: data.image,
           imageOutId: data.fileId || null,  
           locationOut: data.location,
-          isEarlyExit: isEarlyExit,
+          isEarlyExit: String(isEarlyExit), // บันทึกเป็น Text ตามโครงสร้าง DB ของคุณ
           earlyExitMinutes: earlyExitMinutes,
         })
-        .where(
-          and(
-            eq(attendanceTable.user_id, data.userId),
-            eq(attendanceTable.date, dateStr)
-          )
-        );
+        .where(eq(attendanceTable.id, currentRecord.id));
       
       // @ts-ignore
       if (result.rowCount === 0) {
-        return { success: false, error: "ไม่พบข้อมูลการเช็คอินของวันนี้" };
+        return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ต้องการอัปเดต" };
       }
     }
 
@@ -117,7 +136,6 @@ export async function saveAttendanceAction(data: {
     return { success: false, error: "บันทึกเวลาไม่สำเร็จ: " + (error.message || "Unknown Error") };
   }
 }
-
 /**
  * 2. ส่งคำขอลางาน
  */

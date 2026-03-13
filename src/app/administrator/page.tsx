@@ -109,7 +109,8 @@ export default async function AdminDashboardPage() {
         lastName: usersTable.lastName,
         siteName: sitesTable.name,
         startTime: shiftsTable.startTime,
-        endTime: shiftsTable.endTime
+        endTime: shiftsTable.endTime,
+        isEarlyExit: attendanceTable.isEarlyExit,
       })
       .from(attendanceTable)
       .leftJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
@@ -211,6 +212,7 @@ export default async function AdminDashboardPage() {
         endTime: at?.endTime || null,
         // ✅ ใส่ไว้ตรงนี้เพื่อให้ UI ในตารางลงเวลาใช้งานได้
         isLate: isLate, 
+        isEarlyExit: at.isEarlyExit ? String(at.isEarlyExit) : "-",
       };
     });
 
