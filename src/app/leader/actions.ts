@@ -12,22 +12,23 @@ import bcrypt from "bcryptjs";
 export async function saveAttendanceAction(data: {
   userId: string;
   type: "IN" | "OUT";
-  image: string; 
-  fileId?: string; 
+  image: string;
+  fileId?: string;
   location: string;
   departmentId: string;
   siteId: string | null;
 }) {
   try {
     const now = new Date();
-    const dateStr = new Intl.DateTimeFormat('en-CA', { 
-      timeZone: 'Asia/Bangkok' 
+    const dateStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok'
     }).format(now);
-    const currentTimeStr = now.toLocaleTimeString('en-GB', { 
+    const currentTimeStr = now.toLocaleTimeString('en-GB', {
       timeZone: 'Asia/Bangkok',
-      hour12: false 
+      hour12: false
     });
 
+    // 1. ดึงข้อมูลกะงานปกติ
     const shiftData = await db
       .select()
       .from(shiftsTable)
@@ -63,13 +64,14 @@ export async function saveAttendanceAction(data: {
         imageInId: data.fileId || null,
         locationIn: data.location,
         isLate: isLate,
-        // หมายเหตุ: หากใน DB ยังไม่มีคอลัมน์ lateMinutes โปรแกรมจะแจ้ง Error ให้เพิ่มคอลัมน์ integer ใน Schema
         ...(Object.keys(attendanceTable).includes('lateMinutes') ? { lateMinutes } : {}),
       });
     } else {
-      let isEarlyExit = 1; 
+      // --- LOGIC CHECK-OUT ที่ปรับปรุง ---
+      let isEarlyExit = 0;
       let earlyExitMinutes = 0;
 
+      // ค้นหา Record ล่าสุดที่ยังไม่ได้ Check-out
       const lastCheckIn = await db
         .select()
         .from(attendanceTable)
@@ -87,19 +89,38 @@ export async function saveAttendanceAction(data: {
       }
 
       const currentRecord = lastCheckIn[0];
+      const checkInDate = currentRecord.date;
 
-      if (shift) {
-        const deadline = new Date(`${currentRecord.date}T${shift.endTime}`);
-        const checkInDateTime = new Date(`${currentRecord.date}T${currentRecord.checkIn || "00:00"}`);
+      // ดึงข้อมูลกะงาน (ตรวจเช็คกะชั่วคราวด้วยตาม Logic รอบแรก)
+      const [tempShiftData] = await db
+        .select({ id: temporaryShiftsTable.id, endTime: temporaryShiftsTable.endTime })
+        .from(temporaryShiftsTable)
+        .where(and(eq(temporaryShiftsTable.userId, data.userId), eq(temporaryShiftsTable.targetDate, checkInDate)))
+        .limit(1);
 
-        if (deadline < checkInDateTime) {
-          deadline.setDate(deadline.getDate() + 1);
+      const activeEndTime = tempShiftData?.endTime || shift?.endTime;
+
+      if (activeEndTime) {
+        const [currH, currM] = currentTimeStr.split(':').map(Number);
+        const [endH, endM] = activeEndTime.split(':').map(Number);
+        const [inH, inM] = (currentRecord.checkIn || "00:00").split(':').map(Number);
+
+        let currentTotalMinutes = currH * 60 + currM;
+        let endTotalMinutes = endH * 60 + endM;
+        const checkInTotalMinutes = inH * 60 + inM;
+
+        // รองรับกะข้ามคืน
+        if (endTotalMinutes < checkInTotalMinutes) {
+          if (currentTotalMinutes < checkInTotalMinutes) {
+            currentTotalMinutes += 1440;
+          }
+          endTotalMinutes += 1440;
         }
 
-        if (now.getTime() < deadline.getTime()) {
-          isEarlyExit = 2; 
-          const diffMs = deadline.getTime() - now.getTime();
-          earlyExitMinutes = Math.floor(diffMs / 60000);
+        // ตรวจสอบการออกก่อนเวลา
+        if (currentTotalMinutes < endTotalMinutes) {
+          isEarlyExit = 1; // บันทึกเป็น 1 ตาม Logic ที่คุณส่งมาตอนแรก
+          earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
         }
       }
 
@@ -107,16 +128,15 @@ export async function saveAttendanceAction(data: {
         .set({
           checkOut: currentTimeStr,
           imageOut: data.image,
-          imageOutId: data.fileId || null,  
+          imageOutId: data.fileId || null,
           locationOut: data.location,
-          isEarlyExit: String(isEarlyExit), 
-          // หมายเหตุ: หากใน DB ยังไม่มีคอลัมน์ earlyExitMinutes โปรแกรมจะแจ้ง Error ให้เพิ่มคอลัมน์ integer ใน Schema
+          isEarlyExit: isEarlyExit,
           ...(Object.keys(attendanceTable).includes('earlyExitMinutes') ? { earlyExitMinutes } : {}),
         })
         .where(eq(attendanceTable.id, currentRecord.id));
-      
+
       // @ts-ignore
-      if (result.rowCount === 0) {
+      if (result.rowCount === 0 && !result.length) {
         return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ต้องการอัปเดต" };
       }
     }
@@ -137,8 +157,8 @@ export async function saveAttendanceAction(data: {
 export async function createLeaveRequestAction(data: {
   userId: string;
   type: string;
-  startDate: string; 
-  endDate: string;   
+  startDate: string;
+  endDate: string;
   reason: string;
   fileUrl?: string;
   fileId?: string;
@@ -159,13 +179,13 @@ export async function createLeaveRequestAction(data: {
 
     await db.insert(leaveTable).values({
       user_id: data.userId,
-      department_id: user.departmentId, 
-      site_id: user.site_id,           
+      department_id: user.departmentId,
+      site_id: user.site_id,
       type: data.type,
       startDate: data.startDate,
       endDate: data.endDate,
       reason: data.reason,
-      status: "pending", 
+      status: "pending",
       fileUrl: data.fileUrl || null,
       fileId: data.fileId || null,
       fileName: data.fileName || null,
@@ -184,12 +204,12 @@ export async function createLeaveRequestAction(data: {
  * 3. อัปเดตสถานะการลา (แก้ไข Error Type Mismatch)
  */
 export async function updateLeaveStatusAction(
-  leaveId: string, 
+  leaveId: string,
   newStatus: "approved" | "rejected" | "pending",
   adminOrLeaderId: string
 ) {
   try {
-    const updatePayload: any = { 
+    const updatePayload: any = {
       status: newStatus,
       approvedBy: newStatus === "approved" ? adminOrLeaderId : null,
       approvedAt: newStatus === "approved" ? sql`timezone('Asia/Bangkok', now())` : null, // ลบ ::text ออก
@@ -236,7 +256,7 @@ export async function changePasswordAction(data: {
     }
 
     const isMatch = await bcrypt.compare(data.oldPassword, user.passwordHash);
-    
+
     if (!isMatch) {
       return { success: false, error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
     }

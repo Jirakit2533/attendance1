@@ -334,46 +334,46 @@ const filteredAttendance = useMemo(() => {
    ========================================================================== */
 
 /* --- ฟังก์ชันแก้ไขไซต์งาน --- */
-const handleUpdateSite = (site: any) => {
-  setEditingSite(site); // เก็บข้อมูลไซต์ที่เลือกลง State
-  const [latVal, lngVal] = (site.coodinates || ",").split(","); // แยกพิกัด
-  setLat(latVal || "");
-  setLng(lngVal || "");
-  setShowAddSite(true); // เปิด Modal อันเดิมที่มีอยู่แล้ว
-  setShowManageModal(false)
-};
-
-/* --- ฟังก์ชันแก้ไขตำแหน่ง --- */
-const handleEditPos = (pos: any) => {
-  setEditingPos(pos); // เก็บข้อมูลตำแหน่งที่เลือก
-  setShowAddPosition(true); // เปิด Modal อันเดิม
-  setShowManageModal(false)
-};
-
-   const handleDeleteSite = async (id: string) => {
-    // 1. ถามยืนยันก่อนลบ
-    const isConfirmed = confirm("⚠️ ยืนยันการลบไซต์งานนี้?\nข้อมูลพนักงานที่ผูกอยู่กับไซต์นี้อาจได้รับผลกระทบ");
-    if (!isConfirmed) return;
-  
-    const prev = [...allSites];
-    // 🚀 Optimistic Update: หายทันทีจากหน้าจอและการ์ด
-    setAllSites(allSites.filter(s => s.id !== id));
-  
-    try {
-      const res = await deleteSiteAction(id);
-      if (res.success) {
-        // 2. แจ้งเมื่อลบสำเร็จ
-        alert("✅ ลบไซต์งานเรียบร้อยแล้ว");
-      } else {
-        // 3. แจ้งเมื่อเกิดข้อผิดพลาด (เช่น ติด Foreign Key)
-        alert("❌ ไม่สามารถลบได้: " + res.error);
-        setAllSites(prev); // คืนค่ากลับมาในตาราง
-      }
-    } catch (error) {
-      alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
-      setAllSites(prev);
-    }
+  const handleUpdateSite = (site: any) => {
+    setEditingSite(site); // เก็บข้อมูลไซต์ที่เลือกลง State
+    const [latVal, lngVal] = (site.coodinates || ",").split(","); // แยกพิกัด
+    setLat(latVal || "");
+    setLng(lngVal || "");
+    setShowAddSite(true); // เปิด Modal อันเดิมที่มีอยู่แล้ว
+    setShowManageModal(false)
   };
+
+  /* --- ฟังก์ชันแก้ไขตำแหน่ง --- */
+  const handleEditPos = (pos: any) => {
+    setEditingPos(pos); // เก็บข้อมูลตำแหน่งที่เลือก
+    setShowAddPosition(true); // เปิด Modal อันเดิม
+    setShowManageModal(false)
+  };
+
+    const handleDeleteSite = async (id: string) => {
+      // 1. ถามยืนยันก่อนลบ
+      const isConfirmed = confirm("⚠️ ยืนยันการลบไซต์งานนี้?\nข้อมูลพนักงานที่ผูกอยู่กับไซต์นี้อาจได้รับผลกระทบ");
+      if (!isConfirmed) return;
+    
+      const prev = [...allSites];
+      // 🚀 Optimistic Update: หายทันทีจากหน้าจอและการ์ด
+      setAllSites(allSites.filter(s => s.id !== id));
+    
+      try {
+        const res = await deleteSiteAction(id);
+        if (res.success) {
+          // 2. แจ้งเมื่อลบสำเร็จ
+          alert("✅ ลบไซต์งานเรียบร้อยแล้ว");
+        } else {
+          // 3. แจ้งเมื่อเกิดข้อผิดพลาด (เช่น ติด Foreign Key)
+          alert("❌ ไม่สามารถลบได้: " + res.error);
+          setAllSites(prev); // คืนค่ากลับมาในตาราง
+        }
+      } catch (error) {
+        alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+        setAllSites(prev);
+      }
+    };
   
   /* ==========================================================================
      ฟังก์ชันจัดการ ตำแหน่ง
@@ -1345,7 +1345,47 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         {editingSite ? "แก้ไขไซต์งาน" : "เพิ่มไซต์งานใหม่"}
       </h3>
       
-      <form onSubmit={handleAddSite} className="space-y-5">
+      <form 
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (isProcessing) return;
+          setIsProcessing(true);
+
+          try {
+            const formData = new FormData(e.currentTarget);
+            const siteData = {
+              name: formData.get("siteName") as string,
+              address: formData.get("address") as string,
+              lat: lat, // ใช้พิกัดจาก State ที่ดึงมา
+              lng: lng,
+            };
+
+            let res;
+            if (editingSite) {
+              // ✅ กรณีแก้ไข: เรียก updateSiteAction พร้อม ID ตามที่ประกาศใน Server Action
+              res = await updateSiteAction(editingSite.id, siteData);
+            } else {
+              // ➕ กรณีเพิ่มใหม่: เรียก saveSiteAction ตามปกติ
+              res = await saveSiteAction(siteData);
+            }
+
+            if (res.success) {
+              setShowAddSite(false);
+              setEditingSite(null);
+              // ล้างค่าพิกัดหลังบันทึก
+              setLat("");
+              setLng("");
+            } else {
+              alert(res.error || "เกิดข้อผิดพลาดในการบันทึก");
+            }
+          } catch (err) {
+            console.error(err);
+          } finally {
+            setIsProcessing(false);
+          }
+        }} 
+        className="space-y-5"
+      >
         <div className="space-y-3">
           <input 
             name="siteName" 
@@ -1438,24 +1478,69 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
     </div>
   </div>
 )}
-      {/* --- 🎯 MODAL: ADD POSITION --- */}
+{/* --- 🎯 MODAL: ADD POSITION --- */}
 {showAddPosition && (
   <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center p-4">
     <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
       <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic">
         {editingPos ? "✏️ แก้ไขตำแหน่งงาน" : "💼 เพิ่มตำแหน่งงาน"}
       </h3>
-      <form onSubmit={handleAddPosition} className="space-y-4">
+      <form 
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (isProcessing) return;
+          setIsProcessing(true);
+
+          try {
+            const formData = new FormData(e.currentTarget);
+            const posName = formData.get("posName") as string;
+
+            let res;
+            if (editingPos) {
+              // ✅ กรณีแก้ไข: ส่งค่า String และรอผลลัพธ์
+              res = await updatePositionAction(editingPos.id, posName);
+            } else {
+              // ✅ กรณีเพิ่มใหม่: เรียก savePositionAction
+              res = await savePositionAction({ name: posName });
+            }
+
+            if (res.success) {
+              // ✅ อัปเดตข้อมูลหน้าจอทันทีหลังทำรายการสำเร็จ
+              setShowAddPosition(false);
+              setEditingPos(null);
+            } else {
+              alert(res.error || "ไม่สามารถบันทึกข้อมูลได้");
+            }
+          } catch (err) {
+            console.error(err);
+          } finally {
+            setIsProcessing(false);
+          }
+        }} 
+        className="space-y-4"
+      >
         <input 
           name="posName" 
           defaultValue={editingPos?.name || ""} 
           placeholder="ระบุชื่อตำแหน่ง..." 
           required 
-          className="w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-amber-500" 
+          disabled={isProcessing}
+          className="w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50" 
         />
         <div className="flex gap-2 pt-2">
-          <button type="button" onClick={() => { setShowAddPosition(false); setEditingPos(null); }} className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px]">ยกเลิก</button>
-          <button type="submit" disabled={isProcessing} className="flex-1 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 disabled:bg-slate-300">
+          <button 
+            type="button" 
+            disabled={isProcessing}
+            onClick={() => { setShowAddPosition(false); setEditingPos(null); }} 
+            className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px] disabled:opacity-30"
+          >
+            ยกเลิก
+          </button>
+          <button 
+            type="submit" 
+            disabled={isProcessing} 
+            className="flex-1 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 disabled:bg-slate-300"
+          >
             {isProcessing ? "กำลังบันทึก..." : editingPos ? "อัปเดตตำแหน่ง" : "บันทึกตำแหน่ง"}
           </button>
         </div>
@@ -1463,7 +1548,6 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
     </div>
   </div>
 )}
-
 {/* --- 🛡️ MODAL: EDIT ADMIN PROFILE --- */}
 {showAdminEdit && (
   <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[500] p-4 backdrop-blur-md animate-in fade-in duration-300">
