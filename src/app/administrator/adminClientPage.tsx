@@ -2195,14 +2195,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
 {/* --- 🖨️ MODAL: REPORT PREVIEW --- */}
 {showReport && (
   <div className="fixed inset-0 bg-slate-900/95 flex items-start justify-center z-[600] p-4 overflow-y-auto custom-scrollbar font-sans">
-    {/* ปรับปรุง container หลักให้มีขนาดความกว้างแบบกระดาษ A4 (approx 794px) และจัดการระยะขอบสำหรับการพิมพ์ */}
-    <div 
-      id="report-content" 
-      className="bg-white w-full max-w-[210mm] rounded-[2rem] print:rounded-none shadow-2xl flex flex-col p-12 print:p-[15mm] min-h-[297mm] relative mx-auto"
-      style={{ 
-        aspectRatio: '1 / 1.414', // สัดส่วนทองคำของกระดาษ A4
-      }}
-    >
+    <div id="report-content" className="bg-white w-full max-w-[210mm] min-h-[297mm] rounded-[3rem] shadow-2xl flex flex-col p-12 print:p-0 print:m-0 relative">
       
       {/* Header Controller (ซ่อนเมื่อพิมพ์) */}
       <div className="flex justify-between items-center mb-10 print:hidden border-b border-slate-100 pb-6">
@@ -2212,7 +2205,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
           </div>
           <div>
             <h2 className="font-black text-xl tracking-tighter text-slate-800 uppercase italic">
-              {exportFormat === 'excel' ? "ตัวอย่างเอกสาร" : "โหมดพรีวิวไฟล์ PDF ทางการ"}
+              {exportFormat === 'excel' ? "เอกสาร EXCEL" : "เอกสาร PDF"}
             </h2>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">
               {exportFormat === 'excel' ? "ร่างข้อมูลสำหรับไฟล์ Excel" : "ร่างตัวอย่างเอกสารสำหรับไฟล์ PDF"} • {reportData.length} รายการ
@@ -2253,16 +2246,16 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         </div>
       </div>
 
-      {/* ตารางข้อมูลรายงาน - ปรับขนาดฟอนต์ให้เข้ากับกระดาษจริง */}
-      <div className={`overflow-hidden rounded-[2.5rem] print:rounded-2xl border border-slate-200 shadow-sm ${exportFormat === 'excel' ? 'bg-slate-50/50' : 'bg-white'}`}>
-        <table className="w-full text-left border-collapse table-fixed">
+      {/* ตารางข้อมูลรายงาน */}
+      <div className={`overflow-hidden rounded-[2.5rem] border border-slate-200 shadow-sm ${exportFormat === 'excel' ? 'bg-slate-50/50' : 'bg-white'}`}>
+        <table className="w-full text-left border-collapse">
           <thead>
             <tr className={exportFormat === 'excel' ? "bg-emerald-700 text-white" : "bg-slate-900 text-white"}>
-              <th className="p-4 font-black text-[9px] uppercase tracking-wider border-r border-white/10 w-[15%] text-center">วันที่</th>
-              <th className="p-4 font-black text-[9px] uppercase tracking-wider border-r border-white/10 w-[40%]">ข้อมูลพนักงาน</th>
-              <th className="p-4 font-black text-[9px] uppercase tracking-wider text-center border-r border-white/10 w-[12%]">เวลาเข้า</th>
-              <th className="p-4 font-black text-[9px] uppercase tracking-wider text-center border-r border-white/10 w-[12%]">เวลาออก</th>
-              <th className="p-4 font-black text-[9px] uppercase tracking-wider text-right w-[21%]">สถานะ</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider border-r border-white/10 w-32 text-center">วันที่</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider border-r border-white/10">ข้อมูลพนักงาน</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-28">เวลาเข้า</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-28">เวลาออก</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-right w-40">สถานะ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 italic font-medium text-slate-700">
@@ -2270,30 +2263,30 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               const empInfo = initialEmployees?.find((e: any) => String(e.id) === String(a.userId || a.user_id));
               return (
                 <tr key={i} className="hover:bg-white transition-colors page-break-inside-avoid">
-                  <td className="p-4 font-bold text-slate-500 text-[10px] text-center border-r border-slate-100">{a.date}</td>
-                  <td className="p-4 border-r border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 overflow-hidden border border-slate-200 flex-shrink-0">
+                  <td className="p-5 font-bold text-slate-500 text-xs text-center border-r border-slate-100">{a.date}</td>
+                  <td className="p-5 border-r border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 flex-shrink-0">
                         {a.avatarUrl || empInfo?.avatarUrl ? (
                           <img src={a.avatarUrl || empInfo?.avatarUrl} className="w-full h-full object-cover" alt="" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-300 font-bold text-xs">?</div>
+                          <div className="w-full h-full flex items-center justify-center text-slate-300 font-bold text-lg">?</div>
                         )}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-black text-slate-900 text-[11px] uppercase truncate leading-tight">
+                        <div className="font-black text-slate-900 text-sm uppercase truncate leading-none mb-1">
                           {a.employeeName || (empInfo ? `${empInfo.firstName} ${empInfo.lastName}` : "ไม่ทราบชื่อ")}
                         </div>
-                        <div className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter italic">
-                          ID: {a.userId || a.user_id} | ไซต์: {a.siteName || "ทั่วไป"}
+                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter italic">
+                          รหัส: {a.userId || a.user_id} | ไซต์งาน: {a.siteName || "ทั่วไป"}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td className="p-4 text-center text-emerald-600 font-black text-xs border-r border-slate-100">{a.checkIn || "--:--"}</td>
-                  <td className="p-4 text-center text-red-500 font-black text-xs border-r border-slate-100">{a.checkOut || "--:--"}</td>
-                  <td className="p-4 text-right bg-slate-50/30">
-                    <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter ${a.checkOut ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                  <td className="p-5 text-center text-emerald-600 font-black text-sm border-r border-slate-100">{a.checkIn || "--:--"}</td>
+                  <td className="p-5 text-center text-red-500 font-black text-sm border-r border-slate-100">{a.checkOut || "--:--"}</td>
+                  <td className="p-5 text-right bg-slate-50/30">
+                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter ${a.checkOut ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                       {a.checkOut ? 'เสร็จสมบูรณ์' : 'กำลังปฏิบัติงาน'}
                     </span>
                   </td>
@@ -2308,13 +2301,13 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         </table>
       </div>
 
-      {/* ส่วนท้ายรายงาน (Signature & Stamp) - ปรับระยะขอบให้คงที่ */}
-      <div className="mt-12 grid grid-cols-2 gap-20 px-10 pb-10">
+      {/* ส่วนท้ายรายงาน (Signature & Stamp) - ผลักลงด้านล่างสุด */}
+      <div className="mt-auto pt-16 grid grid-cols-2 gap-20 px-10 pb-10">
         <div className="text-center">
           <div className="border-t-2 border-slate-200 pt-6">
-            <p className="text-[11px] font-black text-slate-900 uppercase">({admin.name || "ชื่อผู้จัดการ"})</p>
+            <p className="text-[11px] font-black text-slate-900 uppercase">(Jirakit Nuchsongsin)</p>
             <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest italic leading-none">ลายมือชื่อผู้มีอำนาจลงนาม</p>
-            <p className="text-[8px] text-slate-300 mt-10 italic uppercase">วันที่: ____ / ____ / ____</p>
+            <p className="text-[10px] text-slate-800 mt-10 italic uppercase font-bold">วันที่: ____ / ____ / ____</p>
           </div>
         </div>
         <div className="flex items-center justify-center border-2 border-dashed border-slate-100 rounded-[2.5rem] h-32 relative">
@@ -2323,30 +2316,33 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
       </div>
 
       {/* Footer Print Only */}
-      <div className="mt-auto pt-8 text-center border-t border-slate-50 hidden print:block">
+      <div className="pt-8 text-center border-t border-slate-50 hidden print:block">
         <p className="text-[8px] text-slate-300 font-medium uppercase tracking-[0.5em]">รายงานนี้ได้รับการสร้างโดยระบบโดยอัตโนมัติ ไม่จำเป็นต้องใช้ลายมือชื่อหากมีการประทับตรา</p>
       </div>
     </div>
   </div>
 )}
 
-      {/* --- CSS สำหรับพิมพ์ --- */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          body { background: white !important; }
-          .print\\:hidden { display: none !important; }
-          #report-content { 
-            box-shadow: none !important; 
-            width: 100% !important; 
-            max-width: none !important; 
-            margin: 0 !important; 
-            padding: 0 !important;
-            border-radius: 0 !important;
-          }
-          .page-break-inside-avoid { page-break-inside: avoid; }
-        }
-      ` }} />
-
+{/* --- CSS สำหรับพิมพ์ --- */}
+<style dangerouslySetInnerHTML={{ __html: `
+  @media print {
+    @page { size: A4 portrait; margin: 0; }
+    body { background: white !important; -webkit-print-color-adjust: exact; }
+    .print\\:hidden { display: none !important; }
+    #report-content { 
+      box-shadow: none !important; 
+      width: 210mm !important;
+      height: 297mm !important;
+      margin: 0 !important; 
+      padding: 15mm !important;
+      border-radius: 0 !important;
+      position: relative !important;
+      overflow: hidden !important;
+    }
+    .page-break-inside-avoid { page-break-inside: avoid; }
+    .mt-auto { margin-top: auto !important; }
+  }
+` }} />
 
 {/* --- 🖨️ MODAL: EDIT SITE & POSITION --- */}
 {showManageModal && (
