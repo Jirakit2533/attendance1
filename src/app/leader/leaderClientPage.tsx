@@ -1332,7 +1332,7 @@ export default function LeaderClientPage({
                                         <>
                                           <button
                                             onClick={() =>
-                                              updateLeaveStatus(
+                                              updateLeaveStatusAction(
                                                 l.id,
                                                 "approved"
                                               )
@@ -1343,7 +1343,7 @@ export default function LeaderClientPage({
                                           </button>
                                           <button
                                             onClick={() =>
-                                              updateLeaveStatus(
+                                              updateLeaveStatusAction(
                                                 l.id,
                                                 "rejected"
                                               )
@@ -1356,7 +1356,7 @@ export default function LeaderClientPage({
                                       ) : (
                                         <button
                                           onClick={() =>
-                                            updateLeaveStatus(l.id, "pending")
+                                            updateLeaveStatusAction(l.id, "pending")
                                           }
                                           className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-200 transition-all flex items-center gap-2 italic"
                                         >

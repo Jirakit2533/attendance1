@@ -2,7 +2,7 @@
 
 import { db } from "@/db/db";
 import { leaveTable, attendanceTable, usersTable, shiftsTable, overtimeTable } from "@/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull, desc } from "drizzle-orm"; // เพิ่ม isNull, desc
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 
@@ -20,7 +20,6 @@ export async function saveAttendanceAction(data: {
 }) {
   try {
     const now = new Date();
-    // เตรียมวันที่และเวลาในรูปแบบ Asia/Bangkok จากเครื่อง
     const dateStr = new Intl.DateTimeFormat('en-CA', { 
       timeZone: 'Asia/Bangkok' 
     }).format(now);
@@ -29,7 +28,6 @@ export async function saveAttendanceAction(data: {
       hour12: false 
     });
 
-    // ดึงข้อมูลกะงานเพื่อใช้คำนวณ
     const shiftData = await db
       .select()
       .from(shiftsTable)
@@ -39,7 +37,6 @@ export async function saveAttendanceAction(data: {
     const shift = shiftData[0];
 
     if (data.type === "IN") {
-      // Logic คำนวณการเข้าสาย (ถ้ามีกะงาน)
       let isLate = 0;
       let lateMinutes = 0;
 
@@ -61,19 +58,18 @@ export async function saveAttendanceAction(data: {
         site_id: data.siteId,
         shift_id: shift?.id || null,
         date: dateStr,
-        checkIn: currentTimeStr, // ใช้เวลาจากอุปกรณ์
+        checkIn: currentTimeStr,
         imageIn: data.image,
         imageInId: data.fileId || null,
         locationIn: data.location,
         isLate: isLate,
-        lateMinutes: lateMinutes,
+        // หมายเหตุ: หากใน DB ยังไม่มีคอลัมน์ lateMinutes โปรแกรมจะแจ้ง Error ให้เพิ่มคอลัมน์ integer ใน Schema
+        ...(Object.keys(attendanceTable).includes('lateMinutes') ? { lateMinutes } : {}),
       });
     } else {
-      // Logic คำนวณการออกก่อน: ปกติ = 1, ออกก่อน = 2
-      let isEarlyExit = 1; // Default เป็น ปกติ
+      let isEarlyExit = 1; 
       let earlyExitMinutes = 0;
 
-      // ค้นหารายการเช็คอินล่าสุดที่ยังไม่ได้เช็คเอาท์
       const lastCheckIn = await db
         .select()
         .from(attendanceTable)
@@ -93,18 +89,15 @@ export async function saveAttendanceAction(data: {
       const currentRecord = lastCheckIn[0];
 
       if (shift) {
-        // --- ปรับปรุงโลจิกกะกลางคืนด้วย Absolute Timeline ---
         const deadline = new Date(`${currentRecord.date}T${shift.endTime}`);
         const checkInDateTime = new Date(`${currentRecord.date}T${currentRecord.checkIn || "00:00"}`);
 
-        // ถ้าเวลาเลิกงานน้อยกว่าเวลาเข้างาน แสดงว่าเป็นกะข้ามคืน
         if (deadline < checkInDateTime) {
           deadline.setDate(deadline.getDate() + 1);
         }
 
-        // เปรียบเทียบ Timestamp ปัจจุบันกับเส้นตาย
         if (now.getTime() < deadline.getTime()) {
-          isEarlyExit = 2; // เปลี่ยนเป็น ออกก่อน
+          isEarlyExit = 2; 
           const diffMs = deadline.getTime() - now.getTime();
           earlyExitMinutes = Math.floor(diffMs / 60000);
         }
@@ -112,12 +105,13 @@ export async function saveAttendanceAction(data: {
 
       const result = await db.update(attendanceTable)
         .set({
-          checkOut: currentTimeStr, // ใช้เวลาจากอุปกรณ์
+          checkOut: currentTimeStr,
           imageOut: data.image,
           imageOutId: data.fileId || null,  
           locationOut: data.location,
-          isEarlyExit: String(isEarlyExit), // บันทึกเป็น Text ตามโครงสร้าง DB ของคุณ
-          earlyExitMinutes: earlyExitMinutes,
+          isEarlyExit: String(isEarlyExit), 
+          // หมายเหตุ: หากใน DB ยังไม่มีคอลัมน์ earlyExitMinutes โปรแกรมจะแจ้ง Error ให้เพิ่มคอลัมน์ integer ใน Schema
+          ...(Object.keys(attendanceTable).includes('earlyExitMinutes') ? { earlyExitMinutes } : {}),
         })
         .where(eq(attendanceTable.id, currentRecord.id));
       
@@ -136,6 +130,7 @@ export async function saveAttendanceAction(data: {
     return { success: false, error: "บันทึกเวลาไม่สำเร็จ: " + (error.message || "Unknown Error") };
   }
 }
+
 /**
  * 2. ส่งคำขอลางาน
  */
@@ -185,6 +180,9 @@ export async function createLeaveRequestAction(data: {
   }
 }
 
+/**
+ * 3. อัปเดตสถานะการลา (แก้ไข Error Type Mismatch)
+ */
 export async function updateLeaveStatusAction(
   leaveId: string, 
   newStatus: "approved" | "rejected" | "pending",
@@ -194,9 +192,9 @@ export async function updateLeaveStatusAction(
     const updatePayload: any = { 
       status: newStatus,
       approvedBy: newStatus === "approved" ? adminOrLeaderId : null,
-      approvedAt: newStatus === "approved" ? sql`timezone('Asia/Bangkok', now())::text` : null,
+      approvedAt: newStatus === "approved" ? sql`timezone('Asia/Bangkok', now())` : null, // ลบ ::text ออก
       rejectedBy: newStatus === "rejected" ? adminOrLeaderId : null,
-      rejectedAt: newStatus === "rejected" ? sql`timezone('Asia/Bangkok', now())::text` : null,
+      rejectedAt: newStatus === "rejected" ? sql`timezone('Asia/Bangkok', now())` : null, // ลบ ::text ออก
     };
 
     await db.update(leaveTable)
@@ -212,6 +210,9 @@ export async function updateLeaveStatusAction(
   }
 }
 
+/**
+ * 4. เปลี่ยนรหัสผ่าน
+ */
 export async function changePasswordAction(data: {
   userId: string;
   oldPassword: string;
