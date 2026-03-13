@@ -92,6 +92,8 @@ export default function AdminClientPage({
 
   const [coords, setCoords] = useState("");
   const [isLocating, setIsLocating] = useState(false);
+
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   
   const [showAddSite, setShowAddSite] = useState(false);
   const [showAddPosition, setShowAddPosition] = useState(false);
@@ -943,6 +945,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                       <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">รูป</th>
                       <th className="py-5 px-6 text-left bg-white border-b border-gray-100">พนักงาน</th>
                       <th className="py-5 px-6 text-left bg-white border-b border-gray-100">แผนก</th>
+                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">รอบเข้างาน</th>
                       <th className="py-5 px-6 text-left bg-white border-b border-gray-100">ไซต์งาน</th>
                       <th className="py-5 px-6 text-left bg-white border-b border-gray-100">ตำแหน่ง</th>
                       <th className="py-5 px-6 text-left bg-white border-b border-gray-100">ระดับสิทธิ์</th>
@@ -968,6 +971,19 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                             <div className="text-blue-500 font-mono text-[11px]">@{e.userName || e.id}</div>
                           </td>
                           <td className="py-4 px-6 font-bold text-gray-600">{e.departmentName || "ไม่ระบุแผนก"}</td>
+                          <td className="py-4 px-6 font-bold text-gray-600">
+                            <div className="flex flex-col">
+                              {e.startTime && e.endTime ? (
+                                <span className="text-[15px] text-black-600">
+                                  {e.startTime.slice(0, 5)} - {e.endTime.slice(0, 5)}
+                                </span>
+                              ) : (
+                                <span className="text-[13px] text-slate-400 font-medium italic">
+                                  ยังไม่ได้ระบุ
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-4 px-6">
                             {(() => {
                               // 1. เช็คว่าเป็น Leader หรือไม่
@@ -1106,14 +1122,16 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                             )}
                           </td>
                           <td className="p-6 font-bold whitespace-nowrap">
-                            {a.isEarlyExit === 1 ? (
+                            {a.isEarlyExit === 2 ? (
                               <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
                                 ⚠️ ออกก่อนเวลา
                               </span>
-                            ) : (
+                            ) : a.isEarlyExit === 1 ? (
                               <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
                                 ✅ ปกติ
                               </span>
+                            ) : (
+                              <span className="text-gray-400 font-medium px-3">-</span>
                             )}
                           </td>
                           <td className="py-4 px-6 text-center font-black text-green-600 text-base">
@@ -1657,7 +1675,22 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
 {/* --- 👤 MODAL: REGISTRATION & EDIT --- */}
 {showRegister && (
   <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[500] p-4 backdrop-blur-md animate-in fade-in duration-300">
-    <form onSubmit={handleSaveEmployee} className="bg-white p-8 rounded-[3.5rem] w-full max-w-2xl space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl custom-scrollbar">
+    <form 
+      onSubmit={(e) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const pwd = formData.get("password");
+        const confirmPwd = formData.get("confirmPassword");
+        
+        // Logic ตรวจสอบรหัสผ่านเฉพาะตอนลงทะเบียนใหม่
+        if (!editingEmployee && pwd !== confirmPwd) {
+          alert("รหัสผ่านไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง");
+          return;
+        }
+        handleSaveEmployee(e);
+      }} 
+      className="bg-white p-8 rounded-[3.5rem] w-full max-w-2xl space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl custom-scrollbar"
+    >
       <h2 className="font-black text-2xl text-slate-900 uppercase italic border-b pb-4">
         {editingEmployee ? "✏️ แก้ไขข้อมูลพนักงาน" : "👤 ลงทะเบียนพนักงานใหม่"}
       </h2>
@@ -1710,6 +1743,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Password {editingEmployee && "(ล็อคไว้)"}</label>
           <input 
+            id="reg-password"
             name="password" 
             type="password" 
             placeholder={editingEmployee ? "••••••••" : "รหัสผ่าน"} 
@@ -1718,6 +1752,28 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${editingEmployee ? 'bg-slate-100 text-slate-400 border-transparent' : 'bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white'}`} 
           />
         </div>
+
+        {/* Confirm Password (เพิ่มใหม่เฉพาะตอน Register) */}
+        {!editingEmployee && (
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Confirm Password</label>
+            <input 
+              name="confirmPassword" 
+              type="password" 
+              placeholder="ยืนยันรหัสผ่าน" 
+              required 
+              onChange={(e) => {
+                const pwd = (document.getElementById('reg-password') as HTMLInputElement).value;
+                if (e.target.value !== pwd) {
+                  e.target.setCustomValidity("รหัสผ่านไม่ตรงกัน");
+                } else {
+                  e.target.setCustomValidity("");
+                }
+              }}
+              className="w-full p-4 bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl font-bold border outline-none transition-all" 
+            />
+          </div>
+        )}
 
         {/* ชื่อ-นามสกุล */}
         <div className="space-y-1">
@@ -1729,7 +1785,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
           <input name="lastName" defaultValue={editingEmployee?.lastName} required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all" />
         </div>
 
-        {/* ✨ ส่วนที่จะแสดงเฉพาะในโหมดแก้ไข (Edit Mode) เท่านั้น ✨ */}
+        {/* --- ✨ ส่วนที่จะแสดงเฉพาะในโหมดแก้ไข (Edit Mode) เท่านั้น ✨ --- */}
         {editingEmployee && (
           <>
             <div className="space-y-1">
@@ -1737,7 +1793,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               <input 
                 type="time" 
                 name="startTime" 
-                defaultValue={editingEmployee?.startTime || standardTime.startTime} 
+                defaultValue={editingEmployee?.startTime || "08:00"} 
                 className="w-full bg-blue-50/50 p-4 rounded-2xl font-bold border border-blue-100 focus:border-blue-500 outline-none transition-all" 
               />
             </div>
@@ -1746,7 +1802,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               <input 
                 type="time" 
                 name="endTime" 
-                defaultValue={editingEmployee?.endTime || standardTime.endTime} 
+                defaultValue={editingEmployee?.endTime || "17:00"} 
                 className="w-full bg-blue-50/50 p-4 rounded-2xl font-bold border border-blue-100 focus:border-blue-500 outline-none transition-all" 
               />
             </div>
@@ -1767,7 +1823,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
           </select>
         </div>
 
-        {/* แผนก (Department) - เก็บไว้ 1 อันตามสั่ง */}
+        {/* แผนก (Department) */}
         <div className="space-y-1">
           <label className="text-[10px] font-black text-slate-400 uppercase ml-2">แผนก (Department)</label>
           <select 
@@ -1852,15 +1908,27 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
   </div>
 )}
 
-
 {/* --- 📊 MODAL (Report Generator) --- */}
 {showFilterModal && (
   <div className="fixed inset-0 bg-slate-100 z-[500] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 font-sans">
     
+    {/* State สำหรับเปิด-ปิด Sidebar บนมือถือ (เพิ่มเฉพาะจุดนี้) */}
+    {/* const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false); */}
+
     {/* --- 1. Header --- */}
     <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-blue-100">
+        {/* ปุ่มเปิด Filter บนมือถือ (ปรับเปลี่ยนรูปเป็น 3 ขีด สีขาว-เทา) */}
+        <button 
+          onClick={() => setIsMobileFilterOpen(true)}
+          className="lg:hidden w-10 h-10 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
+        >
+          <span className="w-5 h-[2px] bg-slate-400 rounded-full"></span>
+          <span className="w-5 h-[2px] bg-slate-400 rounded-full"></span>
+          <span className="w-5 h-[2px] bg-slate-400 rounded-full"></span>
+        </button>
+        
+        <div className="w-10 h-10 bg-blue-600 rounded-xl hidden lg:flex items-center justify-center text-white text-xl shadow-lg shadow-blue-100">
           {isProcessing ? <span className="animate-spin text-lg">⏳</span> : "📊"}
         </div>
         <div>
@@ -1879,13 +1947,29 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
       </button>
     </div>
 
-    <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+    <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
       
-      {/* --- 2. Left Side: Filters --- */}
-      <div className="w-full lg:w-80 bg-white border-r border-slate-200 p-6 overflow-y-auto">
-        <h4 className="text-[11px] font-black text-slate-900 mb-6 uppercase tracking-[0.2em] flex items-center gap-2">
-          <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span> เงื่อนไขรายงาน
-        </h4>
+      {/* --- 2. Side Bar: Filters (Desktop: Normal / Mobile: Drawer) --- */}
+      
+      {/* Overlay สำหรับมือถือเมื่อเปิด Sidebar */}
+      {isMobileFilterOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 z-[510] lg:hidden backdrop-blur-sm animate-in fade-in duration-300"
+          onClick={() => setIsMobileFilterOpen(false)}
+        ></div>
+      )}
+
+      <div className={`
+        fixed inset-y-0 left-0 w-80 bg-white z-[520] p-6 overflow-y-auto shadow-2xl transition-transform duration-300 transform
+        lg:relative lg:translate-x-0 lg:shadow-none lg:z-0 lg:border-r lg:border-slate-200
+        ${isMobileFilterOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <div className="flex items-center justify-between mb-6 lg:block">
+           <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span> เงื่อนไขรายงาน
+          </h4>
+          <button onClick={() => setIsMobileFilterOpen(false)} className="lg:hidden text-slate-400 font-bold">ปิด ✕</button>
+        </div>
         
         <div className="space-y-6">
           {/* 2.1 รูปแบบไฟล์ */}
@@ -1955,6 +2039,13 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               {allSites?.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
+          
+          <button 
+            onClick={() => setIsMobileFilterOpen(false)}
+            className="lg:hidden w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs"
+          >
+            ตกลงและบันทึกฟิลเตอร์
+          </button>
         </div>
       </div>
 

@@ -59,7 +59,7 @@ export const sitesTable = pgTable("sites", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull(),
   address: text("address"),
-  coodinates: varchar("coordinates", { length: 255 }),
+  coodinates: varchar("coodinates", { length: 255 }),
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
   createdBy: uuid("created_by_id").references(() => usersTable.id),
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
@@ -166,7 +166,7 @@ export const attendanceTable = pgTable("attendance", {
   imageOutId: text("image_out_id"),
   locationOut: varchar("location_out", { length: 255 }),
   isLate: integer("is_late").default(0),      // 0 = ปกติ, 1 = สาย
-  isEarlyExit: integer("is_early_exit").default(0), // 0 = ปกติ, 1 = ออกสาย
+  isEarlyExit: text("is_early_exit", { length: 255 }), // 0 = ปกติ, 1 = ออกสาย
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
 });
 

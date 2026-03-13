@@ -81,37 +81,58 @@ export async function checkInAction(userId: string, base64Image: string, locatio
 
 export async function checkOutAction(userId: string, base64Image: string, location: string) {
   try {
-    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+    const now = new Date();
+    // 1. เตรียมรูปแบบเวลาและวันที่ (Asia/Bangkok)
+    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
+    const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false }); // รูปแบบ "HH:mm:ss"
 
-    // 1. ดึงข้อมูลกะงาน (endTime) จากทั้ง shiftsTable และกะพิเศษ เพื่อใช้เทียบการออกก่อนเวลา
-    const [userRecord, shiftData, tempShift] = await Promise.all([
-      db.select({ firstName: usersTable.firstName, lastName: usersTable.lastName }).from(usersTable).where(eq(usersTable.id, userId)).limit(1),
+    // 2. ดึงข้อมูลกะงาน (endTime)
+    const [shiftData, tempShift] = await Promise.all([
       db.select({ id: shiftsTable.id, endTime: shiftsTable.endTime }).from(shiftsTable).where(eq(shiftsTable.userId, userId)).limit(1),
       db.select({ id: temporaryShiftsTable.id, endTime: temporaryShiftsTable.endTime }).from(temporaryShiftsTable).where(and(eq(temporaryShiftsTable.userId, userId), eq(temporaryShiftsTable.targetDate, dateStr))).limit(1)
     ]);
 
-    // กำหนดเวลาเลิกงานจริงที่ต้องใช้เทียบ
+    // กำหนดเวลาเลิกงานจริง
     const activeEndTime = tempShift[0]?.endTime || shiftData[0]?.endTime;
 
+    // 3. คำนวณสถานะการออก (1 = ปกติ, 2 = ออกก่อน)
+    let isEarlyExit = 1; // Default ปกติ
+    let earlyExitMinutes = 0;
+
+    if (activeEndTime) {
+      // แปลงเวลา "HH:mm:ss" เป็นนาทีรวมเพื่อเปรียบเทียบ
+      const [currH, currM] = currentTimeStr.split(':').map(Number);
+      const [endH, endM] = activeEndTime.split(':').map(Number);
+      
+      const currentTotalMinutes = currH * 60 + currM;
+      const endTotalMinutes = endH * 60 + endM;
+
+      if (currentTotalMinutes < endTotalMinutes) {
+        isEarlyExit = 2; // ออกก่อนเวลา
+        earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
+      }
+    }
+
+    // 4. จัดการรูปภาพ
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
     const uploadRes = await uploadToDrive(buffer, `checkout_${userId}_${Date.now()}.png`, "image/png");
 
-    const checkOutTimeSql = sql`timezone('Asia/Bangkok', now())::time`;
-
-    // 2. อัปเดตตาราง Attendance (ตรวจสอบเฉพาะการออกก่อนเวลา isEarlyExit)
+    // 5. อัปเดตตาราง Attendance โดยส่งค่าที่คำนวณแล้วเข้าไปตรงๆ
     const result = await db
       .update(attendanceTable)
       .set({
-        checkOut: checkOutTimeSql, 
+        checkOut: currentTimeStr, // บันทึกเวลาที่ดึงมาจากเครื่อง
         imageOut: uploadRes.url, 
         imageOutId: uploadRes.fileId,
         locationOut: location,
-        // ✅ ตรวจสอบ: ก่อนเวลา = 1, ปกติ (รวมถึงหลังเวลา) = 0
-        isEarlyExit: activeEndTime ? sql`CASE WHEN ${checkOutTimeSql} < ${activeEndTime}::time THEN 1 ELSE 0 END` : 0,
-        earlyExitMinutes: activeEndTime ? sql`CASE WHEN ${checkOutTimeSql} < ${activeEndTime}::time THEN EXTRACT(EPOCH FROM (${activeEndTime}::time - ${checkOutTimeSql})) / 60 ELSE 0 END` : 0,
+        isEarlyExit: isEarlyExit,
+        earlyExitMinutes: earlyExitMinutes,
       })
-      .where(and(eq(attendanceTable.user_id, userId), eq(attendanceTable.date, dateStr)))
+      .where(and(
+        eq(attendanceTable.user_id, userId), 
+        eq(attendanceTable.date, dateStr)
+      ))
       .returning({ id: attendanceTable.id });
 
     revalidatePath("/employee");

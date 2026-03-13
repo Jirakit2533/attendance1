@@ -84,12 +84,12 @@ export async function saveSiteAction(data: { name: string; address: string; lat:
     if (!admin || !admin.companyId) return { success: false, error: "เซสชันหมดอายุ" };
 
     // นำ lat และ lng มาต่อกันเป็น "lat,lng" เพื่อลง field coodinates (ตาม schema ของคุณ)
-    const combinedCoordinates = `${data.lat},${data.lng}`;
+    const combinedCoodinates = `${data.lat},${data.lng}`;
 
     await db.insert(sitesTable).values({
       name: data.name,
       address: data.address,
-      coodinates: combinedCoordinates, // บันทึกเข้า field เดิมใน DB
+      coodinates: combinedCoodinates, // บันทึกเข้า field เดิมใน DB
       companyId: admin.companyId,
       createdBy: admin.id,
     });
@@ -478,13 +478,13 @@ export async function updateSiteAction(id: string, data: { name: string; address
     const admin = await getAdminContext();
     if (!admin) return { success: false, error: "Unauthorized" };
 
-    const combinedCoordinates = `${data.lat},${data.lng}`;
+    const combinedCoodinates = `${data.lat},${data.lng}`;
 
     await db.update(sitesTable)
       .set({
         name: data.name,
         address: data.address,
-        coodinates: combinedCoordinates,
+        coodinates: combinedCoodinates,
         updatedAt: new Date(),
       })
       .where(eq(sitesTable.id, id));

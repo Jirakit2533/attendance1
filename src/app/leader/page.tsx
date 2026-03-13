@@ -28,7 +28,6 @@ export default async function LeaderPage() {
     position: positionsTable.name, // ชื่อตำแหน่ง
     site: sitesTable.name,         // ชื่อไซต์งาน
     department: departmentsTable.name, // ชื่อแผนก
-    role: usersTable.role,
   })
   .from(usersTable)
   .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
@@ -103,6 +102,7 @@ export default async function LeaderPage() {
             imageIn: attendanceTable.imageIn,
             imageOut: attendanceTable.imageOut,
             isLate: attendanceTable.isLate, 
+            isEarlyExit: attendanceTable.isEarlyExit, // เพิ่มฟิลด์สถานะออกก่อน
             startTime: attendanceTable.startTime, 
             endTime: attendanceTable.endTime, 
           })
@@ -120,15 +120,15 @@ export default async function LeaderPage() {
         : Promise.resolve([])
     ]);
 
-    // 5. จัดเตรียมข้อมูล (Mapping)
+    // 5. จัดเตรียมข้อมูล (Mapping พร้อมป้องกัน Undefined/Null)
     const finalProps = {
       userProfile: {
         ...user,
-        name: `${user.firstName} ${user.lastName}`,
+        name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
         isAllSites: isAllSitesLeader
       },
       // ข้อมูลการเข้างานของ Leader เอง (ตารางที่ 1)
-      myRecords: myRecordsRaw.map(r => ({
+      myRecords: (myRecordsRaw || []).map(r => ({
         ...r,
         location: r.locationIn || r.locationOut || "ไม่ได้ระบุพิกัด",
         position: user.position || "ไม่ระบุ", 
@@ -136,19 +136,25 @@ export default async function LeaderPage() {
         role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน"
       })),
       // ข้อมูลการเข้างานของทีม (ตารางที่ 2)
-      initialAttendance: teamAttendanceRaw.map(t => ({
+      initialAttendance: (teamAttendanceRaw || []).map(t => ({
         ...t,
-        employeeName: `${t.firstName || ''} ${t.lastName || ''}`.trim(),
+        employeeName: `${t.firstName || ''} ${t.lastName || ''}`.trim() || t.userName || "ไม่ระบุชื่อ",
         location: t.locationIn || t.locationOut || "ไม่ได้ระบุพิกัด",
-        role: t.role === "leader" ? "หัวหน้างาน" : "พนักงาน"
+        role: t.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
+        positionName: t.position || "พนักงาน" // เพิ่ม fallback สำหรับตำแหน่ง
       })),
-      initialLeaves: allLeaveRequests.map(l => ({
+      initialLeaves: (allLeaveRequests || []).map(l => ({
         ...l,
-        employeeName: `${l.firstName || ''} ${l.lastName || ''}`.trim(),
+        employeeName: `${l.firstName || ''} ${l.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
       })),
     };
 
-    return <LeaderClientPage {...JSON.parse(JSON.stringify(finalProps))} />;
+    // ล้างค่า undefined ให้เป็น null ก่อนส่งไป Client เพื่อป้องกัน TypeError ใน Hydration
+    const safeData = JSON.parse(JSON.stringify(finalProps, (key, value) => 
+        value === undefined ? null : value
+    ));
+
+    return <LeaderClientPage {...safeData} />;
 
   } catch (error) {
     console.error("Leader Page Critical Error:", error);

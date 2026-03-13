@@ -19,9 +19,15 @@ export async function saveAttendanceAction(data: {
   siteId: string | null;
 }) {
   try {
+    const now = new Date();
+    // เตรียมวันที่และเวลาในรูปแบบ Asia/Bangkok จากเครื่อง
     const dateStr = new Intl.DateTimeFormat('en-CA', { 
       timeZone: 'Asia/Bangkok' 
-    }).format(new Date());
+    }).format(now);
+    const currentTimeStr = now.toLocaleTimeString('en-GB', { 
+      timeZone: 'Asia/Bangkok',
+      hour12: false 
+    });
 
     // ดึงข้อมูลกะงานเพื่อใช้คำนวณ
     const shiftData = await db
@@ -38,10 +44,6 @@ export async function saveAttendanceAction(data: {
       let lateMinutes = 0;
 
       if (shift) {
-        // ดึงเวลาปัจจุบันในรูปแบบ HH:mm:ss
-        const now = new Date();
-        const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok' }); // 14:30:00
-        
         if (currentTimeStr > shift.startTime) {
           const [nowH, nowM] = currentTimeStr.split(':').map(Number);
           const [shH, shM] = shift.startTime.split(':').map(Number);
@@ -59,7 +61,7 @@ export async function saveAttendanceAction(data: {
         site_id: data.siteId,
         shift_id: shift?.id || null,
         date: dateStr,
-        checkIn: sql`timezone('Asia/Bangkok', now())::time`,
+        checkIn: currentTimeStr, // ใช้เวลาจากอุปกรณ์
         imageIn: data.image,
         imageInId: data.fileId || null,
         locationIn: data.location,
@@ -67,28 +69,26 @@ export async function saveAttendanceAction(data: {
         lateMinutes: lateMinutes,
       });
     } else {
-      // Logic คำนวณการออกก่อน (ถ้ามีกะงาน)
-      let isEarlyExit = 0;
+      // Logic คำนวณการออกก่อน: ปกติ = 1, ออกก่อน = 2
+      let isEarlyExit = 1; // Default เป็น ปกติ
       let earlyExitMinutes = 0;
 
       if (shift) {
-        const now = new Date();
-        const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok' });
+        const [currH, currM] = currentTimeStr.split(':').map(Number);
+        const [endH, endM] = shift.endTime.split(':').map(Number);
         
-        if (currentTimeStr < shift.endTime) {
-          const [nowH, nowM] = currentTimeStr.split(':').map(Number);
-          const [shH, shM] = shift.endTime.split(':').map(Number);
-          const diff = (shH * 60 + shM) - (nowH * 60 + nowM);
-          if (diff > 0) {
-            isEarlyExit = 1;
-            earlyExitMinutes = diff;
-          }
+        const currentTotalMinutes = currH * 60 + currM;
+        const endTotalMinutes = endH * 60 + endM;
+
+        if (currentTotalMinutes < endTotalMinutes) {
+          isEarlyExit = 2; // เปลี่ยนเป็น ออกก่อน
+          earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
         }
       }
 
       const result = await db.update(attendanceTable)
         .set({
-          checkOut: sql`timezone('Asia/Bangkok', now())::time`,
+          checkOut: currentTimeStr, // ใช้เวลาจากอุปกรณ์
           imageOut: data.image,
           imageOutId: data.fileId || null,  
           locationOut: data.location,
