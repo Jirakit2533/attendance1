@@ -66,7 +66,9 @@ export default async function Page() {
     .select()
     .from(attendanceTable)
     .where(eq(attendanceTable.user_id, user.id))
-    .orderBy(desc(attendanceTable.date));
+    /* ✅ แก้ไข: เรียงตามวันที่ล่าสุด และเวลาเข้างานล่าสุด */
+    .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
+    .limit(20); // 🔥 เพิ่มการจำกัดจำนวนประวัติการเข้างาน
   
   // 🔍 ดึงข้อมูลการลาพร้อม Join หาชื่อผู้อนุมัติ/ผู้ปฏิเสธ และ "ชื่อตำแหน่ง" ของผู้อนุมัติ
   const approver = alias(usersTable, "approver");
@@ -90,7 +92,10 @@ export default async function Page() {
       eq(leaveTable.rejectedBy, approver.id)
     ))
     .leftJoin(approverPos, eq(approver.positionId, approverPos.id)) // ✅ Join ต่อไปหาชื่อตำแหน่งของผู้อนุมัติ
-    .where(eq(leaveTable.user_id, user.id));
+    .where(eq(leaveTable.user_id, user.id))
+    /* ✅ แก้ไข: ใช้ createdAt เรียงลำดับรายการที่เพิ่งสร้างล่าสุดไว้บนสุด (แม่นยำกว่าใช้วันที่ลา) */
+    .orderBy(desc(leaveTable.createdAt)) 
+    .limit(2); // 🔥 จำกัดจำนวนคำขอลางานให้เหลือเพียง 2 รายการล่าสุดตามที่สั่ง
 
   // 3. Mapping ข้อมูล (เพิ่มฟิลด์สถานะเพื่อให้ตรงกับ UI)
   const initialRecords = dbRecords.map(r => ({

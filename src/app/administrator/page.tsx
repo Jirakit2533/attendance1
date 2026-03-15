@@ -97,7 +97,8 @@ export default async function AdminDashboardPage() {
       )
       .orderBy(desc(usersTable.created_at)),
 
-      // --- การลงเวลา ---
+      // --- การลงเวลา (Report) ---
+      // ปรับปรุง: ใช้ leftJoin กับ sitesTable เพื่อให้คนไม่มีไซต์ไม่หลุด และใช้ createdBy ของ Admin เป็นตัวตั้งต้น
       db.select({
         id: attendanceTable.id,
         date: attendanceTable.date,
@@ -110,16 +111,19 @@ export default async function AdminDashboardPage() {
         imageOut: attendanceTable.imageOut,
         firstName: usersTable.firstName,
         lastName: usersTable.lastName,
-        siteName: sitesTable.name,
+        siteNameSnapshot: attendanceTable.siteNameSnapshot, 
+        departmentNameSnapshot: attendanceTable.departmentNameSnapshot,
+        siteName: sitesTable.name, // จะเป็น null ได้ถ้าพนักงานไม่มีไซต์
         startTime: shiftsTable.startTime,
         endTime: shiftsTable.endTime,
         isEarlyExit: attendanceTable.isEarlyExit,
       })
       .from(attendanceTable)
-      .leftJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
-      .leftJoin(sitesTable, eq(attendanceTable.site_id, sitesTable.id))
+      .innerJoin(usersTable, eq(attendanceTable.user_id, usersTable.id)) 
+      .leftJoin(sitesTable, eq(attendanceTable.site_id, sitesTable.id)) // ✅ เปลี่ยนเป็น leftJoin เพื่อให้พนักงาน "ทุกไซต์" มาครบ
       .leftJoin(shiftsTable, eq(attendanceTable.shift_id, shiftsTable.id))
-      .orderBy(desc(attendanceTable.date)),
+      .where(eq(usersTable.createdBy, adminId)) 
+      .orderBy(desc(attendanceTable.date), desc(attendanceTable.createdAt)),
 
       // --- การลางาน ---
       db.select({
@@ -139,6 +143,7 @@ export default async function AdminDashboardPage() {
       })
       .from(leaveTable)
       .leftJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
+      .where(eq(usersTable.createdBy, adminId)) // ✅ ดึงเฉพาะการลาของพนักงานที่ Admin คนนี้ดูแล
       .orderBy(desc(leaveTable.startDate)),
 
       // --- ข้อมูลพื้นฐาน ---
@@ -225,7 +230,9 @@ export default async function AdminDashboardPage() {
         checkOut: at?.checkOut || null,
         userId: String(at?.user_id || ""),
         employeeName: `${at?.firstName || ''} ${at?.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
-        siteName: at?.siteName || "ทุกไซต์",
+        siteSnapName: at?.siteNameSnapshot || at?.siteName || "ทั่วไป (ไม่มีไซต์)",
+        departmentSnapName: at?.departmentNameSnapshot || "ไม่ระบุแผนก", //
+        siteName: at?.siteName || "ทั่วไป (ไม่มีไซต์)", // ✅ แสดงผลให้ชัดเจนถ้าเป็นพนักงานทุกไซต์
         locationIn: String(at?.locationIn || "-"),
         locationOut: String(at?.locationOut || "-"),
         imageIn: at?.imageIn || null,

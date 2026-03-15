@@ -511,54 +511,54 @@ export default function LeaderClientPage({
       {isProcessing && <LoadingOverlay />}
       {/* 🟢 TOP NAVIGATION */}
       <nav className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur-xl border-b border-gray-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-4 group">
-          <div className="relative">
-              <Image
-                src={companyData?.logoUrl || "/logo.png"}
-                alt={companyData?.name || "Company Logo"}
-                width={64}
-                height={64}
-                className="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded-xl shadow-sm"
-              />
-            </div>
-              <div className="flex flex-col border-l-2 border-gray-100 pl-4">
-                <h1 className="font-black text-gray-900 tracking-tighter text-lg sm:text-xl leading-none uppercase">
-                  {companyData?.name || "ชื่อบริษัท"}
-                </h1>
-                <span className="hidden sm:block text-[10px] text-gray-400 font-bold tracking-[0.2em] uppercase mt-1 max-w-[440px] line-clamp-2 leading-relaxed whitespace-normal break-words">
-                  {companyData?.description || "description"}
-                </span>
-                <span className="block text-[9px] md:text-[10px] font-bold text-blue-600 tracking-[0.2em] md:tracking-[0.25em] uppercase opacity-90 mt-1">
-                  Leader Panel
-                </span>
-              </div>
-            </div>
-          <div className="flex items-center gap-2 sm:gap-6">
-            <div className="hidden md:flex flex-col items-end">
-              <span className="text-sm font-black text-gray-800 uppercase tracking-tight">
-                {userProfile.firstName}
-              </span>
-              <span className="text-[10px] text-blue-500 font-black uppercase flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>{" "}
-                ONLINE
-              </span>
-            </div>
-            <button
-              onClick={handleLogout}
-              disabled={isProcessing}
-              className="group flex items-center gap-1.5 px-2.5 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95 w-fit max-w-fit"
-            >
-              <span className="text-base sm:text-lg leading-none">
-                {isProcessing ? "⏳" : "🚪"}
-              </span>
-              <span className="text-[9px] sm:text-sm font-bold uppercase tracking-tight leading-none">
-                {isProcessing ? "..." : "ลงชื่อออก"}
-              </span>
-            </button>
-          </div>
-        </div>
-      </nav>
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-2">
+    <div className="flex items-center gap-3 sm:gap-4 group min-w-0">
+      <div className="relative flex-shrink-0">
+        <Image
+          src={companyData?.logoUrl || "/logo.png"}
+          alt={companyData?.name || "Company Logo"}
+          width={64}
+          height={64}
+          className="w-10 h-10 sm:w-16 sm:h-16 object-cover rounded-xl shadow-sm"
+        />
+      </div>
+      <div className="flex flex-col border-l-2 border-gray-100 pl-3 sm:pl-4 min-w-0">
+        <h1 className="font-black text-gray-900 tracking-tighter text-base sm:text-xl leading-none uppercase truncate">
+          {companyData?.name || "ชื่อบริษัท"}
+        </h1>
+        <span className="hidden sm:block text-[10px] text-gray-400 font-bold tracking-[0.2em] uppercase mt-1 max-w-[440px] line-clamp-2 leading-relaxed whitespace-normal break-words">
+          {companyData?.description || "description"}
+        </span>
+        <span className="block text-[9px] md:text-[10px] font-bold text-blue-600 tracking-[0.2em] md:tracking-[0.25em] uppercase opacity-90 mt-1 truncate">
+          Leader Panel
+        </span>
+      </div>
+    </div>
+    <div className="flex items-center gap-2 sm:gap-6 flex-shrink-0">
+      <div className="hidden md:flex flex-col items-end">
+        <span className="text-sm font-black text-gray-800 uppercase tracking-tight">
+          {userProfile.firstName}
+        </span>
+        <span className="text-[10px] text-blue-500 font-black uppercase flex items-center gap-1">
+          <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>{" "}
+          ONLINE
+        </span>
+      </div>
+      <button
+        onClick={handleLogout}
+        disabled={isProcessing}
+        className="group flex items-center gap-1.5 px-2.5 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95 w-fit"
+      >
+        <span className="text-base sm:text-lg leading-none">
+          {isProcessing ? "⏳" : "🚪"}
+        </span>
+        <span className="text-[9px] sm:text-sm font-bold uppercase tracking-tight leading-none">
+          {isProcessing ? "..." : "ลงชื่อออก"}
+        </span>
+      </button>
+    </div>
+  </div>
+</nav>
 
       <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-10">
         {/* 👤 LEADER PROFILE CARD */}
@@ -890,204 +890,189 @@ export default function LeaderClientPage({
               </div>
           
               {/* ตารางที่ 2: คำขออนุมัติลางานของฉัน */}
-              <div className="bg-white p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-gray-50">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-2 h-8 bg-amber-400 rounded-full"></div>
-                  <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">
-                    คำขออนุมัติ ลางานของฉัน
-                    <span className="text-gray-300"></span>
-                  </h2>
-                </div>
-                <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
-                  <table className="w-full text-sm min-w-[600px]">
-                    <thead className="bg-gray-50/50 text-gray-600 uppercase text-[12px] font-black tracking-widest">
-                      <tr>
-                        <th className="p-6 text-left">ประเภท</th>
-                        <th className="p-6 text-left">วันที่ลา</th>
-                        <th className="p-6 text-left">จำนวนวัน</th>
-                        <th className="p-6 text-left">เอกสาร & เหตุผล</th>
-                        <th className="p-6 text-center">สถานะ</th>
-                        <th className="p-6 text-center">หมายเหตุ</th>
-                        <th className="p-6 text-center">ผู้จัดการคำขอ</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {myLeaves.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={5}
-                            className="p-16 text-center text-gray-300 font-bold italic"
+              <div className="bg-white p-4 sm:p-8 rounded-[1.5rem] sm:rounded-[2.5rem] shadow-sm border border-gray-50">
+  <div className="flex items-center gap-3 mb-6 sm:mb-8">
+    <div className="w-1.5 h-6 sm:w-2 sm:h-8 bg-amber-400 rounded-full"></div>
+    <h2 className="font-black text-gray-900 text-lg sm:text-xl tracking-tighter uppercase">
+      คำขออนุมัติ ลางานของฉัน
+    </h2>
+  </div>
+  <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+    <table className="w-full text-sm min-w-[500px] sm:min-w-[600px]">
+      <thead className="bg-gray-50/50 text-gray-600 uppercase text-[10px] sm:text-[12px] font-black tracking-widest">
+        <tr>
+          <th className="p-4 sm:p-6 text-left">ประเภท / วันที่</th>
+          <th className="p-4 sm:p-6 text-center">จำนวนวัน</th>
+          <th className="p-4 sm:p-6 text-left hidden md:table-cell">เอกสาร & เหตุผล</th>
+          <th className="p-4 sm:p-6 text-center">สถานะ</th>
+          <th className="p-4 sm:p-6 text-center hidden lg:table-cell">หมายเหตุ</th>
+          <th className="p-4 sm:p-6 text-center">ผู้จัดการคำขอ</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-50">
+        {myLeaves.length === 0 ? (
+          <tr>
+            <td
+              colSpan={7}
+              className="p-12 sm:p-16 text-center text-gray-300 font-bold italic"
+            >
+              ไม่มีประวัติการลา
+            </td>
+          </tr>
+        ) : (
+          myLeaves.map((l: any) => {
+            const start = new Date(l.startDate || l.start_date);
+            const end = new Date(l.endDate || l.end_date);
+            const diffTime = Math.abs(end.getTime() - start.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+            return (
+              <tr
+                key={l.id}
+                className="hover:bg-amber-50/10 transition-colors"
+              >
+                <td className="p-4 sm:p-6">
+                  <div className="flex flex-col gap-1">
+                    <div className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-black text-[10px] w-fit uppercase">
+                      {l.type}
+                    </div>
+                    <div className="text-[10px] sm:text-[11px] text-gray-500 font-bold">
+                      {l.startDate || l.start_date}
+                      <span className="text-gray-300 mx-1">→</span>
+                      {l.endDate || l.end_date}
+                    </div>
+                    {/* แสดงเหตุผลในมือถือใต้ประเภท */}
+                    <span className="text-[10px] text-gray-400 italic line-clamp-1 md:hidden">
+                      {l.reason}
+                    </span>
+                  </div>
+                </td>
+                <td className="p-4 sm:p-6 text-center">
+                  <span className="bg-orange-500 text-white px-2.5 py-1 rounded-full font-black text-[10px] sm:text-xs shadow-sm shadow-orange-200 whitespace-nowrap">
+                    {isNaN(diffDays) ? "-" : `${diffDays} วัน`}
+                  </span>
+                </td>
+                <td className="p-4 sm:p-6 hidden md:table-cell">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-gray-400 italic line-clamp-1">
+                      {l.reason}
+                    </span>
+                    {l.fileUrl && (
+                      <a
+                        href={l.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-[10px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-all mt-1 w-fit group"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-3 w-3 group-hover:scale-110 transition-transform"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={3}
+                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                          />
+                        </svg>
+                        ดูหลักฐาน
+                      </a>
+                    )}
+                  </div>
+                </td>
+                <td className="p-4 sm:p-6 text-center">
+                  <span
+                    className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-tighter shadow-sm border whitespace-nowrap
+                    ${
+                      l.status === "approved" || l.status === "อนุมัติแล้ว"
+                        ? "bg-green-50 text-green-600 border-green-100"
+                        : l.status === "rejected" || l.status === "ปฏิเสธ"
+                        ? "bg-red-50 text-red-600 border-red-100"
+                        : "bg-amber-50 text-amber-600 border-amber-100"
+                    }`}
+                  >
+                    {l.status === "pending" ? "รออนุมัติ" : l.status === "approved" ? "อนุมัติแล้ว" : l.status === "rejected" ? "ปฏิเสธ" : l.status}
+                  </span>
+                </td>
+                <td className="p-4 sm:p-6 hidden lg:table-cell">
+                  <div className="flex items-center gap-2 justify-center">
+                    {l.status !== 'pending' && l.remark ? (
+                      <>
+                        <div className="relative group">
+                          <input
+                            type="text"
+                            readOnly
+                            value={l.remark}
+                            className="text-[11px] bg-gray-50 border border-gray-100 text-gray-500 rounded-lg px-3 py-1.5 w-24 xl:w-32 focus:outline-none cursor-default font-medium"
+                            title={l.remark}
+                          />
+                          <div className="absolute inset-0 bg-white/10 rounded-lg pointer-events-none"></div>
+                        </div>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setViewRemarkId(viewRemarkId === l.id ? null : l.id)}
+                            className={`flex-shrink-0 p-1.5 rounded-lg transition-all border ${
+                              viewRemarkId === l.id 
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200' 
+                                : 'bg-white text-indigo-500 border-gray-200 hover:border-indigo-200 hover:bg-indigo-50'
+                            }`}
                           >
-                            ไม่มีประวัติการลา
-                          </td>
-                        </tr>
-                      ) : (
-                        myLeaves.map((l: any) => {
-                          // Logic คำนวณส่วนต่างวันลา
-                          const start = new Date(l.startDate || l.start_date);
-                          const end = new Date(l.endDate || l.end_date);
-                          const diffTime = Math.abs(end.getTime() - start.getTime());
-                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-                          return (
-                            <tr
-                              key={l.id}
-                              className="hover:bg-amber-50/10 transition-colors"
-                            >
-                              <td className="p-6 font-black text-gray-800 uppercase tracking-tighter">
-                                <div className="inline-block bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg font-black text-[11px] mb-1">
-                                      {l.type}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="11" cy="11" r="8"></circle>
+                              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                          </button>
+                          {viewRemarkId === l.id && (
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={() => setViewRemarkId(null)}></div>
+                              <div className="absolute right-0 bottom-full mb-2 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl p-3 animate-in fade-in zoom-in duration-200">
+                                <div className="flex justify-between items-center mb-2 pb-1 border-b border-gray-100">
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">หมายเหตุ</span>
+                                  <button onClick={() => setViewRemarkId(null)} className="text-gray-400 hover:text-gray-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                  </button>
                                 </div>
-                              </td>
-                              <td className="p-6 text-[11px] text-gray-500 font-bold">
-                                {l.startDate || l.start_date}{" "}
-                                <span className="text-gray-300 mx-1">→</span>{" "}
-                                {l.endDate || l.end_date}
-                              </td>
-                              <td className="p-6">
-                                    <span className="bg-orange-500 text-white px-3 py-1 rounded-full font-black text-xs shadow-sm shadow-orange-200">
-                                      {isNaN(diffDays)
-                                        ? "-"
-                                        : `${diffDays} วัน`}
-                                    </span>
-                              </td>
-                              <td className="p-6">
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-xs text-gray-400 italic line-clamp-1">
-                                    {l.reason}
-                                  </span>
-                                  {l.fileUrl && (
-                                    <a
-                                      href={l.fileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-1.5 text-[10px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-all mt-1 w-fit group"
-                                    >
-                                      <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        className="h-3 w-3 group-hover:scale-110 transition-transform"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={3}
-                                          d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                                        />
-                                      </svg>
-                                      ดูหลักฐานแนบ
-                                    </a>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="p-6 text-center">
-                                <span
-                                  className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border
-                                  ${
-                                    l.status === "approved" ||
-                                    l.status === "อนุมัติแล้ว"
-                                      ? "bg-green-50 text-green-600 border-green-100"
-                                      : l.status === "rejected" ||
-                                        l.status === "ปฏิเสธ"
-                                      ? "bg-red-50 text-red-600 border-red-100"
-                                      : "bg-amber-50 text-amber-600 border-amber-100"
-                                  }`}
-                                >
-                                  {l.status === "pending"
-                                    ? "รออนุมัติ"
-                                    : l.status === "approved"
-                                    ? "อนุมัติแล้ว"
-                                    : l.status === "rejected"
-                                    ? "ปฏิเสธ"
-                                    : l.status}
-                                </span>
-                              </td>
-                              <td className="p-6">
-                                <div className="flex items-center gap-2 justify-center">
-                                  {l.status !== 'pending' && l.remark ? (
-                                    <>
-                                      {/* ช่องแสดงหมายเหตุแบบพิมพ์ไม่ได้ (Read Only) */}
-                                      <div className="relative group">
-                                        <input
-                                          type="text"
-                                          readOnly
-                                          value={l.remark}
-                                          className="text-[11px] bg-gray-50 border border-gray-100 text-gray-500 rounded-lg px-3 py-1.5 w-32 focus:outline-none cursor-default font-medium"
-                                          title={l.remark}
-                                        />
-                                        {/* เคลือบเงาจางๆ ให้ดูออกว่าเป็น Read Only */}
-                                        <div className="absolute inset-0 bg-white/10 rounded-lg pointer-events-none"></div>
-                                      </div>
-
-                                      {/* ปุ่มแว่นขยายสำหรับดู Popover */}
-                                      <div className="relative">
-                                        <button
-                                          type="button"
-                                          onClick={() => setViewRemarkId(viewRemarkId === l.id ? null : l.id)}
-                                          className={`flex-shrink-0 p-1.5 rounded-lg transition-all border ${
-                                            viewRemarkId === l.id 
-                                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200' 
-                                              : 'bg-white text-indigo-500 border-gray-200 hover:border-indigo-200 hover:bg-indigo-50'
-                                          }`}
-                                        >
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <circle cx="11" cy="11" r="8"></circle>
-                                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                          </svg>
-                                        </button>
-
-                                        {/* Popover แสดงข้อความเต็ม */}
-                                        {viewRemarkId === l.id && (
-                                          <>
-                                            <div className="fixed inset-0 z-40" onClick={() => setViewRemarkId(null)}></div>
-                                            <div className="absolute right-0 bottom-full mb-2 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl p-3 animate-in fade-in zoom-in duration-200">
-                                              <div className="flex justify-between items-center mb-2 pb-1 border-b border-gray-100">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">หมายเหตุฉบับเต็ม</span>
-                                                <button onClick={() => setViewRemarkId(null)} className="text-gray-400 hover:text-gray-600">
-                                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                                  </svg>
-                                                </button>
-                                              </div>
-                                              <p className="text-xs text-gray-700 leading-relaxed break-words font-medium">
-                                                {l.remark}
-                                              </p>
-                                              <div className="absolute -bottom-1 right-3 w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45"></div>
-                                            </div>
-                                          </>
-                                        )}
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <span className="text-gray-200">—</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="p-6 text-center">
-                                {l.status !== 'pending' && l.approverFirst ? (
-                                  <div className="inline-flex flex-col items-center">
-                                    <span className="text-[13px] font-bold text-gray-900 tracking-tight">
-                                      {`${l.approverFirst} ${l.approverLast || ""}`.trim()}
-                                    </span>
-                                    <span className="text-[9px] text-indigo-500 font-black uppercase tracking-widest mt-0.5">
-                                      {l.approverPosition}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-300 font-medium">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                                <p className="text-xs text-gray-700 leading-relaxed break-words font-medium">{l.remark}</p>
+                                <div className="absolute -bottom-1 right-3 w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45"></div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-gray-200">—</span>
+                    )}
+                  </div>
+                </td>
+                <td className="p-4 sm:p-6 text-center">
+                  {l.status !== 'pending' && l.approverFirst ? (
+                    <div className="inline-flex flex-col items-center">
+                      <span className="text-[11px] sm:text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
+                        {`${l.approverFirst} ${l.approverLast || ""}`.trim()}
+                      </span>
+                      <span className="text-[8px] sm:text-[9px] text-indigo-500 font-black uppercase tracking-widest mt-0.5">
+                        {l.approverPosition}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-gray-300 font-medium">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
 
               {/* ตารางที่ 3: การเข้างานของพนักงานในทีม */}
               <div className="print:hidden mt-12">

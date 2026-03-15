@@ -59,17 +59,18 @@ export default async function LeaderPage() {
   const isAllSitesLeader = !currentSite;
 
   try {
+    // แก้ไข teamFilter: ยกเว้นตัวเอง (ne) และกรณีไม่มีไซต์ให้ดึงทุกคนในแผนก
     const teamFilter = and(
       eq(usersTable.departmentId, currentDept!),
-      ne(usersTable.id, user.id),
+      ne(usersTable.id, user.id), // ยกเว้นข้อมูลของตัวเอง
       isNull(usersTable.deletedAt),
       isAllSitesLeader 
-        ? isNotNull(usersTable.site_id) 
+        ? undefined // ถ้าไม่มีไซต์งานประจำ ให้ดึงพนักงานทุกคนในแผนก
         : eq(usersTable.site_id, currentSite!)
     );
 
     const [myRecordsRaw, allLeaveRequests, teamAttendanceRaw, myLeaveRequestsRaw] = await Promise.all([
-      // 2. ดึงประวัติเข้างาน (ใช้ Snapshot)
+      // 2. ดึงประวัติเข้างานของตัวเอง
       db.select({
         id: attendanceTable.id,
         user_id: attendanceTable.user_id,
@@ -120,10 +121,11 @@ export default async function LeaderPage() {
           .leftJoin(approverUser, or(eq(leaveTable.approvedBy, approverUser.id), eq(leaveTable.rejectedBy, approverUser.id)))
           .leftJoin(approverPosition, eq(approverUser.positionId, approverPosition.id))
           .where(teamFilter)
-          .orderBy(desc(leaveTable.startDate))
+          .orderBy(desc(leaveTable.id))
+          .limit(50)
         : Promise.resolve([]),
 
-      // 4. ประวัติเข้างานของทีม (ใช้ Snapshot)
+      // 4. ประวัติเข้างานของทีม
       currentDept
         ? db.select({
             id: attendanceTable.id,
@@ -152,6 +154,7 @@ export default async function LeaderPage() {
           .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
           .where(teamFilter)
           .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
+          .limit(100)
         : Promise.resolve([]),
 
       // 5. ประวัติการลาของตัวเอง
@@ -173,12 +176,12 @@ export default async function LeaderPage() {
       .leftJoin(approverUser, or(eq(leaveTable.approvedBy, approverUser.id), eq(leaveTable.rejectedBy, approverUser.id)))
       .leftJoin(approverPosition, eq(approverUser.positionId, approverPosition.id))
       .where(eq(leaveTable.user_id, user.id))
-      .orderBy(desc(leaveTable.startDate))
+      .orderBy(desc(leaveTable.id))
+      .limit(30)
     ]);
 
     // 6. จัดเตรียมข้อมูล (Mapping)
     const finalProps = {
-      // ข้อมูลบริษัทสำหรับ UI
       companyData: {
         name: user.companyName || "บริษัทไม่ระบุชื่อ",
         logoUrl: user.companyLogo,
