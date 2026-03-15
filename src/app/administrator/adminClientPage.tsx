@@ -1185,7 +1185,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         </div>
 
       {/* --- 2. ATTENDANCE TABLE (ตารางเข้า-ออกงาน) --- */}
-      <div className="print:hidden mt-12">
+        <div className="print:hidden mt-12">
           <Section title="ตารางเข้า-ออกงานของพนักงาน">
             <div className="mb-6 relative max-w-md">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -1201,7 +1201,8 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             </div>
             <div className="rounded-[2rem] border border-slate-100 overflow-hidden bg-white shadow-sm">
               <div className="overflow-x-auto max-h-[580px] overflow-y-auto custom-scrollbar">
-                <table className="min-w-[1300px] w-full text-sm border-separate border-spacing-0">
+                {/* ✅ ขยายความกว้างขั้นต่ำของตารางเป็น 1800px เพื่อการแสดงผลที่กว้างขึ้น */}
+                <table className="min-w-[1800px] w-full text-sm border-separate border-spacing-0">
                   <thead className="sticky top-0 z-20 bg-white">
                     <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
                       <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">รูป</th>
@@ -1335,7 +1336,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={9} className="py-24 text-center">
+                        <td colSpan={13} className="py-24 text-center">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <span className="text-4xl opacity-20">📅</span>
                             <p className="text-slate-400 italic font-black tracking-wide">ไม่พบข้อมูลการลงเวลาในขณะนี้...</p>
