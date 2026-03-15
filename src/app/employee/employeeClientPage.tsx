@@ -811,6 +811,7 @@ export default function EmployeeClientPage({
   </div>
 </div>
 
+              {/* {ตารางคำขอลางาน} */}
               <div className="pt-10 border-t border-gray-50">
                 <div className="flex items-center gap-3 mb-8">
                   <div className="w-2 h-8 bg-indigo-600 rounded-full"></div>
@@ -824,7 +825,8 @@ export default function EmployeeClientPage({
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {leaves.map((l, i) => (
+                    {/* ✅ เพิ่ม .slice().reverse() เพื่อเรียงจากใหม่ไปเก่า */}
+                    {leaves.slice().reverse().map((l, i) => (
                       <div
                         key={i}
                         className="p-8 border border-gray-100 rounded-[2rem] bg-white hover:shadow-2xl hover:shadow-indigo-500/10 transition-all relative overflow-hidden group"

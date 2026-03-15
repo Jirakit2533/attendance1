@@ -637,25 +637,27 @@ export async function updateAdminProfileAction(adminId: string, formData: FormDa
 }
 
 /* ==========================================================================
-   COMPANY UPDATE ACTION (แก้ไขการตรวจสอบรหัสผ่านด้วย Bcrypt)
+   COMPANY UPDATE ACTION (ฉบับแก้ไขตาม Log Deprecation)
    ========================================================================== */
+
    export async function updateCompanyAction(data: any) {
     try {
       const admin = await getAdminContext();
       
-      // ใช้ admin.id และ admin.companyId จาก context ของคุณเป็นตัวหลัก
       if (!admin || !admin.id || !admin.companyId) {
         return { success: false, error: "Unauthorized: ไม่พบข้อมูลผู้ใช้งาน" };
       }
   
-      // --- 1. ดึงข้อมูล Security ตาม Schema จริง (passwordHash) ---
+      // --- 1. ดึงข้อมูล Security และข้อมูลบริษัทเดิม ---
       const adminSecurityCheck = await db
         .select({
           passwordHash: usersTable.passwordHash, 
-          dbCompanyId: adminsTable.company,      
+          dbCompanyId: adminsTable.company,
+          oldLogoUrl: companyTable.logoUrl,
         })
         .from(usersTable)
         .innerJoin(adminsTable, eq(usersTable.id, adminsTable.user_id))
+        .innerJoin(companyTable, eq(adminsTable.company, companyTable.id))
         .where(and(
           eq(usersTable.id, admin.id),
           isNull(usersTable.deletedAt)
@@ -667,7 +669,7 @@ export async function updateAdminProfileAction(adminId: string, formData: FormDa
         return { success: false, error: "ไม่พบข้อมูลผู้ดูแลที่มีสิทธิ์" };
       }
   
-      // --- 2. Security Check: ต้องใช้ bcrypt.compare เพราะใน DB เก็บเป็น Hash ---
+      // --- 2. Security Check ---
       if (!data.confirmPassword) {
         return { success: false, error: "กรุณาระบุรหัสผ่านยืนยัน" };
       }
@@ -678,19 +680,46 @@ export async function updateAdminProfileAction(adminId: string, formData: FormDa
         return { success: false, error: "รหัสผ่านไม่ถูกต้อง" };
       }
   
-      // --- 3. เตรียม Payload (ห้ามลบ ห้ามลดฟิลด์เดิม) ---
+      // --- 3. จัดการอัปโหลดรูปภาพใหม่ (ปรับตาม Log คำแนะนำ ufsUrl) ---
+      let finalLogoUrl = data.logoUrl || null;
+  
+      if (data.logoUrl && data.logoUrl.startsWith("data:image")) {
+        try {
+          // ลบรูปเก่าโดยใช้ File Key จาก URL
+          if (targetAdmin.oldLogoUrl && targetAdmin.oldLogoUrl.includes("/f/")) {
+            const oldFileKey = targetAdmin.oldLogoUrl.split("/f/")[1];
+            if (oldFileKey) {
+              await deleteFromDrive(oldFileKey).catch(() => null);
+            }
+          }
+  
+          // แปลง Base64 และอัปโหลดผ่าน Helper
+          const base64Data = data.logoUrl.replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64Data, "base64");
+          const fileName = `company_logo_${Date.now()}.jpg`;
+          const uploadResult = await uploadToDrive(buffer, fileName, "image/jpeg");
+          
+          // รับค่า URL ที่ Helper ส่งกลับมา (ซึ่งควรจะเป็น ufsUrl แล้ว)
+          finalLogoUrl = uploadResult.url;
+          
+        } catch (uploadError) {
+          console.error("Company Logo Upload Error:", uploadError);
+        }
+      }
+  
+      // --- 4. เตรียม Payload (ห้ามลบ ห้ามลดฟิลด์เดิม) ---
       const payload = {
         name: data.companyName, 
-        description: data.description, 
-        phone: data.phone,
-        email: data.email,
-        address: data.address,
-        logoUrl: data.logoUrl,
+        description: data.description || null, 
+        phone: data.phone || null,
+        email: data.email || null,
+        address: data.address || null,
+        logoUrl: finalLogoUrl,
         updateByName: `${admin.firstName} ${admin.lastName}`,
-        updatedAt: new Date(),
+        updatedAt: new Date(), 
       };
   
-      // --- 4. อัปเดตข้อมูลบริษัท โดยใช้ ID ที่ดึงมาจาก DB ---
+      // --- 5. อัปเดตข้อมูลบริษัท ---
       await db.update(companyTable)
         .set(payload)
         .where(eq(companyTable.id, targetAdmin.dbCompanyId));

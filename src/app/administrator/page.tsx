@@ -75,7 +75,7 @@ export default async function AdminDashboardPage() {
         lastName: usersTable.lastName,
         role: usersTable.role,
         departmentId: usersTable.departmentId,
-        positionName: positionsTable.name,
+        positionName: positionsTable.name, // ✅ ดึงชื่อตำแหน่งจาก positionsTable
         siteName: sitesTable.name, 
         siteId: usersTable.site_id,
         positionId: usersTable.positionId,
@@ -86,7 +86,7 @@ export default async function AdminDashboardPage() {
       })
       .from(usersTable)
       .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
-      .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
+      .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id)) // ✅ Join Position เพื่อเอาชื่อมาแสดง
       .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId)) // Join เพื่อเอาเวลาพนักงาน
       .where(
         and(
@@ -105,7 +105,9 @@ export default async function AdminDashboardPage() {
         checkOut: attendanceTable.checkOut,
         user_id: attendanceTable.user_id,
         locationIn: attendanceTable.locationIn,
+        locationOut: attendanceTable.locationOut,
         imageIn: attendanceTable.imageIn,
+        imageOut: attendanceTable.imageOut,
         firstName: usersTable.firstName,
         lastName: usersTable.lastName,
         siteName: sitesTable.name,
@@ -190,7 +192,8 @@ export default async function AdminDashboardPage() {
         siteId: emp?.siteId ? String(emp.siteId) : null,
         site: String(emp?.siteName || "ไม่ระบุ"),
         siteName: emp?.siteName || "ไม่ระบุ",
-        position: String(emp?.positionName || "ไม่ระบุ"),
+        // ✅ แมพชื่อตำแหน่งจาก positionsTable.name มาใส่ในคีย์ position (เพื่อให้ UI แสดงผล {e.position})
+        position: String(emp?.positionName || "พนักงาน"), 
         avatarUrl: emp?.avatarUrl || null,
         // ✅ เพิ่มเวลาสำหรับการแก้ไขพนักงาน
         startTime: emp?.startTime || null,
@@ -224,7 +227,9 @@ export default async function AdminDashboardPage() {
         employeeName: `${at?.firstName || ''} ${at?.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
         siteName: at?.siteName || "ทุกไซต์",
         locationIn: String(at?.locationIn || "-"),
+        locationOut: String(at?.locationOut || "-"),
         imageIn: at?.imageIn || null,
+        imageOut: at?.imageOut || null,
         startTime: at?.startTime || null,
         endTime: at?.endTime || null,
         // ✅ ใส่ไว้ตรงนี้เพื่อให้ UI ในตารางลงเวลาใช้งานได้

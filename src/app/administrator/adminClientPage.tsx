@@ -28,7 +28,7 @@ const Section = ({ title, children }) => (
   <section className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
     <div className="flex items-center gap-4 mb-8">
       <div className="h-10 w-2 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full shadow-lg shadow-blue-200"></div>
-      <h2 className="text-2xl font-black text-slate-800 tracking-tighter uppercase italic">{title}</h2>
+      <h2 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">{title}</h2>
     </div>
     {children}
   </section>
@@ -149,44 +149,7 @@ const companyData = initialCompanyData;
 
   // --- 3. Component Logo ---
  // --- ส่วนฟังก์ชันจัดการการบันทึกข้อมูลบริษัท ---
- const handleUpdateCompany = async (e: React.FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
-  setIsSavingCompany(true);
-  
-  const formData = new FormData(e.currentTarget);
-  const data = Object.fromEntries(formData.entries());
-  
-  try {
-    const payload = {
-      id: companyData?.id,
-      companyName: data.companyName, // ปรับให้ตรงกับ name="companyName"
-      description: data.description, // เพิ่มตามที่มีในฟอร์ม
-      phone: data.phone,
-      email: data.email,
-      address: data.address,
-      // ส่งรหัสผ่านยืนยันไปด้วย (สำคัญมาก!)
-      confirmPassword: data.confirmPassword, 
-      // ส่งรูปภาพ
-      logoUrl: companyLogoPreview || companyData?.logoUrl,
-    };
-
-    // ส่ง payload ที่มี confirmPassword ไปให้ Server Action
-    const result = await updateCompanyAction(payload);
-    
-    if (result.success) {
-      alert("🏢 อัปเดตข้อมูลบริษัทเรียบร้อย");
-      setShowCompanyModal(false);
-      window.location.reload(); 
-    } else {
-      alert("❌ เกิดข้อผิดพลาด: " + result.error);
-    }
-  } catch (error) {
-    console.error("Save Error:", error);
-    alert("❌ ไม่สามารถบันทึกข้อมูลได้");
-  } finally {
-    setIsSavingCompany(false);
-  }
-};
+ 
   // --- ส่วน Component Logo ---
   const Logo = () => (
     <div className="flex flex-col gap-1">
@@ -358,7 +321,96 @@ const filteredAttendance = useMemo(() => {
     XLSX.writeFile(wb, `Report_${startDate}_to_${endDate}.xlsx`);
   };
 
+
+  const compressImage = (file: File) => {
+    return new Promise((resolve, reject) => {
+      if (!file) return reject("No file provided"); // ✅ ป้องกันกรณี file เป็น null/undefined
+
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 800; 
+          let width = img.width, height = img.height;
+          
+          if (width > height) { 
+            if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } 
+          } else { 
+            if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } 
+          }
+          
+          canvas.width = width; 
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.6)); 
+          } else {
+            reject("Canvas context not available");
+          }
+        };
+        img.onerror = (err) => reject(err); // ✅ เพิ่ม error handling
+      };
+      reader.onerror = (err) => reject(err); // ✅ เพิ่ม error handling
+    });
+  };
+
   // --- HANDLERS ---
+
+  const handleUpdateCompany = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSavingCompany(true);
+    
+    const formData = new FormData(e.currentTarget);
+    const data = Object.fromEntries(formData.entries());
+    
+    try {
+      // 1. กำหนดค่าเริ่มต้นเป็น URL เดิมจาก Database
+      let finalLogoUrl = companyData?.logoUrl || null;
+
+      // 2. ตรวจสอบการอัปโหลดไฟล์ใหม่ (อ้างอิง name="companyLogo" จาก input)
+      const fileInput = (e.currentTarget.elements.namedItem('companyLogo') as HTMLInputElement)?.files?.[0];
+      
+      if (fileInput) {
+        // บีบอัดไฟล์เป็น Base64 ก่อนส่งผ่านฟังก์ชันที่ประกาศไว้ด้านบน
+        finalLogoUrl = await compressImage(fileInput) as string;
+      } else if (companyLogoPreview) {
+        // กรณีมีรูปใน preview แต่ไม่ได้เลือกไฟล์ใหม่
+        finalLogoUrl = companyLogoPreview;
+      }
+
+      const payload = {
+        companyName: data.companyName,
+        description: data.description,
+        phone: data.phone,
+        email: data.email,
+        address: data.address,
+        confirmPassword: data.confirmPassword, 
+        logoUrl: finalLogoUrl, // ส่ง Base64 หรือ URL เดิมไปที่ Server
+      };
+
+      // 3. ส่ง Payload ไปที่ Server Action
+      const result = await updateCompanyAction(payload);
+      
+      if (result.success) {
+        alert("🏢 อัปเดตข้อมูลบริษัทเรียบร้อย");
+        setCompanyLogoPreview(null); // ล้างค่า Preview
+        setShowCompanyModal(false);
+        window.location.reload(); 
+      } else {
+        alert("❌ เกิดข้อผิดพลาด: " + result.error);
+      }
+    } catch (error) {
+      console.error("Save Error:", error);
+      alert("❌ ไม่สามารถบันทึกข้อมูลได้");
+    } finally {
+      setIsSavingCompany(false);
+    }
+  };
 
   const handleUpdateAdmin = async (formData: FormData) => {
     if (isProcessing) return;
@@ -707,30 +759,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
     const formData = new FormData(e.currentTarget);
     const data = Object.fromEntries(formData.entries());
     const avatarFile = formData.get("avatar");
-  
-    const compressImage = (file) => {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-          const img = new window.Image();
-          img.src = event.target.result;
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const MAX_SIZE = 800; 
-            let width = img.width, height = img.height;
-            if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } 
-            else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
-            canvas.width = width; canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(img, 0, 0, width, height);
-              resolve(canvas.toDataURL('image/jpeg', 0.6)); 
-            }
-          };
-        };
-      });
-    };
+
   
     try {
       let finalAvatarUrl = editingEmployee?.avatarUrl || ""; 
@@ -1108,18 +1137,12 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                           </td>
                           <td className="py-4 px-6">
                             {(() => {
-                              // 1. เช็คว่าเป็น Leader หรือไม่
-                              const isLeader = e.role?.toLowerCase() === "leader";
-                              
-                              // 2. ดึงค่าไซต์มาเช็ค (ถ้าเป็น "ไม่ระบุ" ให้ถือว่าเป็นค่าว่าง)
-                              const displaySite = (e.site === "ไม่ระบุ" || !e.site) ? null : e.site;
+                              // เช็คว่าถ้า e.site ไม่มีค่า, เป็นค่าว่าง หรือเป็น "ไม่ระบุ" ให้เปลี่ยนเป็น "ทุกไซต์"
+                              const displaySite = (e.site === "ไม่ระบุ" || !e.site) ? "ทุกไซต์" : e.site;
 
                               return (
                                 <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-full font-bold text-[11px] uppercase tracking-wider">
-                                  {displaySite 
-                                    ? displaySite 
-                                    : (isLeader ? "ทุกไซต์" : "ไม่ระบุ")
-                                  }
+                                  {displaySite}
                                 </span>
                               );
                             })()}
@@ -1268,26 +1291,26 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                           </td>
                           <td className="py-4 px-6 text-center">
                             <div className="flex justify-center">
-                              {a.checkInPhoto || a.imageIn ? (
+                              {a.imageIn ? (
                                 <div className="w-10 h-10 relative rounded-xl overflow-hidden border border-slate-100 cursor-zoom-in active:scale-90 transition-transform shadow-sm" onClick={() => setViewImage(a.checkInPhoto || a.imageIn)}>
-                                  <Image src={a.checkInPhoto || a.imageIn} alt="In" fill className="object-cover" />
+                                  <Image src={a.imageIn} alt="In" fill className="object-cover" />
                                 </div>
                               ) : <span className="text-slate-300 text-[10px] font-bold italic">N/A</span>}
                             </div>
                           </td>
                           <td className="py-4 px-6 text-center">
                             <div className="flex justify-center">
-                              {a.checkOutPhoto ? (
+                              {a.imageOut ? (
                                 <div className="w-10 h-10 relative rounded-xl overflow-hidden border border-slate-100 cursor-zoom-in active:scale-90 transition-transform shadow-sm" onClick={() => setViewImage(a.checkOutPhoto)}>
-                                  <Image src={a.checkOutPhoto} alt="Out" fill className="object-cover" />
+                                  <Image src={a.imageOut} alt="Out" fill className="object-cover" />
                                 </div>
                               ) : <span className="text-slate-300 text-[10px] font-bold italic">N/A</span>}
                             </div>
                           </td>
                           <td className="py-4 px-6 text-center">
-                            {a.checkInLocation || a.locationIn ? (
+                            {a.locationIn ? (
                               <a 
-                                href={`https://www.google.com/maps?q=${a.checkInLocation || a.locationIn}`} 
+                                href={`https://www.google.com/maps?q=${a.locationIn}`} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-black hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-1 mx-auto w-fit shadow-sm"
@@ -1297,9 +1320,9 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                             ) : <span className="text-slate-300 text-[10px] font-bold italic">ไม่มีข้อมูล</span>}
                           </td>
                           <td className="py-4 px-6 text-center">
-                            {a.checkOutLocation ? (
+                            {a.locationOut ? (
                               <a 
-                                href={`https://www.google.com/maps?q=${a.checkOutLocation}`} 
+                                href={`https://www.google.com/maps?q=${a.locationOut}`} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="text-[10px] bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-black hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-1 mx-auto w-fit shadow-sm"
@@ -2177,7 +2200,6 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             required 
             className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all appearance-none cursor-pointer"
           >
-            <option value="">เลือกไซต์งาน...</option>
             <option value="all_sites" className="text-blue-600 font-extrabold bg-blue-50">🌐 ทุกไซต์งาน (ALL SITES)</option>
             {sites.map((s: any) => (
               <option key={s.id} value={s.id}>{s.name}</option>
