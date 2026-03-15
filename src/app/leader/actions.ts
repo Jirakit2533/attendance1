@@ -1,9 +1,10 @@
 "use server";
 
 import { db } from "@/db/db";
-import { leaveTable, attendanceTable, usersTable, shiftsTable, overtimeTable } from "@/db/schema";
+import { leaveTable, attendanceTable, usersTable, shiftsTable, overtimeTable, departmentsTable, sitesTable, temporaryShiftsTable } from "@/db/schema";
 import { eq, and, sql, isNull, desc } from "drizzle-orm"; // เพิ่ม isNull, desc
 import { revalidatePath } from "next/cache";
+import { isInsideBound, validateAndGetSite } from "@/lib/location-service";
 import bcrypt from "bcryptjs";
 
 /**
@@ -37,6 +38,31 @@ export async function saveAttendanceAction(data: {
 
     const shift = shiftData[0];
 
+    // --- ส่วนที่แก้ไข: ดึงข้อมูล Snapshot โดยใช้ validateAndGetSite เพื่อรองรับ Roaming ---
+    let currentSiteName = "";
+    let currentSiteCoords = "";
+    let finalSiteId = data.siteId;
+
+    if (data.type === "IN") {
+      const [uLat, uLon] = data.location.split(',');
+      // เรียกใช้ Algorithm เพื่อระบุตัวตนไซต์งาน (Winner Site)
+      const winnerSite = await validateAndGetSite(uLat, uLon, data.departmentId, data.siteId);
+      currentSiteName = winnerSite.name;
+      currentSiteCoords = winnerSite.coodinates || "";
+      finalSiteId = winnerSite.id;
+    } else if (data.siteId) {
+      // สำหรับ OUT ดึงข้อมูลปกติถ้ามี ID
+      const [site] = await db.select().from(sitesTable).where(eq(sitesTable.id, data.siteId)).limit(1);
+      currentSiteName = site?.name || "";
+      currentSiteCoords = site?.coodinates || "";
+    }
+
+    let deptNameSnapshot = "";
+    if (data.departmentId) {
+      const [dept] = await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, data.departmentId)).limit(1);
+      deptNameSnapshot = dept?.name || "";
+    }
+
     if (data.type === "IN") {
       let isLate = 0;
       let lateMinutes = 0;
@@ -56,8 +82,15 @@ export async function saveAttendanceAction(data: {
       await db.insert(attendanceTable).values({
         user_id: data.userId,
         department_id: data.departmentId,
-        site_id: data.siteId,
+        site_id: finalSiteId, // ใช้ ID ที่ได้จาก Algorithm
         shift_id: shift?.id || null,
+        // --- ส่วน Snapshot ที่จะไม่มีค่าว่างอีกต่อไป ---
+        siteNameSnapshot: currentSiteName,
+        siteCoordinatesSnapshot: currentSiteCoords,
+        shiftStartTimeSnapshot: shift?.startTime || null,
+        shiftEndTimeSnapshot: shift?.endTime || null,
+        departmentNameSnapshot: deptNameSnapshot,
+        // -----------------------------
         date: dateStr,
         checkIn: currentTimeStr,
         imageIn: data.image,
@@ -66,6 +99,12 @@ export async function saveAttendanceAction(data: {
         isLate: isLate,
         ...(Object.keys(attendanceTable).includes('lateMinutes') ? { lateMinutes } : {}),
       });
+      
+      revalidatePath("/", "layout");
+      revalidatePath("/leader");
+      revalidatePath("/employee");
+      return { success: true, siteName: currentSiteName };
+
     } else {
       // --- LOGIC CHECK-OUT ที่ปรับปรุง ---
       let isEarlyExit = 0;
@@ -90,6 +129,17 @@ export async function saveAttendanceAction(data: {
 
       const currentRecord = lastCheckIn[0];
       const checkInDate = currentRecord.date;
+
+      // ตรวจสอบพิกัดตอนออกงานเทียบกับไซต์ที่เข้างานไว้
+      const [originalSite] = await db.select().from(sitesTable).where(eq(sitesTable.id, currentRecord.site_id)).limit(1);
+      let isOffsiteOut = "0";
+      
+      if (originalSite && originalSite.coodinates) {
+        const [uLat, uLon] = data.location.split(',');
+        const [sLat, sLon] = originalSite.coodinates.split(',');
+        const isInside = isInsideBound(uLat, uLon, sLat, sLon);
+        isOffsiteOut = isInside ? "0" : "1";
+      }
 
       // ดึงข้อมูลกะงาน (ตรวจเช็คกะชั่วคราวด้วยตาม Logic รอบแรก)
       const [tempShiftData] = await db
@@ -119,7 +169,7 @@ export async function saveAttendanceAction(data: {
 
         // ตรวจสอบการออกก่อนเวลา
         if (currentTotalMinutes < endTotalMinutes) {
-          isEarlyExit = 1; // บันทึกเป็น 1 ตาม Logic ที่คุณส่งมาตอนแรก
+          isEarlyExit = 1;
           earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
         }
       }
@@ -131,6 +181,7 @@ export async function saveAttendanceAction(data: {
           imageOutId: data.fileId || null,
           locationOut: data.location,
           isEarlyExit: isEarlyExit,
+          isOffsiteOut: isOffsiteOut,
           ...(Object.keys(attendanceTable).includes('earlyExitMinutes') ? { earlyExitMinutes } : {}),
         })
         .where(eq(attendanceTable.id, currentRecord.id));
@@ -139,12 +190,12 @@ export async function saveAttendanceAction(data: {
       if (result.rowCount === 0 && !result.length) {
         return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ต้องการอัปเดต" };
       }
-    }
 
-    revalidatePath("/", "layout");
-    revalidatePath("/leader");
-    revalidatePath("/employee");
-    return { success: true };
+      revalidatePath("/", "layout");
+      revalidatePath("/leader");
+      revalidatePath("/employee");
+      return { success: true, siteName: currentRecord.siteNameSnapshot || originalSite?.name || "", offsite: isOffsiteOut === "1" };
+    }
   } catch (error: any) {
     console.error("Attendance error:", error);
     return { success: false, error: "บันทึกเวลาไม่สำเร็จ: " + (error.message || "Unknown Error") };
@@ -206,15 +257,17 @@ export async function createLeaveRequestAction(data: {
 export async function updateLeaveStatusAction(
   leaveId: string,
   newStatus: "approved" | "rejected" | "pending",
-  adminOrLeaderId: string
+  adminOrLeaderId: string,
+  remark?: string // เพิ่ม parameter สำหรับรับค่าหมายเหตุ
 ) {
   try {
     const updatePayload: any = {
       status: newStatus,
+      remark: remark, // อัปเดตหมายเหตุลงในฟิลด์ remark
       approvedBy: newStatus === "approved" ? adminOrLeaderId : null,
-      approvedAt: newStatus === "approved" ? sql`timezone('Asia/Bangkok', now())` : null, // ลบ ::text ออก
+      approvedAt: newStatus === "approved" ? sql`timezone('Asia/Bangkok', now())` : null,
       rejectedBy: newStatus === "rejected" ? adminOrLeaderId : null,
-      rejectedAt: newStatus === "rejected" ? sql`timezone('Asia/Bangkok', now())` : null, // ลบ ::text ออก
+      rejectedAt: newStatus === "rejected" ? sql`timezone('Asia/Bangkok', now())` : null,
     };
 
     await db.update(leaveTable)

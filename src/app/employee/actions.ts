@@ -1,11 +1,13 @@
 "use server";
 
 import { db } from "@/db/db";
-import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable } from "@/db/schema"; // ✅ เพิ่ม usersTable
+import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable, departmentsTable, sitesTable } from "@/db/schema"; // ✅ เพิ่ม usersTable
 import { eq, and, sql, isNull, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { uploadToDrive } from "@/lib/uploadthing-server"; 
 import * as bcrypt from "bcryptjs";
+import { validateAndGetSite, isInsideBound } from "@/lib/location-service"; // ปรับ Path ตามจริงของคุณ
+
 
 /* -------------------------------------------------------------------------- */
 /* ATTENDANCE ACTIONS (เข้า/ออกงาน)                                             */
@@ -15,16 +17,20 @@ export async function checkInAction(userId: string, base64Image: string, locatio
   try {
     const now = new Date();
     const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
-    // ✅ 1. จัดรูปแบบเวลาจากเครื่องให้เป็น "HH:mm:ss" เหมือนฝั่ง Check-out
     const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false });
+
+    // แปลง String location "lat, lon" เป็นตัวเลข
+    const [lat, lon] = location.split(',').map(Number);
 
     // ดึงข้อมูล User และตรวจสอบกะงาน
     const [userData, tempShift] = await Promise.all([
       db.select({
+        id: usersTable.id,
         departmentId: usersTable.departmentId,
         siteId: usersTable.site_id,
         shiftId: shiftsTable.id,
         startTime: shiftsTable.startTime,
+        endTime: shiftsTable.endTime,
       })
       .from(usersTable)
       .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId))
@@ -44,7 +50,23 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
+    // ✅ เงื่อนไขที่ 1: ตรวจสอบพิกัดเข้างาน หากไม่อยู่ในรัศมีจะไม่อนุญาตให้เช็คอิน (Throw Error)
+    const validatedSite = await validateAndGetSite(
+      lat,
+      lon,
+      user.departmentId,
+      user.siteId
+    );
+
+    // ดึงข้อมูลชื่อแผนกสำหรับ Snapshot
+    let deptNameSnapshot = "";
+    if (user.departmentId) {
+      const [dept] = await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, user.departmentId)).limit(1);
+      deptNameSnapshot = dept?.name || "";
+    }
+
     const activeStartTime = tempShift[0]?.startTime || user.startTime;
+    const activeEndTime = tempShift[0]?.endTime || user.endTime;
     const activeShiftId = tempShift[0] ? null : user.shiftId;
     const activeTempShiftId = tempShift[0]?.id || null;
 
@@ -53,19 +75,25 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const buffer = Buffer.from(base64Data, "base64");
     const uploadRes = await uploadToDrive(buffer, `checkin_${userId}_${Date.now()}.png`, "image/png");
 
-    // 3. บันทึกลง Database (เปลี่ยนจาก sql timezone เป็น currentTimeStr ที่จัดรูปแบบแล้ว)
+    // 3. บันทึกลง Database พร้อม Snapshot
     await db.insert(attendanceTable).values({
       user_id: userId,
       department_id: user.departmentId, 
-      site_id: user.siteId,           
+      site_id: validatedSite.id,           
       shift_id: activeShiftId,
       temp_shift_id: activeTempShiftId,
+      // --- SNAPSHOTS ---
+      siteNameSnapshot: validatedSite.name,
+      siteCoordinatesSnapshot: validatedSite.coodinates,
+      shiftStartTimeSnapshot: activeStartTime,
+      shiftEndTimeSnapshot: activeEndTime,
+      departmentNameSnapshot: deptNameSnapshot,
+      // -----------------
       date: dateStr,
-      checkIn: currentTimeStr, // ✅ ใช้ตัวแปรที่จัดรูปแบบ "HH:mm:ss" แล้ว
+      checkIn: currentTimeStr,
       imageIn: uploadRes.url, 
       imageInId: uploadRes.fileId,
       locationIn: location,
-      // คำนวณสายโดยใช้ currentTimeStr เทียบกับ activeStartTime
       isLate: activeStartTime ? (currentTimeStr > activeStartTime ? 1 : 0) : 0,
       lateMinutes: activeStartTime ? (() => {
           const [currH, currM] = currentTimeStr.split(':').map(Number);
@@ -77,19 +105,22 @@ export async function checkInAction(userId: string, base64Image: string, locatio
 
     revalidatePath("/employee");
     revalidatePath("/leader");
-    return { success: true };
+    // ✅ ส่งชื่อไซต์งาน (validatedSite.name) กลับไปด้วยเพื่อให้หน้าบ้าน Alert แจ้งพนักงาน
+    return { success: true, siteName: validatedSite.name };
   } catch (error: any) {
     console.error("Check-in error:", error);
-    return { success: false, error: "บันทึกเข้างานล้มเหลว: " + error.message };
+    // ส่ง Alert กลับไปว่า "คุณไม่อยู่ในพื้นที่ทำงาน" ตามเงื่อนไขหากเกิดจากรัศมีพิกัด
+    const errorMessage = error.message.includes("รัศมี") ? "คุณไม่อยู่ในพื้นที่ทำงาน" : error.message;
+    return { success: false, error: "บันทึกเข้างานล้มเหลว: " + errorMessage };
   }
 }
+
 export async function checkOutAction(userId: string, base64Image: string, location: string) {
   try {
     const now = new Date();
-    // 1. เตรียมรูปแบบเวลาและวันที่ (Asia/Bangkok)
-    const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false }); // รูปแบบ "HH:mm:ss"
+    const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false });
+    const [lat, lon] = location.split(',').map(Number);
 
-    // --- ส่วนที่ปรับปรุง: ค้นหา Record ล่าสุดที่ยังไม่ได้ Check-out เพื่อรองรับกะข้ามคืน ---
     const lastCheckIn = await db
       .select()
       .from(attendanceTable)
@@ -107,78 +138,80 @@ export async function checkOutAction(userId: string, base64Image: string, locati
     }
 
     const currentRecord = lastCheckIn[0];
-    const checkInDate = currentRecord.date; // ใช้วันที่ที่เช็คอินจริงมาดึงข้อมูลกะงาน
 
-    // 2. ดึงข้อมูลกะงาน (endTime) โดยอ้างอิงจากวันที่เช็คอิน
+    // ✅ ตรวจสอบพิกัดตอนออกงาน (ใช้ Snapshot coordinates ที่บันทึกไว้ตอนเข้างานได้เลยเพื่อความแม่นยำ)
+    const [originalSite] = await db.select().from(sitesTable).where(eq(sitesTable.id, currentRecord.site_id)).limit(1);
+    if (!originalSite) throw new Error("ไม่พบข้อมูลไซต์งานที่ระบุไว้ตอนเข้างาน");
+
+    // แยกค่า lat, lon จาก string coordinates ใน DB
+    const [sLat, sLon] = originalSite.coodinates.split(',').map(Number);
+    const isInside = isInsideBound(lat, lon, sLat, sLon);
+    
+    // ✅ เงื่อนไขที่ 2: หากอยู่นอกพื้นที่ตอนเช็คเอาท์ ให้ทำได้แต่บันทึกสถานะผิดกฎ (isOffsiteOut: 1)
+    const isOffsiteOut = isInside ? 0 : 1;
+
+    const checkInDate = currentRecord.date;
+
     const [shiftData, tempShift] = await Promise.all([
       db.select({ id: shiftsTable.id, endTime: shiftsTable.endTime }).from(shiftsTable).where(eq(shiftsTable.userId, userId)).limit(1),
       db.select({ id: temporaryShiftsTable.id, endTime: temporaryShiftsTable.endTime }).from(temporaryShiftsTable).where(and(eq(temporaryShiftsTable.userId, userId), eq(temporaryShiftsTable.targetDate, checkInDate))).limit(1)
     ]);
 
-    // กำหนดเวลาเลิกงานจริง
     const activeEndTime = tempShift[0]?.endTime || shiftData[0]?.endTime;
 
-    // 3. คำนวณสถานะการออก (0 = ปกติ, 1 = ออกก่อน)
-    let isEarlyExit = 0; // Default ปกติ เป็น 0
+    let isEarlyExit = 0; 
     let earlyExitMinutes = 0;
 
     if (activeEndTime) {
-      // แปลงเวลา "HH:mm:ss" เป็นนาทีรวมเพื่อเปรียบเทียบ
       const [currH, currM] = currentTimeStr.split(':').map(Number);
       const [endH, endM] = activeEndTime.split(':').map(Number);
       
       let currentTotalMinutes = currH * 60 + currM;
       let endTotalMinutes = endH * 60 + endM;
 
-      // --- โลจิกแก้ไขสำหรับกะกลางคืน ---
-      // ดึงเวลาเช็คอินมาเปรียบเทียบ (ถ้าไม่มีให้ถือว่าเป็น 0)
       const [inH, inM] = (currentRecord.checkIn || "00:00").split(':').map(Number);
       const checkInTotalMinutes = inH * 60 + inM;
 
-      // ถ้าเวลาเลิกงาน (endTime) น้อยกว่าเวลาเข้างาน (checkIn) แสดงว่าเป็นกะข้ามคืน
-      // และถ้าเวลาปัจจุบัน (ตอนเช้า) น้อยกว่าเวลาเข้างาน (เมื่อคืน) ให้บวก 1440 นาที (24 ชม.) เข้าไปเพื่อให้เปรียบเทียบได้
       if (endTotalMinutes < checkInTotalMinutes) {
         if (currentTotalMinutes < checkInTotalMinutes) {
           currentTotalMinutes += 1440;
         }
         endTotalMinutes += 1440;
       }
-      // -----------------------------
 
-      // ตรวจสอบเปรียบเทียบเวลากับข้อมูลเอ็นไทม์
       if (currentTotalMinutes < endTotalMinutes) {
-        isEarlyExit = 1; // ออกก่อนเวลา บันทึกเป็นเลข 1
+        isEarlyExit = 1; 
         earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
       }
     }
 
-    // 4. จัดการรูปภาพ
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
     const uploadRes = await uploadToDrive(buffer, `checkout_${userId}_${Date.now()}.png`, "image/png");
 
-    // 5. อัปเดตตาราง Attendance โดยใช้ ID ของ Record ที่เจอ
     const result = await db
       .update(attendanceTable)
       .set({
-        checkOut: currentTimeStr, // บันทึกเวลาที่ดึงมาจากเครื่อง
+        checkOut: currentTimeStr,
         imageOut: uploadRes.url, 
         imageOutId: uploadRes.fileId,
         locationOut: location,
         isEarlyExit: isEarlyExit,
         earlyExitMinutes: earlyExitMinutes,
+        isOffsiteOut: isOffsiteOut, // ✅ บันทึกสถานะว่าเช็คเอาท์นอกสถานที่หรือไม่ (0=ใน, 1=นอก)
       })
-      .where(eq(attendanceTable.id, currentRecord.id)) // เปลี่ยนมาใช้ ID แทนวันที่เพื่อให้แม่นยำและรองรับกะข้ามคืน
+      .where(eq(attendanceTable.id, currentRecord.id))
       .returning({ id: attendanceTable.id });
 
     revalidatePath("/employee");
     revalidatePath("/leader");
     
-    return { success: true };
+    // ✅ ส่งชื่อไซต์งาน (originalSite.name) กลับไปด้วยเพื่อให้หน้าบ้านแสดง Alert ว่าออกงานจากไซต์ไหน
+    return { success: true, offsite: isOffsiteOut === 1, siteName: originalSite.name };
 
   } catch (error: any) {
     console.error("Check-out error:", error);
-    return { success: false, error: "บันทึกเลิกงานล้มเหลว" };
+    return { success: false, error: "บันทึกเลิกงานล้มเหลว: " + error.message };
   }
 }
 /* -------------------------------------------------------------------------- */

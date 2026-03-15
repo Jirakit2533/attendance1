@@ -3,9 +3,10 @@ import { getLeaveHistory } from "@/server/leave";
 import { getCurrentUser } from "@/lib/auth"; 
 import EmployeeClientPage from "./employeeClientPage";
 import { redirect } from "next/navigation";
-import { db } from "@/db/db"; // นำเข้า db เพื่อเช็คความมีตัวตน
-import { usersTable, positionsTable, sitesTable, departmentsTable, shiftsTable } from "@/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { db } from "@/db/db"; // นามเข้า db เพื่อเช็คความมีตัวตน
+import { usersTable, positionsTable, sitesTable, departmentsTable, shiftsTable, leaveTable, companyTable, attendanceTable } from "@/db/schema"; // เพิ่ม companyTable และ attendanceTable
+import { eq, and, isNull, or, desc } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
 
@@ -32,7 +33,11 @@ export default async function Page() {
     departmentName: departmentsTable.name, // ✅ เพิ่ม: เพื่อให้ชื่อแผนกแสดงผล
     // ✅ เพิ่ม: ดึงเวลาจาก shiftsTable
     startTime: shiftsTable.startTime,
-    endTime: shiftsTable.endTime
+    endTime: shiftsTable.endTime,
+    // ✅ เพิ่มการดึงข้อมูลบริษัท
+    companyName: companyTable.name,
+    companyLogo: companyTable.logoUrl,
+    companyDescription: companyTable.description,
   })
   .from(usersTable)
   .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
@@ -41,6 +46,8 @@ export default async function Page() {
   .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id)) 
   // ✅ เพิ่ม Join shiftsTable เพื่อเอาข้อมูลเวลา
   .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId))
+  // ✅ Join เพื่อดึงข้อมูลบริษัท
+  .leftJoin(companyTable, eq(usersTable.companyId, companyTable.id))
   .where(and(
     eq(usersTable.id, userFromAuth.id),
     isNull(usersTable.deletedAt)
@@ -54,9 +61,36 @@ export default async function Page() {
 
   const user = userExists[0];
 
-  // 2. ดึงข้อมูลจากฐานข้อมูลจริงโดยใช้ ID ที่ตรวจสอบแล้ว
-  const dbRecords = await getAttendanceHistory(user.id);
-  const dbLeaves = await getLeaveHistory(user.id);
+  // 2. ดึงข้อมูลประวัติการเข้างานโดยตรงเพื่อให้มั่นใจว่าได้ฟิลด์ Snapshot
+  const dbRecords = await db
+    .select()
+    .from(attendanceTable)
+    .where(eq(attendanceTable.user_id, user.id))
+    .orderBy(desc(attendanceTable.date));
+  
+  // 🔍 ดึงข้อมูลการลาพร้อม Join หาชื่อผู้อนุมัติ/ผู้ปฏิเสธ และ "ชื่อตำแหน่ง" ของผู้อนุมัติ
+  const approver = alias(usersTable, "approver");
+  const approverPos = alias(positionsTable, "approverPos");
+
+  const dbLeaves = await db
+    .select({
+      type: leaveTable.type,
+      startDate: leaveTable.startDate,
+      endDate: leaveTable.endDate,
+      remark: leaveTable.remark,
+      reason: leaveTable.reason,
+      status: leaveTable.status,
+      approverFirst: approver.firstName,
+      approverLast: approver.lastName,
+      approverPositionName: approverPos.name, // ✅ ดึงชื่อตำแหน่งของผู้อนุมัติ
+    })
+    .from(leaveTable)
+    .leftJoin(approver, or(
+      eq(leaveTable.approvedBy, approver.id),
+      eq(leaveTable.rejectedBy, approver.id)
+    ))
+    .leftJoin(approverPos, eq(approver.positionId, approverPos.id)) // ✅ Join ต่อไปหาชื่อตำแหน่งของผู้อนุมัติ
+    .where(eq(leaveTable.user_id, user.id));
 
   // 3. Mapping ข้อมูล (เพิ่มฟิลด์สถานะเพื่อให้ตรงกับ UI)
   const initialRecords = dbRecords.map(r => ({
@@ -68,24 +102,32 @@ export default async function Page() {
     imageUrl: r.imageIn || "/profile.png",
     checkOutImageUrl: r.imageOut,
     position: user.positionName || "-",
-    site: user.siteName || "-",
+    // ✅ เปลี่ยนไปใช้ข้อมูลจาก Snapshot ใน Record (r) แทน
+    site: r.siteNameSnapshot || "-",
     role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
     // ✅ เพิ่มสถานะเพื่อให้ Client Page ตรวจสอบการแสดงสี/ไอคอนได้เหมือน Admin
     isLate: r.isLate ?? 0,
     isEarlyExit: r.isEarlyExit ?? "-",
-    startTime: user.startTime, 
-    endTime: user.endTime,
+    // ✅ เปลี่ยนไปใช้ข้อมูลเวลาจาก Snapshot ใน Record (r) แทน
+    startTime: r.shiftStartTimeSnapshot, 
+    endTime: r.shiftEndTimeSnapshot,
   }));
-
+  
   const initialLeaves = dbLeaves.map(l => ({
     type: l.type,
     start: l.startDate,
     end: l.endDate,
+    remark: l.remark,
     reason: l.reason,
     days: 0,
     status: l.status === "pending" ? "รออนุมัติ" : 
             l.status === "approved" ? "อนุมัติ" : 
-            l.status === "rejected" ? "ปฏิเสธ" : l.status
+            l.status === "rejected" ? "ปฏิเสธ" : l.status,
+    // ✅ ดึงชื่อผู้อนุมัติ และชื่อตำแหน่งผู้อนุมัติ จากข้อมูลที่ Join มา
+    approverName: l.approverFirst 
+      ? `${l.approverFirst} ${l.approverLast || ""}`.trim() 
+      : "-",
+    approverPosition: l.approverPositionName || "-" // ✅ ส่งชื่อตำแหน่งผู้อนุมัติไปแสดงผล
   }));
 
   // เตรียมโปรไฟล์ให้ Client Page
@@ -105,11 +147,19 @@ const userProfile = {
     endTime: user.endTime
   };
 
+  // สร้างชื่อคีย์สำหรับข้อมูลบริษัทเพื่อนำไปใช้ใน UI
+  const companyData = {
+    name: user.companyName || "Company Name",
+    logoUrl: user.companyLogo || null,
+    description: user.companyDescription || ""
+  };
+
   return (
     <EmployeeClientPage 
       userProfile={userProfile}
       initialRecords={initialRecords}
       initialLeaves={initialLeaves}
+      companyData={companyData} // ✅ ส่งข้อมูลบริษัทไปด้วย
     />
   );
 }

@@ -64,7 +64,8 @@ export default async function AdminDashboardPage() {
       sitesData, 
       positionsData, 
       departmentsData,
-      defaultShiftData // ✅ เพิ่มการ Query กะเวลามาตรฐาน 1 รอบตามสั่ง
+      defaultShiftData,
+      companyInfoData // ✅ เพิ่มการ Query ข้อมูลบริษัทเพื่อใช้ในฟอร์มแก้ไข
     ] = await Promise.all([
       // --- พนักงาน ---
       db.select({
@@ -126,6 +127,7 @@ export default async function AdminDashboardPage() {
         endDate: leaveTable.endDate,
         status: leaveTable.status,
         reason: leaveTable.reason,
+        remark: leaveTable.remark, // ✅ เพิ่มการดึงค่า Remark จาก Database
         fileUrl: leaveTable.fileUrl,
         fileName: leaveTable.fileName,
         firstName: usersTable.firstName,
@@ -152,6 +154,21 @@ export default async function AdminDashboardPage() {
         eq(shiftsTable.companyId, companyId || ""),
         isNull(shiftsTable.userId) // ดึงกะที่เป็นค่ากลางของบริษัท (ถ้ามี)
       ))
+      .limit(1),
+
+      // ✅ ดึงข้อมูลบริษัทแบบละเอียด (เพิ่ม description เข้าไปในผลลัพธ์การ Query)
+      db.select({
+        id: companyTable.id,
+        name: companyTable.name,
+        description: companyTable.description, // ✅ ดึง Description มาจากฐานข้อมูล
+        address: companyTable.address,
+        phone: companyTable.phone,
+        email: companyTable.email,
+        logoUrl: companyTable.logoUrl,
+        companyCode: companyTable.companyCode,
+      })
+      .from(companyTable)
+      .where(eq(companyTable.id, companyId || ""))
       .limit(1)
     ]);
 
@@ -223,6 +240,7 @@ export default async function AdminDashboardPage() {
       endDate: l?.endDate ? String(l.endDate) : "",
       status: String(l?.status || "pending"),
       reason: String(l?.reason || ""),
+      remark: String(l?.remark || ""), // ✅ Mapping Remark ส่งไปที่ Client Page
       fileUrl: l?.fileUrl || null,
       fileName: l?.fileName || null,
       employeeName: `${l?.firstName || ''} ${l?.lastName || ''}`.trim() || "ไม่ระบุพนักงาน",
@@ -233,6 +251,9 @@ export default async function AdminDashboardPage() {
     const sites = (sitesData || []).map(s => ({ id: String(s?.id || ""), name: String(s?.name || "") }));
     const positions = (positionsData || []).map(p => ({ id: String(p?.id || ""), name: String(p?.name || "") }));
     const departments = (departmentsData || []).map(d => ({ id: String(d?.id || ""), name: String(d?.name || "") }));
+
+    // ✅ ข้อมูลบริษัทสำหรับ Client Page (รวม description เรียบร้อย)
+    const initialCompanyData = companyInfoData?.[0] || null;
 
     // ✅ ปรับปรุง Admin Profile: ส่งข้อมูลให้ครบถ้วนเพื่อใช้ใน Modal แก้ไขข้อมูล (ห้ามลบ)
     const adminProfile = {
@@ -257,7 +278,8 @@ export default async function AdminDashboardPage() {
       sites: sites,
       positions: positions,
       departments: departments,
-      standardTime: standardTime // ✅ ส่งเวลามาตรฐานไปใช้ใน Client Page
+      standardTime: standardTime, // ✅ ส่งเวลามาตรฐานไปใช้ใน Client Page
+      initialCompanyData: initialCompanyData // ✅ ส่งข้อมูลบริษัทไปแก้ Error companyData is not defined
     };
 
     // 🛡️ ป้องกัน Error undefined ในขั้นตอนสุดท้าย

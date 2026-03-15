@@ -1,5 +1,5 @@
 import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm"; 
+import { desc, relations, sql } from "drizzle-orm"; 
 
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
 export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected"]);
@@ -15,12 +15,15 @@ export const superAdminTable = pgTable("super_admins", {
 
 export const companyTable = pgTable("company", {
   id: uuid("id").primaryKey().defaultRandom(),
-  creatorId: uuid("user_id").references(() => superAdminTable.id),
+  superAdminCreatorId: uuid("user_id").references(() => superAdminTable.id),
+  adminCreatorId: uuid("admin_creator_id").references(() => adminsTable.id),
   companyCode: varchar("company_code", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
   address: text("address"),
   phone: varchar("phone", { length: 255 }),
   email: varchar("email", { length: 255 }),
+  logoUrl: text("logo_url"),
   createdByName: varchar("created_by_name", { length: 255 }),
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
   updateByName: varchar("update_by_name", { length: 255 }), 
@@ -140,6 +143,11 @@ export const attendanceTable = pgTable("attendance", {
   user_id: uuid("user_id").references(() => usersTable.id),
   department_id: uuid("department_id").references(() => departmentsTable.id),
   site_id: uuid("site_id").references(() => sitesTable.id),
+  siteNameSnapshot: varchar("site_name_snapshot", { length: 255 }),
+  siteCoordinatesSnapshot: varchar("site_coordinates_snapshot", { length: 255 }),
+  shiftStartTimeSnapshot: time("shift_start_time_snapshot"),
+  shiftEndTimeSnapshot: time("shift_end_time_snapshot"),
+  departmentNameSnapshot: varchar("department_name_snapshot", { length: 255 }),
   date: date("date").notNull(),
   checkIn: time("check_in"),
   imageIn: text("image_in").notNull(),   
@@ -153,6 +161,7 @@ export const attendanceTable = pgTable("attendance", {
   locationOut: varchar("location_out", { length: 255 }),
   isLate: integer("is_late").default(0),      // 0 = ปกติ, 1 = สาย
   isEarlyExit: text("is_early_exit", { length: 255 }), // 0 = ปกติ, 1 = ออกสาย
+  isOffsiteOut: text("is_offsite_out", { length: 255 }), // 0 = ปกติ, 1 = ออกไซต์
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
 });
 
@@ -170,6 +179,7 @@ export const leaveTable = pgTable("leave", {
   approvedAt: timestamp("approved_at", { withTimezone: true }), 
   rejectedBy: uuid("rejected_by_id").references(() => usersTable.id),
   rejectedAt: timestamp("rejected_at", { withTimezone: true }), 
+  remark: text("remark"),
   fileUrl: text("file_url"), 
   fileId: text("file_id"),
   fileName: text("file_name"),

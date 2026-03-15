@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/db/db";
-import { usersTable, attendanceTable, leaveTable, positionsTable, sitesTable, departmentsTable, shiftsTable } from "@/db/schema"; // เพิ่ม shiftsTable
-import { eq, desc, and, ne, isNull, isNotNull } from "drizzle-orm";
+import { usersTable, attendanceTable, leaveTable, positionsTable, sitesTable, departmentsTable, shiftsTable, companyTable } from "@/db/schema"; 
+import { eq, desc, and, ne, isNull, isNotNull, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import LeaderClientPage from "./leaderClientPage";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,11 @@ export default async function LeaderPage() {
     redirect("/api/auth/logout-cleanup");
   }
 
-  // 1. ดึง Profile ของ Leader พร้อมชื่อตำแหน่ง ชื่อไซต์งาน และเวลาเข้า-ออกงาน
+  // สร้าง Alias สำหรับตาราง User และ Position เพื่อใช้ดึงข้อมูลผู้อนุมัติ
+  const approverUser = alias(usersTable, "approverUser");
+  const approverPosition = alias(positionsTable, "approverPosition");
+
+  // 1. ดึง Profile ของ Leader พร้อมข้อมูลบริษัท
   const userExists = await db
   .select({
     id: usersTable.id,
@@ -26,16 +31,21 @@ export default async function LeaderPage() {
     avatarUrl: usersTable.avatarUrl,
     userName: usersTable.userName, 
     position: positionsTable.name, 
-    site: sitesTable.name,         
+    site: sitesTable.name,           
     department: departmentsTable.name, 
-    startTime: shiftsTable.startTime, // ดึงเวลาเริ่มงานของ Leader
-    endTime: shiftsTable.endTime,     // ดึงเวลาเลิกงานของ Leader
+    startTime: shiftsTable.startTime, 
+    endTime: shiftsTable.endTime,     
+    // ดึงข้อมูลบริษัทปัจจุบัน
+    companyName: companyTable.name,
+    companyLogo: companyTable.logoUrl,
+    companyDescription: companyTable.description,
   })
   .from(usersTable)
   .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
   .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
   .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id))
-  .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId)) // เพิ่มการ Join shiftsTable ของ Leader
+  .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId)) 
+  .leftJoin(companyTable, eq(usersTable.companyId, companyTable.id)) 
   .where(and(eq(usersTable.id, userFromAuth.id), isNull(usersTable.deletedAt)))
   .limit(1);
 
@@ -49,9 +59,6 @@ export default async function LeaderPage() {
   const isAllSitesLeader = !currentSite;
 
   try {
-    // แก้ไข Logic เงื่อนไข Site ตามคำสั่ง: 
-    // ถ้า Leader เป็น ทุกไซต์ (site_id เป็น null) ให้ดึงพนักงานทุกคนในแผนก รวมทั้ง Leader ที่ถูกกำหนดไซต์ด้วย
-    // (ยกเว้นคนที่ไม่ระบุไซต์เหมือนกัน)
     const teamFilter = and(
       eq(usersTable.departmentId, currentDept!),
       ne(usersTable.id, user.id),
@@ -62,8 +69,25 @@ export default async function LeaderPage() {
     );
 
     const [myRecordsRaw, allLeaveRequests, teamAttendanceRaw, myLeaveRequestsRaw] = await Promise.all([
-      // 2. ดึงประวัติเข้างานของตัว Leader เอง
-      db.select()
+      // 2. ดึงประวัติเข้างาน (ใช้ Snapshot)
+      db.select({
+        id: attendanceTable.id,
+        user_id: attendanceTable.user_id,
+        date: attendanceTable.date,
+        checkIn: attendanceTable.checkIn,
+        checkOut: attendanceTable.checkOut,
+        locationIn: attendanceTable.locationIn,
+        locationOut: attendanceTable.locationOut,
+        imageIn: attendanceTable.imageIn,
+        imageOut: attendanceTable.imageOut,
+        isLate: attendanceTable.isLate,
+        isEarlyExit: attendanceTable.isEarlyExit,
+        // Snapshot
+        site: attendanceTable.siteNameSnapshot,
+        department: attendanceTable.departmentNameSnapshot,
+        startTime: attendanceTable.shiftStartTimeSnapshot,
+        endTime: attendanceTable.shiftEndTimeSnapshot,
+      })
         .from(attendanceTable)
         .where(eq(attendanceTable.user_id, user.id))
         .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
@@ -82,7 +106,10 @@ export default async function LeaderPage() {
             reason: leaveTable.reason,
             status: leaveTable.status,
             fileUrl: leaveTable.fileUrl,
-            // เพิ่มฟิลด์เพื่อใช้ใน Mapping initialLeaves
+            remark: leaveTable.remark, 
+            approverFirst: approverUser.firstName,
+            approverLast: approverUser.lastName,
+            approverPosition: approverPosition.name, 
             positionName: positionsTable.name,
             siteName: sitesTable.name,
           })
@@ -90,11 +117,13 @@ export default async function LeaderPage() {
           .innerJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
           .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
           .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
+          .leftJoin(approverUser, or(eq(leaveTable.approvedBy, approverUser.id), eq(leaveTable.rejectedBy, approverUser.id)))
+          .leftJoin(approverPosition, eq(approverUser.positionId, approverPosition.id))
           .where(teamFilter)
           .orderBy(desc(leaveTable.startDate))
         : Promise.resolve([]),
 
-      // 4. ประวัติเข้างานของทีม
+      // 4. ประวัติเข้างานของทีม (ใช้ Snapshot)
       currentDept
         ? db.select({
             id: attendanceTable.id,
@@ -104,7 +133,6 @@ export default async function LeaderPage() {
             userName: usersTable.userName, 
             avatarUrl: usersTable.avatarUrl, 
             position: positionsTable.name,
-            site: sitesTable.name,
             role: usersTable.role,
             date: attendanceTable.date,
             checkIn: attendanceTable.checkIn,
@@ -115,18 +143,18 @@ export default async function LeaderPage() {
             imageOut: attendanceTable.imageOut,
             isLate: attendanceTable.isLate, 
             isEarlyExit: attendanceTable.isEarlyExit, 
-            startTime: shiftsTable.startTime, 
-            endTime: shiftsTable.endTime,    
+            site: attendanceTable.siteNameSnapshot,
+            startTime: attendanceTable.shiftStartTimeSnapshot, 
+            endTime: attendanceTable.shiftEndTimeSnapshot,    
           })
           .from(attendanceTable)
           .leftJoin(usersTable, eq(attendanceTable.user_id, usersTable.id)) 
           .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
-          .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
-          .leftJoin(shiftsTable, eq(attendanceTable.shift_id, shiftsTable.id)) 
           .where(teamFilter)
           .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
         : Promise.resolve([]),
 
+      // 5. ประวัติการลาของตัวเอง
       db.select({
         id: leaveTable.id,
         user_id: leaveTable.user_id,
@@ -136,14 +164,26 @@ export default async function LeaderPage() {
         reason: leaveTable.reason,
         status: leaveTable.status,
         fileUrl: leaveTable.fileUrl,
+        remark: leaveTable.remark, 
+        approverFirst: approverUser.firstName,
+        approverLast: approverUser.lastName,
+        approverPosition: approverPosition.name,
       })
       .from(leaveTable)
+      .leftJoin(approverUser, or(eq(leaveTable.approvedBy, approverUser.id), eq(leaveTable.rejectedBy, approverUser.id)))
+      .leftJoin(approverPosition, eq(approverUser.positionId, approverPosition.id))
       .where(eq(leaveTable.user_id, user.id))
       .orderBy(desc(leaveTable.startDate))
     ]);
 
-    // 5. จัดเตรียมข้อมูล (Mapping พร้อมจัดการฟิลด์เวลา)
+    // 6. จัดเตรียมข้อมูล (Mapping)
     const finalProps = {
+      // ข้อมูลบริษัทสำหรับ UI
+      companyData: {
+        name: user.companyName || "บริษัทไม่ระบุชื่อ",
+        logoUrl: user.companyLogo,
+        description: user.companyDescription
+      },
       userProfile: {
         ...user,
         name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
@@ -156,7 +196,7 @@ export default async function LeaderPage() {
         ...r,
         location: r.locationIn || r.locationOut || "ไม่ได้ระบุพิกัด",
         position: user.position || "ไม่ระบุ", 
-        site: user.site || "ทุกไซต์งาน",
+        site: r.site || "ไม่ระบุไซต์", 
         role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
         checkIn: r.checkIn ? r.checkIn.substring(0, 5) : null,
         checkOut: r.checkOut ? r.checkOut.substring(0, 5) : null,
@@ -169,20 +209,28 @@ export default async function LeaderPage() {
         positionName: t.position || "พนักงาน",
         startTime: t.startTime || null, 
         endTime: t.endTime || null,  
-        siteName: t.site || "ทุกไซต์งาน",
+        siteName: t.site || "ไม่ระบุไซต์",
         checkIn: t.checkIn ? t.checkIn.substring(0, 5) : null,
         checkOut: t.checkOut ? t.checkOut.substring(0, 5) : null,    
       })),
-      initialLeaves: (allLeaveRequests || []).map(l => ({
+      initialLeaves: (allLeaveRequests || []).map((l: any) => ({
         ...l,
         employeeName: `${l.firstName || ''} ${l.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
         positionName: l.positionName || "พนักงาน",
         siteName: l.siteName || "ทุกไซต์งาน",
+        remark: l.remark,
+        approverFirst: l.approverFirst,
+        approverLast: l.approverLast,
+        approverPosition: l.approverPosition || "ไม่ระบุตำแหน่ง",
       })),
-      myLeaves: (myLeaveRequestsRaw || []).map(l => ({
+      myLeaves: (myLeaveRequestsRaw || []).map((l: any) => ({
         ...l,
         start_date: l.startDate, 
         end_date: l.endDate,    
+        remark: l.remark,
+        approverFirst: l.approverFirst,
+        approverLast: l.approverLast,
+        approverPosition: l.approverPosition || "admin/HR",
       })),
     };
 

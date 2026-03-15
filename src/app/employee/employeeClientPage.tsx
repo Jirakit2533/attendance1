@@ -32,12 +32,18 @@ interface Props {
   initialLeaves: any[];
   position: string;
   site: string;
+  companyData: {      // ✅ กำหนดโครงสร้างให้ชัดเจน
+    name: string;
+    logoUrl: string | null;
+    description: string;
+  };
 }
 
 export default function EmployeeClientPage({
   userProfile,
   initialRecords,
   initialLeaves,
+  companyData,
 }: Props) {
   const router = useRouter();
 
@@ -419,17 +425,36 @@ export default function EmployeeClientPage({
       {/* 🟢 TOP NAVIGATION */}
       <nav className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur-xl border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4">
+            {/* ส่วนโลโก้ด้านซ้าย: ปรับขนาดตามหน้า Leader ที่คุณชอบ (w-12 ถึง sm:w-16) */}
+            <div className="flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-xl shadow-lg shadow-blue-200 overflow-hidden">
+              <img 
+                src={companyData?.logoUrl || "/logo.png"} 
+                alt={companyData?.name || "Logo"} 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = `https://ui-avatars.com/api/?name=${companyData?.name || 'CP'}&background=2563eb&color=fff`;
+                }}
+              />
+            </div>
+
             <div className="flex flex-col border-l-2 border-gray-100 pl-4">
-              <h1 className="font-black text-gray-900 tracking-tighter text-xl leading-none">
-                SIAM ROYAL <span className="text-blue-600">SYSTEM</span>
+              <h1 className="font-black text-gray-900 tracking-tighter text-lg sm:text-xl leading-none uppercase">
+                {companyData?.name || "ชื่อบริษัท"}
               </h1>
-              <span className="text-[10px] text-gray-400 font-bold tracking-[0.2em] uppercase mt-1">
-                ศูนย์นวัตกรรมแห่งอนาคต
+              
+              {/* ซ่อน Description ในมือถือ และจำกัดความกว้างตามที่คุณปรับจูนไว้ */}
+              <span className="hidden sm:block text-[10px] text-gray-400 font-bold tracking-[0.2em] uppercase mt-1 max-w-[440px] line-clamp-2 leading-relaxed whitespace-normal break-words">
+                {companyData?.description || "description"}
+              </span>
+
+              {/* ปรับแต่ง Employee Panel ให้เป็นสีน้ำเงินสไตล์เดียวกับ Leader */}
+              <span className="block text-[9px] md:text-[10px] font-bold text-blue-600 tracking-[0.2em] md:tracking-[0.25em] uppercase opacity-90 mt-1">
+                Employee Panel
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 sm:gap-6">
             <div className="hidden md:flex flex-col items-end">
               <span className="text-sm font-black text-gray-800">
                 {userProfile.firstName} {/*{userProfile.lastName}*/}
@@ -442,12 +467,11 @@ export default function EmployeeClientPage({
             <button
               onClick={handleLogout}
               disabled={isProcessing}
-              className="group flex items-center gap-2 px-3 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95"
-            >
-              <span className="text-base sm:text-lg">
+              className="group flex items-center gap-1.5 px-2.5 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95 w-fit max-w-fit"            >
+              <span className="text-base sm:text-lg leading-none">
                 {isProcessing ? "⏳" : "🚪"}
               </span>
-              <span className="text-[10px] sm:text-sm font-bold uppercase tracking-tight">
+              <span className="text-[9px] sm:text-sm font-bold uppercase tracking-tight leading-none">
                 {isProcessing ? "..." : "ลงชื่อออก"}
               </span>
             </button>
@@ -637,7 +661,7 @@ export default function EmployeeClientPage({
     <div className="flex items-center gap-3">
       <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
       <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">
-        ประวัติ <span className="text-gray-300">การเข้างาน</span>
+        ประวัติการเข้างาน <span className="text-gray-300"></span>
       </h2>
     </div>
   </div>
@@ -797,7 +821,7 @@ export default function EmployeeClientPage({
                 <div className="flex items-center gap-3 mb-8">
                   <div className="w-2 h-8 bg-indigo-600 rounded-full"></div>
                   <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">
-                    คำขอ <span className="text-gray-300">ลางานของฉัน</span>
+                    คำขอลางานของฉัน
                   </h2>
                 </div>
                 {leaves.length === 0 ? (
@@ -822,7 +846,7 @@ export default function EmployeeClientPage({
                             </p>
                           </div>
                           <span
-                            className={`text-[9px] px-4 py-2 rounded-full font-black border uppercase tracking-widest ${
+                            className={`text-[11px] px-4 py-2 rounded-full font-black border uppercase tracking-widest ${
                               l.status === "อนุมัติแล้ว"
                                 ? "bg-green-50 text-green-600 border-green-100"
                                 : l.status === "ปฏิเสธ"
@@ -833,6 +857,20 @@ export default function EmployeeClientPage({
                             {l.status}
                           </span>
                         </div>
+                          <div className="mt-4 py-4 border-y border-gray-100">
+                            <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
+                              <span className="text-indigo-600 mr-2 font-black">หมายเหตุ:</span>
+                              {l.remark || "-"}
+                            </div>
+                            <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
+                              <span className="text-indigo-600 mr-2 font-black">ผู้จัดการคำขอ:</span>
+                              {l.approverName || "-"}
+                            </div>
+                            <div className="text-[12px] font-bold text-gray-900 leading-relaxed">
+                              <span className="text-indigo-600 mr-2 font-black">ตำแหน่ง:</span>
+                              {l.approverPosition || "-"}
+                            </div>
+                          </div>
                         <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 text-sm text-gray-600 font-medium italic">
                           {l.reason}
                         </div>

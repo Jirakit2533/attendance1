@@ -162,9 +162,25 @@ export async function createDepartmentAction(name: string) {
         return { success: false, error: "กรุณาระบุชื่อผู้ใช้งาน (Username)" };
       }
   
-      // 2. จัดการ Password
+      // 2. จัดการ Password (เพิ่ม Logic ตรวจสอบรหัสผ่านเดิมกรณีแก้ไข)
       let passwordHash = undefined;
       if (data.password && data.password.trim() !== "") {
+        
+        // ✅ เพิ่มการตรวจสอบรหัสผ่านเดิมกรณีที่เป็นการแก้ไข (data.id มีค่า)
+        if (data.id) {
+          const userForAuth = await db.select({ passwordHash: usersTable.passwordHash })
+            .from(usersTable)
+            .where(eq(usersTable.id, data.id))
+            .limit(1);
+  
+          if (userForAuth.length > 0 && userForAuth[0].passwordHash) {
+            const isOldPasswordCorrect = await bcrypt.compare(data.oldPassword || "", userForAuth[0].passwordHash);
+            if (!isOldPasswordCorrect) {
+              return { success: false, error: "รหัสผ่านเดิมไม่ถูกต้อง ไม่สามารถเปลี่ยนรหัสผ่านใหม่ได้" };
+            }
+          }
+        }
+        
         passwordHash = await bcrypt.hash(data.password, 10);
       }
   
@@ -216,9 +232,12 @@ export async function createDepartmentAction(name: string) {
       if (!data.id) {
           payload.userName = inputUsername;
           payload.createdBy = admin.id;
+          // กรณีลงทะเบียนใหม่ ถ้าไม่มีรหัสผ่านส่งมา ให้ใช้ default "123456"
           payload.passwordHash = passwordHash || await bcrypt.hash("123456", 10);
       } else {
+          // กรณีแก้ไข: จะอัปเดตรหัสผ่านเฉพาะเมื่อมีการส่ง passwordHash มาเท่านั้น
           if (passwordHash) payload.passwordHash = passwordHash;
+          
           if (inputUsername && inputUsername.length < 30) {
             payload.userName = inputUsername;
           }
@@ -265,13 +284,10 @@ export async function createDepartmentAction(name: string) {
       revalidatePath("/administrator");
       return { success: true, message: "บันทึกข้อมูลพนักงานสำเร็จ" };
     } catch (error: any) {
-      // 1. พิมพ์ Error ออกทาง Terminal เพื่อให้คุณเห็นค่าจริง (สำหรับการตรวจสอบ)
       console.error("DEBUG - FULL ERROR:", error);
   
-      // 2. แปลง Error เป็นข้อความทั้งหมดเพื่อหา Keyword
       const fullErrorString = JSON.stringify(error) || String(error);
       
-      // 3. เช็ค Keyword ที่บ่งบอกว่า "ข้อมูลซ้ำ"
       const isDuplicate = 
         error.code === "23505" || 
         fullErrorString.includes("23505") || 
@@ -283,11 +299,9 @@ export async function createDepartmentAction(name: string) {
         return { success: false, error: "ชื่อผู้ใช้งานนี้มีอยู่ในระบบแล้ว" };
       }
   
-      // ถ้าไม่ใช่เรื่องชื่อซ้ำ ให้ส่ง Error กลาง (บรรทัดเดิมที่คุณมี)
       return { success: false, error: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" };
     }
   }
-  
   /* ==========================================================================
      DELETE STAFF ACTION (Soft Delete + ลบรูปภาพ)
      ========================================================================== */
@@ -331,12 +345,15 @@ export async function createDepartmentAction(name: string) {
    LEAVE ACTIONS
    ========================================================================== */
 
-export async function updateLeaveStatusAction(leaveId: string, status: string) {
+export async function updateLeaveStatusAction(leaveId: string, status: string, remark?: string) {
   try {
     const admin = await getAdminContext();
     if (!admin) return { success: false, error: "Unauthorized: เซสชันหมดอายุ" };
 
-    const updateData: any = { status };
+    const updateData: any = { 
+      status,
+      remark: remark || null // บันทึกหมายเหตุลงในฟิลด์ remark
+    };
 
     if (status === 'approved') {
       updateData.approvedBy = admin.id;
@@ -349,6 +366,7 @@ export async function updateLeaveStatusAction(leaveId: string, status: string) {
       updateData.approvedBy = null;
       updateData.approvedAt = null;
     } else {
+      // กรณีดึงกลับเป็น pending (แก้ไข)
       updateData.approvedBy = null;
       updateData.approvedAt = null;
       updateData.rejectedBy = null;
@@ -360,6 +378,8 @@ export async function updateLeaveStatusAction(leaveId: string, status: string) {
       .where(eq(leaveTable.id, leaveId));
 
     revalidatePath("/administrator"); 
+    // เพิ่ม revalidatePath สำหรับหน้า leader ด้วยเพื่อให้ข้อมูลอัปเดตทันที
+    revalidatePath("/leader"); 
     
     const statusText = status === 'approved' ? 'อนุมัติ' : status === 'rejected' ? 'ปฏิเสธ' : 'แก้ไข';
     return { success: true, message: `${statusText}คำขอลาสำเร็จ` };
@@ -368,7 +388,6 @@ export async function updateLeaveStatusAction(leaveId: string, status: string) {
     return { success: false, error: "ไม่สามารถอัปเดตสถานะได้" };
   }
 }
-
 /* ==========================================================================
    FETCH DATA ACTIONS
    ========================================================================== */
@@ -616,3 +635,71 @@ export async function updateAdminProfileAction(adminId: string, formData: FormDa
     return { success: false, error: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" };
   }
 }
+
+/* ==========================================================================
+   COMPANY UPDATE ACTION (แก้ไขการตรวจสอบรหัสผ่านด้วย Bcrypt)
+   ========================================================================== */
+   export async function updateCompanyAction(data: any) {
+    try {
+      const admin = await getAdminContext();
+      
+      // ใช้ admin.id และ admin.companyId จาก context ของคุณเป็นตัวหลัก
+      if (!admin || !admin.id || !admin.companyId) {
+        return { success: false, error: "Unauthorized: ไม่พบข้อมูลผู้ใช้งาน" };
+      }
+  
+      // --- 1. ดึงข้อมูล Security ตาม Schema จริง (passwordHash) ---
+      const adminSecurityCheck = await db
+        .select({
+          passwordHash: usersTable.passwordHash, 
+          dbCompanyId: adminsTable.company,      
+        })
+        .from(usersTable)
+        .innerJoin(adminsTable, eq(usersTable.id, adminsTable.user_id))
+        .where(and(
+          eq(usersTable.id, admin.id),
+          isNull(usersTable.deletedAt)
+        ))
+        .limit(1);
+  
+      const targetAdmin = adminSecurityCheck[0];
+      if (!targetAdmin) {
+        return { success: false, error: "ไม่พบข้อมูลผู้ดูแลที่มีสิทธิ์" };
+      }
+  
+      // --- 2. Security Check: ต้องใช้ bcrypt.compare เพราะใน DB เก็บเป็น Hash ---
+      if (!data.confirmPassword) {
+        return { success: false, error: "กรุณาระบุรหัสผ่านยืนยัน" };
+      }
+  
+      const isPasswordValid = await bcrypt.compare(data.confirmPassword, targetAdmin.passwordHash);
+      
+      if (!isPasswordValid) {
+        return { success: false, error: "รหัสผ่านไม่ถูกต้อง" };
+      }
+  
+      // --- 3. เตรียม Payload (ห้ามลบ ห้ามลดฟิลด์เดิม) ---
+      const payload = {
+        name: data.companyName, 
+        description: data.description, 
+        phone: data.phone,
+        email: data.email,
+        address: data.address,
+        logoUrl: data.logoUrl,
+        updateByName: `${admin.firstName} ${admin.lastName}`,
+        updatedAt: new Date(),
+      };
+  
+      // --- 4. อัปเดตข้อมูลบริษัท โดยใช้ ID ที่ดึงมาจาก DB ---
+      await db.update(companyTable)
+        .set(payload)
+        .where(eq(companyTable.id, targetAdmin.dbCompanyId));
+  
+      revalidatePath("/administrator");
+      return { success: true };
+  
+    } catch (error) {
+      console.error("Update Company Error:", error);
+      return { success: false, error: "Database Connection Error" };
+    }
+  }
