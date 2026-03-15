@@ -859,7 +859,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
   </div>
 </header>
 
-        {/* --- SIDEBAR OVERLAY & PANEL --- */}
+ {/* --- SIDEBAR OVERLAY & PANEL --- */}
         <div className={`fixed inset-0 z-[1000] print:hidden transition-all duration-300 ${isSidebarOpen ? 'visible' : 'invisible'}`}>
           {/* Background Overlay */}
           <div 
@@ -873,7 +873,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
           >
             
             {/* Sidebar Header */}
-            <div className="p-5 md:p-7 border-b border-slate-100 flex items-center gap-5 bg-white">
+            <div className="p-5 md:p-7 border-b border-slate-100 flex items-center gap-5 bg-white shrink-0">
               <button 
                 onClick={() => setIsSidebarOpen(false)}
                 className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center bg-slate-900 rounded-xl md:rounded-2xl text-white hover:bg-slate-800 transition-all active:scale-90 shadow-xl"
@@ -883,8 +883,8 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               <h2 className="font-black text-slate-900 uppercase italic tracking-tighter text-lg md:text-xl">Admin Menu</h2>
             </div>
 
-            {/* Sidebar Content */}
-            <div className="flex-1 overflow-y-auto px-6 md:px-7 py-4 flex flex-col justify-center space-y-8 md:space-y-12">
+            {/* Sidebar Content - เปลี่ยน justify-center เป็น justify-start และเพิ่ม pt-10 */}
+            <div className="flex-1 overflow-y-auto px-6 md:px-7 pt-10 pb-8 flex flex-col justify-start space-y-8 md:space-y-12">
               
               {/* 👤 Profile Section */}
               <div className="flex flex-col items-center text-center">
@@ -971,7 +971,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             </div>
 
             {/* Sidebar Footer */}
-            <div className="p-8 md:p-10 border-t border-slate-100 bg-slate-50/30 text-center">
+            <div className="p-8 md:p-10 border-t border-slate-100 bg-slate-50/30 text-center shrink-0">
               <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em] opacity-50 italic">Gemini HR System v1.0</p>
             </div>
           </aside>
