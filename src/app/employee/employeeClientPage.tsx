@@ -544,8 +544,8 @@ export default function EmployeeClientPage({
           </div>
 
           <div className="flex flex-col gap-3 w-full md:w-auto min-w-[240px]">
-            {/* 1. ปุ่มลงชื่อเข้า/ออกงาน */}
-            {!todayStatus.hasCheckedIn ? (
+            {/* 1. ปุ่มลงชื่อเข้า/ออกงาน (Logic แบบสลับปุ่มเดียวและวนลูป) */}
+            {(!todayStatus.hasCheckedIn || (!userProfile.site && todayStatus.hasCheckedOut)) ? (
               <button
                 onClick={handleCheckIn}
                 disabled={isProcessing}
@@ -572,7 +572,7 @@ export default function EmployeeClientPage({
                 </svg>
                 {isProcessing ? "กำลังประมวลผล..." : "ลงชื่อเข้าทำงาน"}
               </button>
-            ) : !todayStatus.hasCheckedOut ? (
+            ) : (todayStatus.hasCheckedIn && !todayStatus.hasCheckedOut) ? (
               <button
                 onClick={handleCheckOut}
                 disabled={isProcessing}
@@ -614,18 +614,14 @@ export default function EmployeeClientPage({
               ขอลางาน
             </button>
 
-            {/* 3. ปุ่มเปลี่ยนรหัสผ่าน (เพิ่มใหม่ ดีไซน์หรู) */}
+            {/* 3. ปุ่มเปลี่ยนรหัสผ่าน */}
             <button
               onClick={() => setShowPasswordModal(true)}
               disabled={isProcessing}
               className="w-full relative group active:scale-[0.97] transition-all duration-300 disabled:opacity-50"
             >
-              {/* 1. Background Layer: เงาฟุ้งด้านหลังปุ่มเมื่อ Hover */}
               <div className="absolute inset-0 bg-blue-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[1.5rem]"></div>
-
-              {/* 2. Main Button Body */}
               <div className="relative flex items-center justify-center gap-3 px-8 py-5 rounded-[1.5rem] bg-white border-2 border-gray-50 group-hover:border-blue-500 group-hover:bg-blue-50/30 transition-all duration-300 shadow-sm group-hover:shadow-md">
-                {/* 3. Icon Box: มีการหมุนและขยายเล็กน้อย */}
                 <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white group-hover:rotate-12 group-hover:scale-110 transition-all duration-300">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -642,8 +638,6 @@ export default function EmployeeClientPage({
                     />
                   </svg>
                 </div>
-
-                {/* 4. Text: ใช้ฟอนต์หนาและเว้นระยะตัวอักษรให้ดูพรีเมียม */}
                 <span className="text-[11px] font-black text-gray-400 group-hover:text-blue-600 uppercase tracking-[0.15em] transition-colors">
                   {isProcessing ? "กำลังประมวลผล..." : "เปลี่ยนรหัสผ่าน"}
                 </span>
