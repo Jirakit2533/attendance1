@@ -83,6 +83,18 @@ export async function saveSiteAction(data: { name: string; address: string; lat:
     const admin = await getAdminContext();
     if (!admin || !admin.companyId) return { success: false, error: "เซสชันหมดอายุ" };
 
+    // ตรวจสอบว่ามีชื่อไซต์นี้อยู่ในบริษัทแล้วหรือไม่
+    const existingSite = await db.query.sitesTable.findFirst({
+      where: (sites, { and, eq }) => and(
+        eq(sites.name, data.name),
+        eq(sites.companyId, admin.companyId)
+      ),
+    });
+
+    if (existingSite) {
+      return { success: false, error: `ตรวจพบข้อมูลซ้ำ: มีไซต์งานชื่อ "${data.name}" อยู่ในระบบแล้ว` };
+    }
+
     // นำ lat และ lng มาต่อกันเป็น "lat,lng" เพื่อลง field coordinates (ตาม schema ของคุณ)
     const combinedCoordinates = `${data.lat},${data.lng}`;
 
@@ -110,6 +122,18 @@ export async function savePositionAction(data: { name: string }) {
     const admin = await getAdminContext();
     if (!admin || !admin.companyId) return { success: false, error: "เซสชันหมดอายุ" };
 
+    // ตรวจสอบชื่อตำแหน่งซ้ำ
+    const existingPos = await db.query.positionsTable.findFirst({
+      where: (pos, { and, eq }) => and(
+        eq(pos.name, data.name),
+        eq(pos.company_id, admin.companyId)
+      ),
+    });
+
+    if (existingPos) {
+      return { success: false, error: `ตำแหน่ง "${data.name}" ถูกเพิ่มไว้ในระบบก่อนหน้านี้แล้ว` };
+    }
+
     await db.insert(positionsTable).values({
       name: data.name,
       company_id: admin.companyId, // ตาม schema: company_id
@@ -132,6 +156,18 @@ export async function createDepartmentAction(name: string) {
     const admin = await getAdminContext();
     if (!admin || !admin.companyId) return { success: false, error: "เซสชันหมดอายุ" };
 
+    // ตรวจสอบชื่อแผนกซ้ำ
+    const existingDept = await db.query.departmentsTable.findFirst({
+      where: (dept, { and, eq }) => and(
+        eq(dept.name, name),
+        eq(dept.companyId, admin.companyId)
+      ),
+    });
+
+    if (existingDept) {
+      return { success: false, error: `แผนก "${name}" มีอยู่ในระบบแล้ว ไม่สามารถเพิ่มซ้ำได้` };
+    }
+
     await db.insert(departmentsTable).values({
       name: name,
       companyId: admin.companyId,
@@ -145,7 +181,6 @@ export async function createDepartmentAction(name: string) {
     return { success: false, error: "ไม่สามารถบันทึกแผนกได้" };
   }
 }
-
 /* ==========================================================================
    STAFF (USER) ACTIONS (ฉบับปรับปรุงบันทึก User และ shiftsTable - FIXED)
    ========================================================================== */

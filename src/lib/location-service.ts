@@ -32,7 +32,7 @@ export const isInsideBound = (
 
 /**
  * 2. ฟังก์ชันหลักสำหรับหา "ไซต์งานผู้ชนะ"
- * แก้ไข: เพิ่มระบบ Fallback หากหาในบริษัทไม่เจอ ให้ค้นหาจากไซต์ทั้งหมดในระบบด้วยพิกัด
+ * แก้ไข: เพิ่มระบบ Bypass การเช็คพิกัดหากพนักงานสังกัดไซต์ชื่อ "ทุกไซต์"
  */
 export const validateAndGetSite = async (
   userLat: number | string,
@@ -46,9 +46,16 @@ export const validateAndGetSite = async (
       where: eq(sitesTable.id, fixedSiteId),
     });
 
-    if (!site || !site.coodinates) throw new Error("ไม่พบข้อมูลไซต์งานประจำ หรือพิกัดไม่สมบูรณ์");
+    if (!site) throw new Error("ไม่พบข้อมูลไซต์งานประจำของคุณในระบบ (กรุณาแจ้งแอดมิน)");
 
-    const [sLat, sLon] = site.coodinates.split(',').map(s => s.trim());
+    // ✅ เพิ่ม Logic: ถ้าชื่อไซต์คือ "ทุกไซต์" ให้ผ่านทันทีโดยไม่ต้องเช็คพิกัด
+    if (site.name === "ทุกไซต์") {
+      return site;
+    }
+
+    if (!site.coordinates) throw new Error("พิกัดไซต์งานไม่สมบูรณ์");
+
+    const [sLat, sLon] = site.coordinates.split(',').map(s => s.trim());
 
     const ok = isInsideBound(userLat, userLon, sLat, sLon);
     if (!ok) throw new Error("คุณไม่ได้อยู่ในรัศมีไซต์งานประจำของคุณ (20 เมตร)");
@@ -66,8 +73,8 @@ export const validateAndGetSite = async (
 
   // วนลูปเปรียบเทียบพิกัดพนักงานกับไซต์ในบริษัท
   let winnerSite = companySites.find(site => {
-    if (!site.coodinates) return false;
-    const [sLat, sLon] = site.coodinates.split(',').map(s => s.trim());
+    if (!site.coordinates) return false;
+    const [sLat, sLon] = site.coordinates.split(',').map(s => s.trim());
     return isInsideBound(userLat, userLon, sLat, sLon);
   });
 
@@ -77,8 +84,8 @@ export const validateAndGetSite = async (
     const allGlobalSites = await db.query.sitesTable.findMany(); 
     
     winnerSite = allGlobalSites.find(site => {
-      if (!site.coodinates) return false;
-      const [sLat, sLon] = site.coodinates.split(',').map(s => s.trim());
+      if (!site.coordinates) return false;
+      const [sLat, sLon] = site.coordinates.split(',').map(s => s.trim());
       return isInsideBound(userLat, userLon, sLat, sLon);
     });
   }

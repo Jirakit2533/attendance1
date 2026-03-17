@@ -97,6 +97,7 @@ export default async function AdminDashboardPage() {
       )
       .orderBy(desc(usersTable.created_at)),
 
+
       // --- การลงเวลา (Report) ---
       // ปรับปรุง: ใช้ leftJoin กับ sitesTable เพื่อให้คนไม่มีไซต์ไม่หลุด และใช้ createdBy ของ Admin เป็นตัวตั้งต้น
       db.select({
@@ -262,7 +263,18 @@ export default async function AdminDashboardPage() {
       avatarUrl: l?.avatarUrl || null
     }));
 
-    const sites = (sitesData || []).map(s => ({ id: String(s?.id || ""), name: String(s?.name || "") }));
+    // 📍 ปรับปรุง: Mapping ข้อมูล Sites พร้อมเช็คโหมด "ทุกไซต์" จากฐานข้อมูล
+    const sites = (sitesData || []).map(s => ({ 
+      id: String(s?.id || ""), 
+      name: String(s?.name || ""),
+      address: s?.address || "",
+      lat: s?.lat || "",
+      lng: s?.lng || ""
+    }));
+
+    // ✅ เพิ่มการตรวจเช็คพิเศษ: ส่งสถานะไปว่าบริษัทนี้มี "ทุกไซต์" แล้วหรือยัง
+    const hasMultiSiteActive = sites.some(s => s.name === "ทุกไซต์");
+
     const positions = (positionsData || []).map(p => ({ id: String(p?.id || ""), name: String(p?.name || "") }));
     const departments = (departmentsData || []).map(d => ({ id: String(d?.id || ""), name: String(d?.name || "") }));
 
@@ -289,7 +301,8 @@ export default async function AdminDashboardPage() {
       initialAttendance: attendance,
       initialLeaves: leaves,
       admin: adminProfile,
-      sites: sites,
+      sites: sites, 
+      hasMultiSiteActive: hasMultiSiteActive, // ✅ ส่ง Flag นี้ไปให้ Client ตรวจสอบได้ทันที
       positions: positions,
       departments: departments,
       standardTime: standardTime, // ✅ ส่งเวลามาตรฐานไปใช้ใน Client Page
@@ -309,7 +322,6 @@ export default async function AdminDashboardPage() {
     }
 
     console.error("Critical Dashboard Error:", error);
-     redirect('/api/auth/logout-cleanup');
+      redirect('/api/auth/logout-cleanup');
   }
 }
-

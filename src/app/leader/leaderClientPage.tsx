@@ -627,9 +627,10 @@ export default function LeaderClientPage({
             </div>
           </div>
 
+          {/* {CHECK IN/OUT BUTTON} */}
           <div className="flex flex-col gap-4 mt-8 w-full md:w-64">
             {/* 1. กรณี: ยังไม่ได้เช็คอิน OR (ไม่มีไซต์งาน และล่าสุดเพิ่งเช็คเอาท์ไป/สถานะว่าง) */}
-            {(!todayStatus.hasCheckedIn || (!userProfile.site && todayStatus.hasCheckedOut)) && (
+            {(!todayStatus.hasCheckedIn || (userProfile.site === "ทุกไซต์" && todayStatus.hasCheckedOut)) && (
               <button
                 onClick={() => {
                   setIsCheckingOut(false);

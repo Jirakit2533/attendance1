@@ -546,7 +546,7 @@ export default function EmployeeClientPage({
 
           <div className="flex flex-col gap-2.5 w-full md:w-auto min-w-[200px] sm:min-w-[240px]">
             {/* 1. ปุ่มลงชื่อเข้า/ออกงาน (Logic แบบสลับปุ่มเดียวและวนลูป) */}
-            {(!todayStatus.hasCheckedIn || (!userProfile.site && todayStatus.hasCheckedOut)) ? (
+            {(!todayStatus.hasCheckedIn || (userProfile.site === "ทุกไซต์" && todayStatus.hasCheckedOut)) ? (
               <button
                 onClick={handleCheckIn}
                 disabled={isProcessing}

@@ -148,6 +148,8 @@ const [lng, setLng] = useState("");
 
 const companyData = initialCompanyData;
 
+const allSite = "";
+
   // --- 3. Component Logo ---
  // --- ส่วนฟังก์ชันจัดการการบันทึกข้อมูลบริษัท ---
  
@@ -1620,15 +1622,14 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
 
           try {
             const formData = new FormData(e.currentTarget);
-            // ตรวจสอบว่ามีการเช็ค "ทุกไซต์" หรือไม่
             const isAllSiteChecked = formData.get("isAllSite") === "on";
-            const siteNameValue = isAllSiteChecked ? "---- ทุกไซต์ ----" : formData.get("siteName") as string;
+            const siteNameValue = isAllSiteChecked ? "ทุกไซต์" : formData.get("siteName") as string;
 
             const siteData = {
               name: siteNameValue,
-              address: isAllSiteChecked ? "สำนักงานใหญ่ / ทุกสถานที่" : formData.get("address") as string,
-              lat: isAllSiteChecked ? "0" : lat, 
-              lng: isAllSiteChecked ? "0" : lng,
+              address: isAllSiteChecked ? "ไม่ประจำไซต์" : formData.get("address") as string,
+              lat: isAllSiteChecked ? "" : lat, 
+              lng: isAllSiteChecked ? "" : lng,
             };
 
             let res;
@@ -1643,7 +1644,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               setEditingSite(null);
               setLat("");
               setLng("");
-              setIsAllSite(false); // Reset state
+              setIsAllSite(false);
             } else {
               alert(res.error || "เกิดข้อผิดพลาดในการบันทึก");
             }
@@ -1659,25 +1660,15 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
           <input 
             name="siteName" 
             id="siteNameInput"
-            value={isAllSite ? "---- ทุกไซต์ ----" : undefined}
-            defaultValue={!isAllSite ? (editingSite?.name || "") : undefined} 
+            value={isAllSite ? "ทุกไซต์" : (editingSite ? undefined : undefined)}
+            defaultValue={editingSite?.name || ""} 
             readOnly={isAllSite}
             placeholder="ชื่อไซต์งาน..." 
             required 
-            onChange={(e) => {
-              const val = e.target.value;
-              const checkboxDiv = document.getElementById('special-site-logic');
-              if(val === "---- ทุกไซต์ ----") {
-                checkboxDiv?.classList.add('hidden');
-              } else {
-                checkboxDiv?.classList.remove('hidden');
-              }
-            }}
             className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${isAllSite ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50'}`} 
           />
           
-          {/* 🌟 เช็คบ็อกซ์ฟังก์ชัน "ทุกไซต์" แบบทันสมัย */}
-          <div id="special-site-logic" className={`p-4 rounded-[2rem] border-2 border-dashed border-slate-100 bg-slate-50/50 space-y-3 transition-all ${editingSite?.name === "---- ทุกไซต์ ----" ? 'hidden' : ''}`}>
+          <div id="special-site-logic" className={`p-4 rounded-[2rem] border-2 border-dashed border-slate-100 bg-slate-50/50 space-y-3 transition-all ${editingSite?.name === "ทุกไซต์" ? 'hidden' : ''}`}>
              <label className="flex items-center justify-between cursor-pointer group">
                 <div className="flex flex-col">
                    <span className="text-[11px] font-black text-slate-700 uppercase italic">เปิดโหมด "ทุกไซต์"</span>
@@ -1698,8 +1689,8 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
 
           <input 
             name="address" 
-            value={isAllSite ? "สำนักงานใหญ่ / ทุกสถานที่" : undefined}
-            defaultValue={!isAllSite ? (editingSite?.address || "") : undefined} 
+            value={isAllSite ? "ไม่ประจำไซต์" : (editingSite ? undefined : undefined)}
+            defaultValue={editingSite?.address || ""} 
             readOnly={isAllSite}
             placeholder="ที่อยู่ไซต์งาน..." 
             className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${isAllSite ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50'}`} 
@@ -1738,7 +1729,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">Lat</span>
               <input 
                 name="latitude" 
-                value={isAllSite ? "0" : lat} 
+                value={isAllSite ? "" : lat} 
                 readOnly={isProcessing || isAllSite}
                 onChange={(e) => setLat(e.target.value)}
                 placeholder="0.0000"
@@ -1749,7 +1740,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">Lng</span>
               <input 
                 name="longitude" 
-                value={isAllSite ? "0" : lng} 
+                value={isAllSite ? "" : lng} 
                 readOnly={isProcessing || isAllSite}
                 onChange={(e) => setLng(e.target.value)}
                 placeholder="0.0000"
@@ -2299,7 +2290,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             required 
             className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all appearance-none cursor-pointer"
           >
-            <option value="all_sites" className="text-blue-600 font-extrabold bg-blue-50">🌐 ทุกไซต์งาน (ALL SITES)</option>
+            <option value="">เลือกไซต์งาน...</option>
             {sites.map((s: any) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
@@ -2795,7 +2786,10 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                   <tr key={site.id} className="hover:bg-white transition-colors group">
                     <td className="p-4 text-slate-700">{site.name}</td>
                     <td className="p-4 flex justify-center gap-2">
-                      <button onClick={() => handleUpdateSite(site)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">📝</button>
+                      {/* แก้ไข: ซ่อนปุ่มแก้ไขหากเป็นไซต์ "ทุกไซต์" */}
+                      {site.name !== "ทุกไซต์" && (
+                        <button onClick={() => handleUpdateSite(site)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">📝</button>
+                      )}
                       <button onClick={() => handleDeleteSite(site.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">🗑️</button>
                     </td>
                   </tr>
@@ -2834,6 +2828,8 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
     </div>
   </div>
 )}
+
+{/* {MODAL : UPDATE COMPANY} */}
 {showCompanyModal && (
   <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[600] p-4 backdrop-blur-md animate-in fade-in duration-300">
     <form 
