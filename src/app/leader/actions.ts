@@ -48,13 +48,13 @@ export async function saveAttendanceAction(data: {
       // เรียกใช้ Algorithm เพื่อระบุตัวตนไซต์งาน (Winner Site)
       const winnerSite = await validateAndGetSite(uLat, uLon, data.departmentId, data.siteId);
       currentSiteName = winnerSite.name;
-      currentSiteCoords = winnerSite.coodinates || "";
+      currentSiteCoords = winnerSite.coordinates || "";
       finalSiteId = winnerSite.id;
     } else if (data.siteId) {
       // สำหรับ OUT ดึงข้อมูลปกติถ้ามี ID
       const [site] = await db.select().from(sitesTable).where(eq(sitesTable.id, data.siteId)).limit(1);
       currentSiteName = site?.name || "";
-      currentSiteCoords = site?.coodinates || "";
+      currentSiteCoords = site?.coordinates || "";
     }
 
     let deptNameSnapshot = "";
@@ -134,9 +134,9 @@ export async function saveAttendanceAction(data: {
       const [originalSite] = await db.select().from(sitesTable).where(eq(sitesTable.id, currentRecord.site_id)).limit(1);
       let isOffsiteOut = "0";
       
-      if (originalSite && originalSite.coodinates) {
+      if (originalSite && originalSite.coordinates) {
         const [uLat, uLon] = data.location.split(',');
-        const [sLat, sLon] = originalSite.coodinates.split(',');
+        const [sLat, sLon] = originalSite.coordinates.split(',');
         const isInside = isInsideBound(uLat, uLon, sLat, sLon);
         isOffsiteOut = isInside ? "0" : "1";
       }

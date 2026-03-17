@@ -114,6 +114,8 @@ export default async function AdminDashboardPage() {
         siteNameSnapshot: attendanceTable.siteNameSnapshot, 
         departmentNameSnapshot: attendanceTable.departmentNameSnapshot,
         siteName: sitesTable.name, // จะเป็น null ได้ถ้าพนักงานไม่มีไซต์
+        siteIdInAttendance: attendanceTable.site_id, 
+        siteNameFromTable: sitesTable.name,
         startTime: shiftsTable.startTime,
         endTime: shiftsTable.endTime,
         isEarlyExit: attendanceTable.isEarlyExit,
@@ -307,6 +309,7 @@ export default async function AdminDashboardPage() {
     }
 
     console.error("Critical Dashboard Error:", error);
-    redirect('/api/auth/logout-cleanup');
+     redirect('/api/auth/logout-cleanup');
   }
 }
+

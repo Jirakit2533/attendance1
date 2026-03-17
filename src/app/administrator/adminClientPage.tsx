@@ -87,6 +87,7 @@ export default function AdminClientPage({
   const [companyLogoPreview, setCompanyLogoPreview] = useState<string | null>(null);
 
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [isAllSite, setIsAllSite] = useState(false);
   
   const [showAddSite, setShowAddSite] = useState(false);
   const [showAddPosition, setShowAddPosition] = useState(false);
@@ -282,45 +283,57 @@ const filteredAttendance = useMemo(() => {
 
   // 4. Filter สำหรับช่องค้นหาใน Report
   const filteredEmpSuggestions = useMemo(() => {
-    return (employees || []).filter(e => {
-      // ใช้ String() ครอบทั้งสองฝั่งเพื่อให้มั่นใจว่าเปรียบเทียบกันได้
-      const matchSite = filterSite === "" || String(e.siteId) === String(filterSite);
-      const matchDept = filterDepartment === "" || String(e.departmentId) === String(filterDepartment);
-      
-      const s = searchTerm.toLowerCase();
-      const matchSearch = searchTerm === "" || 
-                          e.firstName?.toLowerCase().includes(s) || 
-                          e.lastName?.toLowerCase().includes(s) || 
-                          e.id?.toString().includes(s);
-      
-      return matchSite && matchDept && matchSearch;
+    return initialEmployees.filter((emp: any) => {
+      // 1. กรองด้วยคำค้นหา (ชื่อ-นามสกุล)
+      const searchMatch = !searchTerm || 
+        `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(searchTerm.toLowerCase());
+  
+      // 2. กรองด้วยแผนก (เทียบชื่อ String)
+      const deptMatch = !filterDepartment || 
+        String(emp.departmentName || "").trim() === String(filterDepartment).trim();
+  
+      // 3. กรองด้วยไซต์งาน (Logic พิเศษตามที่คุณต้องการ)
+      let siteMatch = true;
+      if (filterSite) {
+        const targetSiteName = String(filterSite).trim();
+        
+        // เช็คทั้งจากชื่อที่ผูกกับตัวพนักงาน (emp.siteName) 
+        // หรือถ้าในอนาคตมีการเช็คผ่าน ID ก็ให้หาชื่อจาก allSites มาเทียบ
+        const currentEmpSiteName = emp.siteName || allSites.find(s => String(s.id) === String(emp.siteId))?.name || "";
+        
+        siteMatch = String(currentEmpSiteName).trim() === targetSiteName;
+      }
+  
+      return searchMatch && deptMatch && siteMatch;
     });
-  }, [employees, filterSite, filterDepartment, searchTerm]);
+  }, [initialEmployees, searchTerm, filterDepartment, filterSite, allSites]);
 
-  const handleDownloadExcel = (data: any[]) => {
-    if (data.length === 0) {
-      alert("ไม่มีข้อมูลที่จะส่งออก");
-      return;
-    }
-  
-    const excelData = data.map(item => ({
-      'วันที่': item.date,
-      'ชื่อพนักงาน': item.employeeName,
-      'รหัสพนักงาน': item.userId || item.user_id,
-      'เวลาเข้า': item.checkIn,
-      'เวลาออก': item.checkOut || '-',
-      'สถานที่': item.siteName || '-',
-      'สถานะ': item.checkOut ? 'เสร็จสิ้น' : 'กำลังปฏิบัติงาน'
-    }));
-  
-    const ws = XLSX.utils.json_to_sheet(excelData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Attendance_Report");
-    
-    // ดาวน์โหลดไฟล์พร้อมตั้งชื่อตามช่วงวันที่
-    XLSX.writeFile(wb, `Report_${startDate}_to_${endDate}.xlsx`);
-  };
 
+  // --- 🚀 Logic สำหรับการกรองข้อมูลในฝั่ง Client ---
+  const filteredReportData = useMemo(() => {
+    if (!reportData) return [];
+  
+    return reportData.filter((item: any) => {
+      // 1. กรองแผนก (String Comparison)
+      const matchesDepartment = !filterDepartment || 
+        String(item.departmentSnapName || "").trim() === String(filterDepartment).trim();
+  
+      // 2. กรองไซต์งาน (เงื่อนไขพิเศษที่คุณต้องการ)
+      let matchesSite = true;
+      if (filterSite) {
+        // เทียบจากชื่อไซต์ (String)
+        const selectedSiteName = String(filterSite).trim();
+        
+        // เงื่อนไข: (มี siteId และชื่อไซต์ตรง) OR (ไม่มี siteId แต่ชื่อใน Snapshot ตรง)
+        const siteNameFromTable = String(item.siteName || "").trim();
+        const siteNameFromSnapshot = String(item.siteSnapName || "").trim();
+  
+        matchesSite = (siteNameFromTable === selectedSiteName) || (siteNameFromSnapshot === selectedSiteName);
+      }
+  
+      return matchesDepartment && matchesSite;
+    });
+  }, [reportData, filterDepartment, filterSite]);
 
   const compressImage = (file: File) => {
     return new Promise((resolve, reject) => {
@@ -360,6 +373,55 @@ const filteredAttendance = useMemo(() => {
   };
 
   // --- HANDLERS ---
+
+  const handleGenerateReport = async () => {
+    // 1. ป้องกันการกดซ้ำ และตรวจสอบว่ามีการเลือกพนักงานหรือไม่
+    if (isProcessing || selectedEmployees.length === 0) return;
+  
+    setIsProcessing(true);
+  
+    try {
+      // 2. จำลองการหน่วงเวลาเพื่อให้ UI ดูสมูท (หรือจะเอาออกก็ได้)
+      // await new Promise(res => setTimeout(res, 500));
+  
+      // 3. ยิง API ไปยัง Backend (เปลี่ยน URL ตามโครงสร้างโปรเจกต์ของคุณ)
+      const response = await fetch('/api/attendance/generate-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          employeeIds: selectedEmployees, // ส่ง Array ของ ID พนักงาน
+          startDate: startDate,           // วันที่เริ่ม
+          endDate: endDate,               // วันที่สิ้นสุด
+          departmentId: filterDepartment,  // กรองแผนก (ถ้ามี)
+          siteId: filterSite,             // กรองไซต์ (ถ้ามี)
+          format: exportFormat            // 'pdf' หรือ 'excel'
+        }),
+      });
+  
+      const result = await response.json();
+  
+      if (response.ok && result.success) {
+        // 4. เมื่อ Server ประมวลผลเสร็จและส่งข้อมูลที่กรองแล้วกลับมา
+        setReportData(result.data); 
+        
+        // 5. สั่งเปิดหน้า Preview Report และปิด Modal กรอง
+        setShowReport(true);
+        setShowFilterModal(false);
+      } else {
+        // กรณี Server ส่ง Error กลับมา
+        alert(result.message || "ไม่พบข้อมูลการลงเวลาในช่วงวันที่เลือก");
+      }
+  
+    } catch (error) {
+      console.error("Generate Report Error:", error);
+      alert("เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์");
+    } finally {
+      // 6. ปิดสถานะการโหลด
+      setIsProcessing(false);
+    }
+  };
 
   const handleUpdateCompany = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -472,7 +534,7 @@ const filteredAttendance = useMemo(() => {
 /* --- ฟังก์ชันแก้ไขไซต์งาน --- */
   const handleUpdateSite = (site: any) => {
     setEditingSite(site); // เก็บข้อมูลไซต์ที่เลือกลง State
-    const [latVal, lngVal] = (site.coodinates || ",").split(","); // แยกพิกัด
+    const [latVal, lngVal] = (site.coordinates || ",").split(","); // แยกพิกัด
     setLat(latVal || "");
     setLng(lngVal || "");
     setShowAddSite(true); // เปิด Modal อันเดิมที่มีอยู่แล้ว
@@ -1558,28 +1620,30 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
 
           try {
             const formData = new FormData(e.currentTarget);
+            // ตรวจสอบว่ามีการเช็ค "ทุกไซต์" หรือไม่
+            const isAllSiteChecked = formData.get("isAllSite") === "on";
+            const siteNameValue = isAllSiteChecked ? "---- ทุกไซต์ ----" : formData.get("siteName") as string;
+
             const siteData = {
-              name: formData.get("siteName") as string,
-              address: formData.get("address") as string,
-              lat: lat, // ใช้พิกัดจาก State ที่ดึงมา
-              lng: lng,
+              name: siteNameValue,
+              address: isAllSiteChecked ? "สำนักงานใหญ่ / ทุกสถานที่" : formData.get("address") as string,
+              lat: isAllSiteChecked ? "0" : lat, 
+              lng: isAllSiteChecked ? "0" : lng,
             };
 
             let res;
             if (editingSite) {
-              // ✅ กรณีแก้ไข: เรียก updateSiteAction พร้อม ID ตามที่ประกาศใน Server Action
               res = await updateSiteAction(editingSite.id, siteData);
             } else {
-              // ➕ กรณีเพิ่มใหม่: เรียก saveSiteAction ตามปกติ
               res = await saveSiteAction(siteData);
             }
 
             if (res.success) {
               setShowAddSite(false);
               setEditingSite(null);
-              // ล้างค่าพิกัดหลังบันทึก
               setLat("");
               setLng("");
+              setIsAllSite(false); // Reset state
             } else {
               alert(res.error || "เกิดข้อผิดพลาดในการบันทึก");
             }
@@ -1594,27 +1658,61 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         <div className="space-y-3">
           <input 
             name="siteName" 
-            defaultValue={editingSite?.name || ""} 
+            id="siteNameInput"
+            value={isAllSite ? "---- ทุกไซต์ ----" : undefined}
+            defaultValue={!isAllSite ? (editingSite?.name || "") : undefined} 
+            readOnly={isAllSite}
             placeholder="ชื่อไซต์งาน..." 
             required 
-            className="w-full border-none p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300" 
+            onChange={(e) => {
+              const val = e.target.value;
+              const checkboxDiv = document.getElementById('special-site-logic');
+              if(val === "---- ทุกไซต์ ----") {
+                checkboxDiv?.classList.add('hidden');
+              } else {
+                checkboxDiv?.classList.remove('hidden');
+              }
+            }}
+            className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${isAllSite ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50'}`} 
           />
+          
+          {/* 🌟 เช็คบ็อกซ์ฟังก์ชัน "ทุกไซต์" แบบทันสมัย */}
+          <div id="special-site-logic" className={`p-4 rounded-[2rem] border-2 border-dashed border-slate-100 bg-slate-50/50 space-y-3 transition-all ${editingSite?.name === "---- ทุกไซต์ ----" ? 'hidden' : ''}`}>
+             <label className="flex items-center justify-between cursor-pointer group">
+                <div className="flex flex-col">
+                   <span className="text-[11px] font-black text-slate-700 uppercase italic">เปิดโหมด "ทุกไซต์"</span>
+                   <p className="text-[9px] text-slate-400 font-bold leading-tight max-w-[180px]">พนักงานจะสามารถเลือกไซต์นี้เพื่อเข้าทำงานได้ทุกสถานที่โดยไม่ต้องกำหนดไซต์งานให้พนักงาน</p>
+                </div>
+                <div className="relative">
+                   <input 
+                    type="checkbox" 
+                    name="isAllSite" 
+                    className="sr-only peer" 
+                    checked={isAllSite}
+                    onChange={(e) => setIsAllSite(e.target.checked)}
+                   />
+                   <div className="w-12 h-7 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:start-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </div>
+             </label>
+          </div>
+
           <input 
             name="address" 
-            defaultValue={editingSite?.address || ""} 
+            value={isAllSite ? "สำนักงานใหญ่ / ทุกสถานที่" : undefined}
+            defaultValue={!isAllSite ? (editingSite?.address || "") : undefined} 
+            readOnly={isAllSite}
             placeholder="ที่อยู่ไซต์งาน..." 
-            className="w-full border-none p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300" 
+            className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${isAllSite ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50'}`} 
           />
         </div>
 
-        {/* 📍 ส่วนพิกัด: เพิ่มระบบกันกดซ้ำและ Loading Overlay */}
         <div className="space-y-3 relative">
           <button
             type="button"
-            disabled={isProcessing}
+            disabled={isProcessing || isAllSite}
             onClick={handleGetCurrentLocation}
             className={`w-full py-4 relative overflow-hidden text-white rounded-2xl font-black uppercase text-[12px] shadow-lg transition-all flex items-center justify-center gap-3 border-b-4 
-              ${isProcessing 
+              ${(isProcessing || isAllSite)
                 ? 'bg-slate-400 border-slate-500 cursor-not-allowed' 
                 : 'bg-blue-600 border-blue-800 hover:bg-blue-700 active:scale-95 shadow-blue-100'
               }`}
@@ -1635,24 +1733,24 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             )}
           </button>
 
-          <div className={`flex gap-2 transition-opacity duration-300 ${isProcessing ? 'opacity-30' : 'opacity-60'}`}>
-            <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 p-2">
+          <div className={`flex gap-2 transition-opacity duration-300 ${(isProcessing || isAllSite) ? 'opacity-30' : 'opacity-60'}`}>
+            <div className={`flex-1 rounded-xl border border-slate-200 p-2 ${isAllSite ? 'bg-slate-200' : 'bg-slate-50'}`}>
               <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">Lat</span>
               <input 
                 name="latitude" 
-                value={lat} 
-                readOnly={isProcessing}
+                value={isAllSite ? "0" : lat} 
+                readOnly={isProcessing || isAllSite}
                 onChange={(e) => setLat(e.target.value)}
                 placeholder="0.0000"
                 className="w-full bg-transparent outline-none font-bold text-xs px-1" 
               />
             </div>
-            <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 p-2">
+            <div className={`flex-1 rounded-xl border border-slate-200 p-2 ${isAllSite ? 'bg-slate-200' : 'bg-slate-50'}`}>
               <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">Lng</span>
               <input 
                 name="longitude" 
-                value={lng} 
-                readOnly={isProcessing}
+                value={isAllSite ? "0" : lng} 
+                readOnly={isProcessing || isAllSite}
                 onChange={(e) => setLng(e.target.value)}
                 placeholder="0.0000"
                 className="w-full bg-transparent outline-none font-bold text-xs px-1" 
@@ -1666,7 +1764,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
           <button 
             type="button" 
             disabled={isProcessing}
-            onClick={() => { setShowAddSite(false); setEditingSite(null); }} 
+            onClick={() => { setShowAddSite(false); setEditingSite(null); setIsAllSite(false); }} 
             className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px] disabled:opacity-30"
           >
             ยกเลิก
@@ -2239,13 +2337,9 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
 {showFilterModal && (
   <div className="fixed inset-0 bg-slate-100 z-[500] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 font-sans">
     
-    {/* State สำหรับเปิด-ปิด Sidebar บนมือถือ (เพิ่มเฉพาะจุดนี้) */}
-    {/* const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false); */}
-
     {/* --- 1. Header --- */}
     <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-3">
-        {/* ปุ่มเปิด Filter บนมือถือ (ปรับเปลี่ยนรูปเป็น 3 ขีด สีขาว-เทา) */}
         <button 
           onClick={() => setIsMobileFilterOpen(true)}
           className="lg:hidden w-10 h-10 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
@@ -2276,9 +2370,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
 
     <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
       
-      {/* --- 2. Side Bar: Filters (Desktop: Normal / Mobile: Drawer) --- */}
-      
-      {/* Overlay สำหรับมือถือเมื่อเปิด Sidebar */}
+      {/* --- 2. Side Bar: Filters --- */}
       {isMobileFilterOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/40 z-[510] lg:hidden backdrop-blur-sm animate-in fade-in duration-300"
@@ -2286,7 +2378,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         ></div>
       )}
 
-      <div className={`
+<div className={`
         fixed inset-y-0 left-0 w-80 bg-white z-[520] p-6 overflow-y-auto shadow-2xl transition-transform duration-300 transform
         lg:relative lg:translate-x-0 lg:shadow-none lg:z-0 lg:border-r lg:border-slate-200
         ${isMobileFilterOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -2299,7 +2391,6 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         </div>
         
         <div className="space-y-6">
-          {/* 2.1 รูปแบบไฟล์ */}
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">รูปแบบไฟล์ (Format)</label>
             <div className="grid grid-cols-2 gap-2">
@@ -2318,7 +2409,6 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             </div>
           </div>
 
-          {/* 2.2 ช่วงวันที่ */}
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">ช่วงวันที่ (Date Range)</label>
             <div className="grid grid-cols-1 gap-2">
@@ -2339,7 +2429,6 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             </div>
           </div>
 
-          {/* 2.3 แผนก */}
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">แผนก (Department)</label>
             <select 
@@ -2349,11 +2438,14 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-4 ring-blue-500/10 transition-all"
             >
               <option value="">ทุกแผนก</option>
-              {allDepartments?.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              {allDepartments?.map((d: any) => (
+                <option key={d.id} value={d.name}>
+                  {d.name}
+                </option>
+              ))}
             </select>
           </div>
 
-          {/* 2.4 ไซส์งาน */}
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">สถานที่ปฏิบัติงาน (Site)</label>
             <select 
@@ -2363,9 +2455,26 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-4 ring-blue-500/10 transition-all"
             >
               <option value="">ทุกไซส์งาน (All Sites)</option>
-              {allSites?.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {allSites?.map((s: any) => (
+                <option key={s.id} value={s.name}>
+                  {s.name}
+                </option>
+              ))}
             </select>
           </div>
+
+          {/* ปุ่มล้างตัวกรองเสริม (Optional) เพื่อความสะดวกในการ Reset ข้อมูล */}
+          {(filterDepartment || filterSite) && (
+            <button
+              onClick={() => {
+                setFilterDepartment("");
+                setFilterSite("");
+              }}
+              className="w-full py-2 text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition-colors"
+            >
+              ล้างตัวกรองทั้งหมด
+            </button>
+          )}
           
           <button 
             onClick={() => setIsMobileFilterOpen(false)}
@@ -2405,8 +2514,9 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         <div className="flex-1 overflow-y-auto p-6 relative">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredEmpSuggestions?.length > 0 ? filteredEmpSuggestions.map((emp: any) => {
-              const siteName = allSites.find(s => String(s.id) === String(emp.siteId))?.name || "ทั่วไป";
-              const posName = allPositions.find(p => String(p.id) === String(emp.positionId))?.name || "พนักงาน";
+              // ✅ ปรับปรุง: ใช้ชื่อจาก emp.siteName ตรงๆ (ถ้ามี) หรือหาจากรายชื่อ Site ทั้งหมด
+              const siteDisplayName = emp.siteName || allSites.find(s => String(s.id) === String(emp.siteId))?.name || "ทั่วไป";
+              const posDisplayName = emp.position || allPositions.find(p => String(p.id) === String(emp.positionId))?.name || "พนักงาน";
 
               return (
                 <label 
@@ -2440,8 +2550,9 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                       {emp.firstName} {emp.lastName}
                     </p>
                     <div className="flex flex-col gap-0.5 mt-1">
-                       <p className="text-[9px] font-bold text-blue-600 uppercase tracking-tight truncate italic">📍 {siteName}</p>
-                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter truncate">💼 {posName}</p>
+                       {/* ✅ แสดงชื่อไซต์ที่ได้จาก Logic ใหม่ */}
+                       <p className="text-[9px] font-bold text-blue-600 uppercase tracking-tight truncate italic">📍 {siteDisplayName}</p>
+                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter truncate">💼 {posDisplayName}</p>
                     </div>
                   </div>
                 </label>
@@ -2476,27 +2587,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               <button 
                 disabled={isProcessing || selectedEmployees.length === 0}
                 type="button"
-                onClick={async () => {
-                  setIsProcessing(true);
-                  const finalData = (filteredAttendance || []).filter(a => {
-                    const currentId = String(a.userId || a.user_id || "");
-                    const isEmployeeSelected = selectedEmployees.some(id => String(id) === currentId);
-                    const isInDateRange = a.date >= startDate && a.date <= endDate;
-                    return isEmployeeSelected && isInDateRange;
-                  });
-
-                  if (finalData.length === 0) {
-                    alert("⚠️ ไม่พบข้อมูลการลงเวลาของพนักงานที่เลือกในช่วงวันที่นี้");
-                    setIsProcessing(false);
-                    return;
-                  }
-
-                  setReportData(finalData);
-                  await new Promise(res => setTimeout(res, 800));
-                  setShowReport(true);
-                  setShowFilterModal(false);
-                  setIsProcessing(false);
-                }}
+                onClick={handleGenerateReport} 
                 className={`flex-[2.5] sm:px-16 py-5 rounded-[1.5rem] font-black uppercase text-sm tracking-widest shadow-2xl transition-all flex items-center justify-center gap-3 active:scale-95 ${
                   selectedEmployees.length === 0 
                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
@@ -2587,30 +2678,33 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
           </thead>
           <tbody className="divide-y divide-slate-200 italic font-medium text-slate-700">
             {reportData.length > 0 ? reportData.map((a: any, i: number) => {
-              const empInfo = initialEmployees?.find((e: any) => String(e.id) === String(a.userId || a.user_id));
+              // แก้ไข userId ให้ตรงกับโครงสร้าง Map
+              const empInfo = initialEmployees?.find((e: any) => String(e.id) === String(a.userId));
               return (
                 <tr key={i} className="hover:bg-white transition-colors page-break-inside-avoid">
                   <td className="p-5 font-bold text-slate-500 text-xs text-center border-r border-slate-100">{a.date}</td>
                   <td className="p-5 border-r border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 flex-shrink-0">
-                        {a.avatarUrl || empInfo?.avatarUrl ? (
-                          <img src={a.avatarUrl || empInfo?.avatarUrl} className="w-full h-full object-cover" alt="" />
+                        {empInfo?.avatarUrl ? (
+                          <img src={empInfo.avatarUrl} className="w-full h-full object-cover" alt="" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-slate-300 font-bold text-lg">?</div>
                         )}
                       </div>
                       <div className="min-w-0">
                         <div className="font-black text-slate-900 text-sm uppercase truncate leading-none mb-1">
-                          {a.employeeName || (empInfo ? `${empInfo.firstName} ${empInfo.lastName}` : "ไม่ทราบชื่อ")}
+                          {a.employeeName}
                         </div>
                         <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter italic">
-                          รหัส: {a.userId || a.user_id} | ไซต์งาน: {a.siteName || "ทั่วไป"}
+                          รหัส: {a.userId} | ไซต์งาน: {a.siteSnapName}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td className="p-5 text-center text-emerald-600 font-black text-sm border-r border-slate-100">{a.checkIn || "--:--"}</td>
+                  <td className={`p-5 text-center font-black text-sm border-r border-slate-100 ${a.isLate === 1 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {a.checkIn || "--:--"}
+                  </td>
                   <td className="p-5 text-center text-red-500 font-black text-sm border-r border-slate-100">{a.checkOut || "--:--"}</td>
                   <td className="p-5 text-right bg-slate-50/30">
                     <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter ${a.checkOut ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>

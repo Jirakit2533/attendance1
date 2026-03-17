@@ -84,7 +84,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       temp_shift_id: activeTempShiftId,
       // --- SNAPSHOTS ---
       siteNameSnapshot: validatedSite.name,
-      siteCoordinatesSnapshot: validatedSite.coodinates,
+      siteCoordinatesSnapshot: validatedSite.coordinates,
       shiftStartTimeSnapshot: activeStartTime,
       shiftEndTimeSnapshot: activeEndTime,
       departmentNameSnapshot: deptNameSnapshot,
@@ -144,7 +144,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
     if (!originalSite) throw new Error("ไม่พบข้อมูลไซต์งานที่ระบุไว้ตอนเข้างาน");
 
     // แยกค่า lat, lon จาก string coordinates ใน DB
-    const [sLat, sLon] = originalSite.coodinates.split(',').map(Number);
+    const [sLat, sLon] = originalSite.coordinates.split(',').map(Number);
     const isInside = isInsideBound(lat, lon, sLat, sLon);
     
     // ✅ เงื่อนไขที่ 2: หากอยู่นอกพื้นที่ตอนเช็คเอาท์ ให้ทำได้แต่บันทึกสถานะผิดกฎ (isOffsiteOut: 1)
