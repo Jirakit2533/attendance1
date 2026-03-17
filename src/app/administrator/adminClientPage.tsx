@@ -18,7 +18,7 @@ import { saveSiteAction,
          updateAdminProfileAction,
          updateCompanyAction,
         } from "./actions"; 
-import { usersTable } from '@/db/schema';
+
         
  
 export const dynamic = "force-dynamic";
@@ -65,6 +65,7 @@ export default function AdminClientPage({
   positions = [],
   departments = [],
   initialCompanyData,
+  hasMultiSiteActive,
 }) {
   // --- STATE MANAGEMENT ---
   const [employees, setEmployees] = useState(initialEmployees || []);
@@ -156,9 +157,9 @@ const allSite = "";
   // --- ส่วน Component Logo ---
   const Logo = () => (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2 md:gap-3 group cursor-pointer">
+      <div className="flex items-center gap-2 md:gap-3 group">
         {/* ปรับขนาดโลโก้ให้เล็กลงในมือถือ (w-10) และขนาดปกติในจอใหญ่ (md:w-16) */}
-        <div className="w-10 h-10 md:w-16 md:h-16 bg-slate-50 rounded-xl md:rounded-2xl flex items-center justify-center overflow-hidden shadow-lg group-hover:rotate-6 transition-transform border border-slate-100">
+        <div className="w-10 h-10 md:w-16 md:h-16 bg-slate-50 rounded-xl md:rounded-2xl flex items-center justify-center overflow-hidden shadow-lg border border-slate-100">
           <img 
             src={companyData?.logoUrl || "/logo.png"} 
             alt="Logo"
@@ -185,15 +186,6 @@ const allSite = "";
           </span>
         </div>
       </div>
-      
-      {/* ปุ่มแก้ไข: ซ่อนในมือถือเพื่อความสะอาดของ Header หรือแสดงเมื่อเปิด Sidebar เท่านั้น */}
-      <button 
-        type="button"
-        onClick={() => setShowCompanyModal(true)}
-        className="hidden md:flex text-[9px] font-bold text-slate-400 hover:text-blue-500 transition-colors items-center gap-1 ml-1 w-fit uppercase outline-none"
-      >
-        <span>⚙️ แก้ไขโปรไฟล์บริษัท</span>
-      </button>
     </div>
   );
 
@@ -953,7 +945,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
 </header>
 
  {/* --- SIDEBAR OVERLAY & PANEL --- */}
-        <div className={`fixed inset-0 z-[1000] print:hidden transition-all duration-300 ${isSidebarOpen ? 'visible' : 'invisible'}`}>
+ <div className={`fixed inset-0 z-[1000] print:hidden transition-all duration-300 ${isSidebarOpen ? 'visible' : 'invisible'}`}>
           {/* Background Overlay */}
           <div 
             className={`absolute inset-0 bg-slate-900/40 backdrop-blur-[3px] transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0'}`}
@@ -965,24 +957,35 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             className={`absolute left-0 top-0 h-full w-full max-w-[300px] md:max-w-[340px] bg-white shadow-2xl flex flex-col transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
           >
             
-            {/* Sidebar Header */}
-            <div className="p-5 md:p-7 border-b border-slate-100 flex items-center gap-5 bg-white shrink-0">
+            {/* Sidebar Header - ปรับการจัดวางเป็น justify-between */}
+            <div className="p-5 md:p-7 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-5">
+                <button 
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center bg-slate-900 rounded-xl md:rounded-2xl text-white hover:bg-slate-800 transition-all active:scale-90 shadow-xl"
+                >
+                  <span className="text-xl md:text-2xl">☰</span>
+                </button>
+                <h2 className="font-black text-slate-900 uppercase italic tracking-tighter text-lg md:text-xl">Admin Menu</h2>
+              </div>
+
+              {/* ✅ ปุ่มแก้ไขข้อมูลบริษัท - อยู่ฝั่งขวาของ Header */}
               <button 
-                onClick={() => setIsSidebarOpen(false)}
-                className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center bg-slate-900 rounded-xl md:rounded-2xl text-white hover:bg-slate-800 transition-all active:scale-90 shadow-xl"
+                onClick={() => { setShowCompanyModal(true); setIsSidebarOpen(false); }}
+                className="flex flex-col items-center gap-0.5 group active:scale-90 transition-all"
               >
-                <span className="text-xl md:text-2xl">☰</span>
+                <span className="text-xl md:text-2xl group-hover:rotate-45 transition-transform duration-300">⚙️</span>
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter group-hover:text-blue-600">แก้ไขข้อมูลบริษัท</span>
               </button>
-              <h2 className="font-black text-slate-900 uppercase italic tracking-tighter text-lg md:text-xl">Admin Menu</h2>
             </div>
 
-            {/* Sidebar Content - เปลี่ยน justify-center เป็น justify-start และเพิ่ม pt-10 */}
+            {/* Sidebar Content */}
             <div className="flex-1 overflow-y-auto px-6 md:px-7 pt-10 pb-8 flex flex-col justify-start space-y-8 md:space-y-12">
               
               {/* 👤 Profile Section */}
               <div className="flex flex-col items-center text-center">
                 <div className="relative mb-6 md:mb-8">
-                  <div className="w-24 h-24 md:w-32 md:h-32 rounded-[2.5rem] md:rounded-[3rem] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 flex items-center justify-center text-white font-black shadow-2xl border-4 border-white overflow-hidden transform hover:rotate-3 transition-transform">
+                  <div className="w-24 h-24 md:w-32 md:h-32 rounded-[2.5rem] md:rounded-[3rem] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 flex items-center justify-center text-white font-black shadow-2xl border-4 border-white overflow-hidden">
                     {isUploading && (
                       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-10 flex items-center justify-center animate-spin">⏳</div>
                     )}
@@ -1072,10 +1075,20 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
       </>
       <main className="max-w-7xl mx-auto px-6 pt-12">
        {/* --- STATS CARDS --- */}
-        <div className="justify-center grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 print:hidden">
+       <div className="justify-center grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 print:hidden">
           {[
             { label: "พนักงานทั้งหมด", val: employees.length, unit: "คน", icon: "👥", color: "blue" },
-            { label: "ลงชื่อวันนี้", val: attendance.length, unit: "รายการ", icon: "📍", color: "emerald" },
+            { 
+              label: "ลงชื่อวันนี้", 
+              // ✅ กรองข้อมูลจาก attendanceTable โดยเทียบคอลัมน์ date กับวันที่ปัจจุบัน (YYYY-MM-DD)
+              val: attendance.filter(a => {
+                const today = new Date().toLocaleDateString('en-CA'); // ได้รูปแบบ 'YYYY-MM-DD' ตามมาตรฐาน SQL Date
+                return a.date === today;
+              }).length, 
+              unit: "รายการ", 
+              icon: "📍", 
+              color: "emerald" 
+            },
             { label: "คำขอลางาน", val: leaves.filter(l => l.status === 'pending').length, unit: "รอนุมัติ", icon: "📝" },
           ].map((s, i) => (
             /* --- การ์ดปกติ 1-3: ปรับเป็นแนวนอนในมือถือ (flex-row) และแนวตั้งในจอใหญ่ (md:flex-col) --- */
@@ -1668,7 +1681,8 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${isAllSite ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50'}`} 
           />
           
-          <div id="special-site-logic" className={`p-4 rounded-[2rem] border-2 border-dashed border-slate-100 bg-slate-50/50 space-y-3 transition-all ${editingSite?.name === "ทุกไซต์" ? 'hidden' : ''}`}>
+          {/* ✅ แก้ไข: ซ่อนส่วนเลือก "ทุกไซต์" ทันทีหากเป็นการแก้ไขไซต์งาน (editingSite) */}
+          <div id="special-site-logic" className={`p-4 rounded-[2rem] border-2 border-dashed border-slate-100 bg-slate-50/50 space-y-3 transition-all ${editingSite ? 'hidden' : ''}`}>
              <label className="flex items-center justify-between cursor-pointer group">
                 <div className="flex flex-col">
                    <span className="text-[11px] font-black text-slate-700 uppercase italic">เปิดโหมด "ทุกไซต์"</span>
@@ -1686,6 +1700,187 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
                 </div>
              </label>
           </div>
+
+          <input 
+            name="address" 
+            value={isAllSite ? "ไม่ประจำไซต์" : (editingSite ? undefined : undefined)}
+            defaultValue={editingSite?.address || ""} 
+            readOnly={isAllSite}
+            placeholder="ที่อยู่ไซต์งาน..." 
+            className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${isAllSite ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50'}`} 
+          />
+        </div>
+
+        <div className="space-y-3 relative">
+          <button
+            type="button"
+            disabled={isProcessing || isAllSite}
+            onClick={handleGetCurrentLocation}
+            className={`w-full py-4 relative overflow-hidden text-white rounded-2xl font-black uppercase text-[12px] shadow-lg transition-all flex items-center justify-center gap-3 border-b-4 
+              ${(isProcessing || isAllSite)
+                ? 'bg-slate-400 border-slate-500 cursor-not-allowed' 
+                : 'bg-blue-600 border-blue-800 hover:bg-blue-700 active:scale-95 shadow-blue-100'
+              }`}
+          >
+            {isProcessing ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>กำลังประมวลผล...</span>
+              </>
+            ) : (
+              <>
+                <span className="text-lg">🎯</span> 
+                กดเพื่อดึงพิกัดจากเครื่อง
+              </>
+            )}
+          </button>
+
+          <div className={`flex gap-2 transition-opacity duration-300 ${(isProcessing || isAllSite) ? 'opacity-30' : 'opacity-60'}`}>
+            <div className={`flex-1 rounded-xl border border-slate-200 p-2 ${isAllSite ? 'bg-slate-200' : 'bg-slate-50'}`}>
+              <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">Lat</span>
+              <input 
+                name="latitude" 
+                value={isAllSite ? "" : lat} 
+                readOnly={isProcessing || isAllSite}
+                onChange={(e) => setLat(e.target.value)}
+                placeholder="0.0000"
+                className="w-full bg-transparent outline-none font-bold text-xs px-1" 
+              />
+            </div>
+            <div className={`flex-1 rounded-xl border border-slate-200 p-2 ${isAllSite ? 'bg-slate-200' : 'bg-slate-50'}`}>
+              <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">Lng</span>
+              <input 
+                name="longitude" 
+                value={isAllSite ? "" : lng} 
+                readOnly={isProcessing || isAllSite}
+                onChange={(e) => setLng(e.target.value)}
+                placeholder="0.0000"
+                className="w-full bg-transparent outline-none font-bold text-xs px-1" 
+              />
+            </div>
+          </div>
+          <p className="text-center text-[9px] text-slate-400 font-bold uppercase italic">* หากดึงพิกัดไม่ได้ กรุณาอนุญาตสิทธิ์เข้าถึงตำแหน่ง</p>
+        </div>
+
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+          <button 
+            type="button" 
+            disabled={isProcessing}
+            onClick={() => { setShowAddSite(false); setEditingSite(null); setIsAllSite(false); }} 
+            className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px] disabled:opacity-30"
+          >
+            ยกเลิก
+          </button>
+          <button 
+            type="submit" 
+            disabled={isProcessing} 
+            className={`flex-[2] py-4 ${editingSite ? 'bg-blue-600 shadow-blue-100' : 'bg-emerald-600 shadow-emerald-100'} text-white rounded-2xl font-black uppercase text-[10px] shadow-xl disabled:bg-slate-300`}
+          >
+            {isProcessing ? "กำลังบันทึก..." : editingSite ? "ยืนยันการแก้ไข" : "ยืนยันเพิ่มไซต์งาน"}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+{showAddSite && (
+  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+      <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic flex items-center gap-2">
+        <span className={`${editingSite ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'} p-2 rounded-lg text-sm not-italic`}>
+          {editingSite ? '✏️' : '📍'}
+        </span>
+        {editingSite ? "แก้ไขไซต์งาน" : "เพิ่มไซต์งานใหม่"}
+      </h3>
+      
+      <form 
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (isProcessing) return;
+          setIsProcessing(true);
+
+          try {
+            const formData = new FormData(e.currentTarget);
+            const isAllSiteChecked = formData.get("isAllSite") === "on";
+            const siteNameValue = isAllSiteChecked ? "ทุกไซต์" : formData.get("siteName") as string;
+
+            const siteData = {
+              name: siteNameValue,
+              address: isAllSiteChecked ? "ไม่ประจำไซต์" : formData.get("address") as string,
+              lat: isAllSiteChecked ? "" : lat, 
+              lng: isAllSiteChecked ? "" : lng,
+            };
+
+            let res;
+            if (editingSite) {
+              res = await updateSiteAction(editingSite.id, siteData);
+            } else {
+              res = await saveSiteAction(siteData);
+            }
+
+            if (res.success) {
+              setShowAddSite(false);
+              setEditingSite(null);
+              setLat("");
+              setLng("");
+              setIsAllSite(false);
+            } else {
+              alert(res.error || "เกิดข้อผิดพลาดในการบันทึก");
+            }
+          } catch (err) {
+            console.error(err);
+          } finally {
+            setIsProcessing(false);
+          }
+        }} 
+        className="space-y-5"
+      >
+        <div className="space-y-3">
+          <input 
+            name="siteName" 
+            id="siteNameInput"
+            value={isAllSite ? "ทุกไซต์" : (editingSite ? undefined : undefined)}
+            defaultValue={editingSite?.name || ""} 
+            readOnly={isAllSite}
+            placeholder="ชื่อไซต์งาน..." 
+            required 
+            className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${isAllSite ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50'}`} 
+          />
+          
+          {/* ✅ ส่วน Logic ตรวจสอบและแสดงสถานะ "ทุกไซต์" */}
+          {!editingSite && (
+            hasMultiSiteActive ? (
+              // แสดงข้อความเมื่อมี "ทุกไซต์" อยู่ในระบบแล้ว
+              <div className="p-4 rounded-[2rem] border-2 border-emerald-100 bg-emerald-50/30 flex flex-col items-center text-center space-y-1">
+                <span className="text-[14px]">✅</span>
+                <span className="text-[10px] font-black text-emerald-600 uppercase italic">Multi-Site System Ready</span>
+                <p className="text-[9px] text-slate-500 font-bold leading-tight">คุณได้สร้าง "ทุกไซต์" เรียบร้อยแล้ว ระบบพร้อมให้พนักงานลงเวลาได้ทุกสถานที่</p>
+              </div>
+            ) : (
+              // แสดงปุ่มเปิดโหมดถ้ายังไม่มีในฐานข้อมูล
+              <div id="special-site-logic" className="p-4 rounded-[2rem] border-2 border-dashed border-slate-100 bg-slate-50/50 space-y-3 transition-all">
+                <label className="flex items-center justify-between cursor-pointer group">
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-black text-slate-700 uppercase italic">เปิดโหมด "ทุกไซต์"</span>
+                    <p className="text-[9px] text-slate-400 font-bold leading-tight max-w-[180px]">พนักงานจะสามารถเลือกไซต์นี้เพื่อเข้าทำงานได้ทุกสถานที่</p>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type="checkbox" 
+                      name="isAllSite" 
+                      className="sr-only peer" 
+                      checked={isAllSite}
+                      onChange={(e) => setIsAllSite(e.target.checked)}
+                    />
+                    <div className="w-12 h-7 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:start-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </div>
+                </label>
+              </div>
+            )
+          )}
 
           <input 
             name="address" 
@@ -1766,76 +1961,6 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
             className={`flex-[2] py-4 ${editingSite ? 'bg-blue-600 shadow-blue-100' : 'bg-emerald-600 shadow-emerald-100'} text-white rounded-2xl font-black uppercase text-[10px] shadow-xl disabled:bg-slate-300`}
           >
             {isProcessing ? "กำลังบันทึก..." : editingSite ? "ยืนยันการแก้ไข" : "ยืนยันเพิ่มไซต์งาน"}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
-{/* --- 🎯 MODAL: ADD POSITION --- */}
-{showAddPosition && (
-  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center p-4">
-    <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
-      <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic">
-        {editingPos ? "✏️ แก้ไขตำแหน่งงาน" : "💼 เพิ่มตำแหน่งงาน"}
-      </h3>
-      <form 
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (isProcessing) return;
-          setIsProcessing(true);
-
-          try {
-            const formData = new FormData(e.currentTarget);
-            const posName = formData.get("posName") as string;
-
-            let res;
-            if (editingPos) {
-              // ✅ กรณีแก้ไข: ส่งค่า String และรอผลลัพธ์
-              res = await updatePositionAction(editingPos.id, posName);
-            } else {
-              // ✅ กรณีเพิ่มใหม่: เรียก savePositionAction
-              res = await savePositionAction({ name: posName });
-            }
-
-            if (res.success) {
-              // ✅ อัปเดตข้อมูลหน้าจอทันทีหลังทำรายการสำเร็จ
-              setShowAddPosition(false);
-              setEditingPos(null);
-            } else {
-              alert(res.error || "ไม่สามารถบันทึกข้อมูลได้");
-            }
-          } catch (err) {
-            console.error(err);
-          } finally {
-            setIsProcessing(false);
-          }
-        }} 
-        className="space-y-4"
-      >
-        <input 
-          name="posName" 
-          defaultValue={editingPos?.name || ""} 
-          placeholder="ระบุชื่อตำแหน่ง..." 
-          required 
-          disabled={isProcessing}
-          className="w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50" 
-        />
-        <div className="flex gap-2 pt-2">
-          <button 
-            type="button" 
-            disabled={isProcessing}
-            onClick={() => { setShowAddPosition(false); setEditingPos(null); }} 
-            className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px] disabled:opacity-30"
-          >
-            ยกเลิก
-          </button>
-          <button 
-            type="submit" 
-            disabled={isProcessing} 
-            className="flex-1 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 disabled:bg-slate-300"
-          >
-            {isProcessing ? "กำลังบันทึก..." : editingPos ? "อัปเดตตำแหน่ง" : "บันทึกตำแหน่ง"}
           </button>
         </div>
       </form>
@@ -2369,7 +2494,7 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         ></div>
       )}
 
-<div className={`
+      <div className={`
         fixed inset-y-0 left-0 w-80 bg-white z-[520] p-6 overflow-y-auto shadow-2xl transition-transform duration-300 transform
         lg:relative lg:translate-x-0 lg:shadow-none lg:z-0 lg:border-r lg:border-slate-200
         ${isMobileFilterOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -2660,45 +2785,48 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className={exportFormat === 'excel' ? "bg-emerald-700 text-white" : "bg-slate-900 text-white"}>
-              <th className="p-5 font-black text-[10px] uppercase tracking-wider border-r border-white/10 w-32 text-center">วันที่</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider border-r border-white/10 w-28 text-center">วันที่</th>
               <th className="p-5 font-black text-[10px] uppercase tracking-wider border-r border-white/10">ข้อมูลพนักงาน</th>
-              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-28">เวลาเข้า</th>
-              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-28">เวลาออก</th>
-              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-right w-40">สถานะ</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-28">รอบเข้างาน</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-32">ไซต์ที่เข้างาน</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-center border-r border-white/10 w-32">เข้า - ออก</th>
+              <th className="p-5 font-black text-[10px] uppercase tracking-wider text-right w-32">สถานะ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 italic font-medium text-slate-700">
             {reportData.length > 0 ? reportData.map((a: any, i: number) => {
-              // แก้ไข userId ให้ตรงกับโครงสร้าง Map
               const empInfo = initialEmployees?.find((e: any) => String(e.id) === String(a.userId));
               return (
-                <tr key={i} className="hover:bg-white transition-colors page-break-inside-avoid">
-                  <td className="p-5 font-bold text-slate-500 text-xs text-center border-r border-slate-100">{a.date}</td>
+                <tr key={i} className="hover:bg-white transition-colors page-break-inside-avoid text-[11px]">
+                  <td className="p-5 font-bold text-slate-500 text-center border-r border-slate-100">{a.date}</td>
                   <td className="p-5 border-r border-slate-100">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 flex-shrink-0">
+                      <div className="w-9 h-9 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 flex-shrink-0">
                         {empInfo?.avatarUrl ? (
                           <img src={empInfo.avatarUrl} className="w-full h-full object-cover" alt="" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-300 font-bold text-lg">?</div>
+                          <div className="w-full h-full flex items-center justify-center text-slate-300 font-bold text-base">?</div>
                         )}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-black text-slate-900 text-sm uppercase truncate leading-none mb-1">
+                        <div className="font-black text-slate-900 uppercase truncate leading-none mb-1">
                           {a.employeeName}
                         </div>
                         <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter italic">
-                          รหัส: {a.userId} | ไซต์งาน: {a.siteSnapName}
+                          ไซต์: {empInfo?.site || "-"}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td className={`p-5 text-center font-black text-sm border-r border-slate-100 ${a.isLate === 1 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                    {a.checkIn || "--:--"}
+                  <td className="p-5 text-center font-bold border-r border-slate-100 uppercase">{a.shiftName || "-"}</td>
+                  <td className="p-5 text-center font-bold border-r border-slate-100 uppercase">{a.siteSnapName || "-"}</td>
+                  <td className="p-5 text-center font-black border-r border-slate-100 tracking-tighter">
+                    <span className={a.isLate === 1 ? 'text-amber-600' : 'text-emerald-600'}>{a.checkIn || "--:--"}</span>
+                    <span className="mx-1 text-slate-300">-</span>
+                    <span className="text-red-500">{a.checkOut || "--:--"}</span>
                   </td>
-                  <td className="p-5 text-center text-red-500 font-black text-sm border-r border-slate-100">{a.checkOut || "--:--"}</td>
                   <td className="p-5 text-right bg-slate-50/30">
-                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-tighter ${a.checkOut ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                    <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter ${a.checkOut ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                       {a.checkOut ? 'เสร็จสมบูรณ์' : 'กำลังปฏิบัติงาน'}
                     </span>
                   </td>
@@ -2706,14 +2834,14 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
               );
             }) : (
               <tr>
-                <td colSpan={5} className="p-20 text-center font-bold text-slate-300 italic uppercase tracking-widest">ไม่พบข้อมูลการลงเวลา</td>
+                <td colSpan={6} className="p-20 text-center font-bold text-slate-300 italic uppercase tracking-widest">ไม่พบข้อมูลการลงเวลา</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* ส่วนท้ายรายงาน (Signature & Stamp) - ผลักลงด้านล่างสุด */}
+      {/* ส่วนท้ายรายงาน (Signature & Stamp) */}
       <div className="mt-auto pt-16 grid grid-cols-2 gap-20 px-10 pb-10">
         <div className="text-center">
           <div className="border-t-2 border-slate-200 pt-6">
@@ -2755,7 +2883,6 @@ const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
     .mt-auto { margin-top: auto !important; }
   }
 ` }} />
-
 {/* --- 🖨️ MODAL: EDIT SITE & POSITION --- */}
 {showManageModal && (
   <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[600] flex items-center justify-center p-4">
