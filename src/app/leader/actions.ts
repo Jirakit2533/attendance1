@@ -7,10 +7,10 @@ import { revalidatePath } from "next/cache";
 import { isInsideBound, validateAndGetSite } from "@/lib/location-service";
 import bcrypt from "bcryptjs";
 
-/**
+/**------------------------------------------------------------------
  * 1. บันทึกเวลาเข้า-ออก (Check-in / Check-out) พร้อมตรวจสอบสาย/ออกก่อน
- */
-export async function saveAttendanceAction(data: {
+ --------------------------------------------------------------------*/
+ export async function saveAttendanceAction(data: {
   userId: string;
   type: "IN" | "OUT";
   image: string;
@@ -37,21 +37,18 @@ export async function saveAttendanceAction(data: {
       .limit(1);
 
     const shift = shiftData[0];
-
-    // --- ส่วนที่แก้ไข: ดึงข้อมูล Snapshot โดยใช้ validateAndGetSite เพื่อรองรับ Roaming ---
     let currentSiteName = "";
-    let currentSiteCoords = "";
+    let currentSiteCoords = ""; // เพิ่มตัวแปรเก็บพิกัด Snapshot
     let finalSiteId = data.siteId;
 
     if (data.type === "IN") {
       const [uLat, uLon] = data.location.split(',');
-      // เรียกใช้ Algorithm เพื่อระบุตัวตนไซต์งาน (Winner Site)
+      // ค้นหา Winner Site จากฐานข้อมูลจริง
       const winnerSite = await validateAndGetSite(uLat, uLon, data.departmentId, data.siteId);
       currentSiteName = winnerSite.name;
       currentSiteCoords = winnerSite.coordinates || "";
       finalSiteId = winnerSite.id;
     } else if (data.siteId) {
-      // สำหรับ OUT ดึงข้อมูลปกติถ้ามี ID
       const [site] = await db.select().from(sitesTable).where(eq(sitesTable.id, data.siteId)).limit(1);
       currentSiteName = site?.name || "";
       currentSiteCoords = site?.coordinates || "";
@@ -82,15 +79,16 @@ export async function saveAttendanceAction(data: {
       await db.insert(attendanceTable).values({
         user_id: data.userId,
         department_id: data.departmentId,
-        site_id: finalSiteId, // ใช้ ID ที่ได้จาก Algorithm
+        site_id: finalSiteId,
         shift_id: shift?.id || null,
-        // --- ส่วน Snapshot ที่จะไม่มีค่าว่างอีกต่อไป ---
+        
+        // ✅ บันทึก Snapshot ชื่อไซต์และพิกัดที่ค้นเจอจากฐานข้อมูลจริง
         siteNameSnapshot: currentSiteName,
         siteCoordinatesSnapshot: currentSiteCoords,
+        
         shiftStartTimeSnapshot: shift?.startTime || null,
         shiftEndTimeSnapshot: shift?.endTime || null,
         departmentNameSnapshot: deptNameSnapshot,
-        // -----------------------------
         date: dateStr,
         checkIn: currentTimeStr,
         imageIn: data.image,
@@ -99,18 +97,16 @@ export async function saveAttendanceAction(data: {
         isLate: isLate,
         ...(Object.keys(attendanceTable).includes('lateMinutes') ? { lateMinutes } : {}),
       });
-      
+
       revalidatePath("/", "layout");
       revalidatePath("/leader");
       revalidatePath("/employee");
       return { success: true, siteName: currentSiteName };
 
     } else {
-      // --- LOGIC CHECK-OUT ที่ปรับปรุง ---
       let isEarlyExit = 0;
       let earlyExitMinutes = 0;
 
-      // ค้นหา Record ล่าสุดที่ยังไม่ได้ Check-out
       const lastCheckIn = await db
         .select()
         .from(attendanceTable)
@@ -130,18 +126,16 @@ export async function saveAttendanceAction(data: {
       const currentRecord = lastCheckIn[0];
       const checkInDate = currentRecord.date;
 
-      // ตรวจสอบพิกัดตอนออกงานเทียบกับไซต์ที่เข้างานไว้
       const [originalSite] = await db.select().from(sitesTable).where(eq(sitesTable.id, currentRecord.site_id)).limit(1);
       let isOffsiteOut = "0";
-      
-      if (originalSite && originalSite.coordinates) {
+
+      if (originalSite && originalSite.coordinates && originalSite.name !== "ทุกไซต์") {
         const [uLat, uLon] = data.location.split(',');
         const [sLat, sLon] = originalSite.coordinates.split(',');
         const isInside = isInsideBound(uLat, uLon, sLat, sLon);
         isOffsiteOut = isInside ? "0" : "1";
       }
 
-      // ดึงข้อมูลกะงาน (ตรวจเช็คกะชั่วคราวด้วยตาม Logic รอบแรก)
       const [tempShiftData] = await db
         .select({ id: temporaryShiftsTable.id, endTime: temporaryShiftsTable.endTime })
         .from(temporaryShiftsTable)
@@ -159,7 +153,6 @@ export async function saveAttendanceAction(data: {
         let endTotalMinutes = endH * 60 + endM;
         const checkInTotalMinutes = inH * 60 + inM;
 
-        // รองรับกะข้ามคืน
         if (endTotalMinutes < checkInTotalMinutes) {
           if (currentTotalMinutes < checkInTotalMinutes) {
             currentTotalMinutes += 1440;
@@ -167,7 +160,6 @@ export async function saveAttendanceAction(data: {
           endTotalMinutes += 1440;
         }
 
-        // ตรวจสอบการออกก่อนเวลา
         if (currentTotalMinutes < endTotalMinutes) {
           isEarlyExit = 1;
           earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
@@ -201,10 +193,9 @@ export async function saveAttendanceAction(data: {
     return { success: false, error: "บันทึกเวลาไม่สำเร็จ: " + (error.message || "Unknown Error") };
   }
 }
-
-/**
+/**------------------------------------------------------------------------------------------
  * 2. ส่งคำขอลางาน
- */
+--------------------------------------------------------------------------------------------- */
 export async function createLeaveRequestAction(data: {
   userId: string;
   type: string;

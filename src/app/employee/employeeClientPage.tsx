@@ -32,7 +32,8 @@ interface Props {
   initialLeaves: any[];
   position: string;
   site: string;
-  companyData: {      // ✅ กำหนดโครงสร้างให้ชัดเจน
+  companyData: {
+    // ✅ กำหนดโครงสร้างให้ชัดเจน
     name: string;
     logoUrl: string | null;
     description: string;
@@ -168,12 +169,18 @@ export default function EmployeeClientPage({
     }).format(now);
 
     const todayRecord = records.find((r: any) => r.date === todayStr);
-    
+
     return {
       // เช็คว่ามีค่า checkIn และไม่ใช่ค่าว่าง/ขีด
-      hasCheckedIn: !!todayRecord?.checkIn && todayRecord.checkIn !== "-" && todayRecord.checkIn !== null,
+      hasCheckedIn:
+        !!todayRecord?.checkIn &&
+        todayRecord.checkIn !== "-" &&
+        todayRecord.checkIn !== null,
       // เช็คว่ามีค่า checkOut และไม่ใช่ค่าว่าง/ขีด
-      hasCheckedOut: !!todayRecord?.checkOut && todayRecord.checkOut !== "-" && todayRecord.checkOut !== null,
+      hasCheckedOut:
+        !!todayRecord?.checkOut &&
+        todayRecord.checkOut !== "-" &&
+        todayRecord.checkOut !== null,
       record: todayRecord,
     };
   }, [records]);
@@ -426,15 +433,17 @@ export default function EmployeeClientPage({
       <nav className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur-xl border-b border-gray-100 shadow-sm">
         {/* ✅ ปรับจาก px-6 เป็น px-4 สำหรับมือถือ เพื่อลดช่องว่างส่วนเกินด้านข้าง */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4">
             {/* ส่วนโลโก้ด้านซ้าย: ปรับขนาดตามหน้า Leader ที่คุณชอบ (w-12 ถึง sm:w-16) */}
             <div className="flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-xl shadow-lg shadow-blue-200 overflow-hidden">
-              <img 
-                src={companyData?.logoUrl || "/logo.png"} 
-                alt={companyData?.name || "Logo"} 
+              <img
+                src={companyData?.logoUrl || "/logo.png"}
+                alt={companyData?.name || "Logo"}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  e.currentTarget.src = `https://ui-avatars.com/api/?name=${companyData?.name || 'CP'}&background=2563eb&color=fff`;
+                  e.currentTarget.src = `https://ui-avatars.com/api/?name=${
+                    companyData?.name || "CP"
+                  }&background=2563eb&color=fff`;
                 }}
               />
             </div>
@@ -443,7 +452,7 @@ export default function EmployeeClientPage({
               <h1 className="font-black text-gray-900 tracking-tighter text-lg sm:text-xl leading-none uppercase">
                 {companyData?.name || "ชื่อบริษัท"}
               </h1>
-              
+
               {/* ซ่อน Description ในมือถือ และจำกัดความกว้างตามที่คุณปรับจูนไว้ */}
               <span className="hidden sm:block text-[10px] text-gray-400 font-bold tracking-[0.2em] uppercase mt-1 max-w-[440px] line-clamp-2 leading-relaxed whitespace-normal break-words">
                 {companyData?.description || "description"}
@@ -468,7 +477,8 @@ export default function EmployeeClientPage({
             <button
               onClick={handleLogout}
               disabled={isProcessing}
-              className="group flex items-center gap-1.5 px-2.5 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95 w-fit max-w-fit"            >
+              className="group flex items-center gap-1.5 px-2.5 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95 w-fit max-w-fit"
+            >
               <span className="text-base sm:text-lg leading-none">
                 {isProcessing ? "⏳" : "🚪"}
               </span>
@@ -485,7 +495,7 @@ export default function EmployeeClientPage({
         <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm mb-6 sm:mb-10 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 border border-white">
           <div className="relative">
             <div className="absolute inset-0 bg-blue-500 rounded-full blur-2xl opacity-10"></div>
-           <Image
+            <Image
               src={
                 userProfile?.avatarUrl ||
                 userProfile?.profileImage ||
@@ -510,26 +520,35 @@ export default function EmployeeClientPage({
             </h2>
 
             {/* ข้อมูลต่างๆ */}
-            <div className="space-y-1 sm:space-y-2 mb-4 sm:mb-6"> {/* ใช้ space-y เพื่อความเป็นระเบียบ */}
-            <p className="text-gray-500 font-bold text-sm sm:text-lg tracking-tight">
-              ระดับ : {userProfile.role === "employee" ? "พนักงาน" : "ไม่ระบุ"}
-            </p>
+            <div className="space-y-1 sm:space-y-2 mb-4 sm:mb-6">
+              {" "}
+              {/* ใช้ space-y เพื่อความเป็นระเบียบ */}
               <p className="text-gray-500 font-bold text-sm sm:text-lg tracking-tight">
-                ตำแหน่ง : {userProfile.position || "ไม่ได้ระบุตำแหน่ง" }
+                ระดับ :{" "}
+                {userProfile.role === "employee" ? "พนักงาน" : "ไม่ระบุ"}
               </p>
               <p className="text-gray-500 font-bold text-sm sm:text-lg tracking-tight">
-                ไซต์งาน : {userProfile.site || "ทุกไซต์งาน" }
+                ตำแหน่ง : {userProfile.position || "ไม่ได้ระบุตำแหน่ง"}
               </p>
               <p className="text-gray-500 font-bold text-sm sm:text-lg tracking-tight">
-                รอบเข้างาน : {userProfile.startTime && userProfile.endTime 
-                  ? `${userProfile.startTime.slice(0, 5)} - ${userProfile.endTime.slice(0, 5)}` 
+                ไซต์งาน : {userProfile.site || "ทุกไซต์งาน"}
+              </p>
+              <p className="text-gray-500 font-bold text-sm sm:text-lg tracking-tight">
+                รอบเข้างาน :{" "}
+                {userProfile.startTime && userProfile.endTime
+                  ? `${userProfile.startTime.slice(
+                      0,
+                      5
+                    )} - ${userProfile.endTime.slice(0, 5)}`
                   : "ยังไม่ระบุ"}
               </p>
             </div>
 
             {/* Badges ด้านล่าง */}
             <div className="flex flex-col justify-center md:justify-start items-center md:items-start gap-2 mt-4">
-              <div className="w-fit"> {/* ใช้ w-fit เพื่อให้พื้นหลังกว้างพอดีตัวอักษร */}
+              <div className="w-fit">
+                {" "}
+                {/* ใช้ w-fit เพื่อให้พื้นหลังกว้างพอดีตัวอักษร */}
                 <span className="inline-flex items-center bg-gray-100 text-gray-500 text-[10px] sm:text-[12px] px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl font-black border border-gray-200 uppercase tracking-widest shadow-sm">
                   USERNAME: {userProfile.userName || "ไม่ได้ระบุ"}
                 </span>
@@ -546,7 +565,8 @@ export default function EmployeeClientPage({
 
           <div className="flex flex-col gap-2.5 w-full md:w-auto min-w-[200px] sm:min-w-[240px]">
             {/* 1. ปุ่มลงชื่อเข้า/ออกงาน (Logic แบบสลับปุ่มเดียวและวนลูป) */}
-            {(!todayStatus.hasCheckedIn || (userProfile.site === "ทุกไซต์" && todayStatus.hasCheckedOut)) ? (
+            {!todayStatus.hasCheckedIn ||
+            (userProfile.site === "ทุกไซต์" && todayStatus.hasCheckedOut) ? (
               <button
                 onClick={handleCheckIn}
                 disabled={isProcessing}
@@ -573,7 +593,7 @@ export default function EmployeeClientPage({
                 </svg>
                 {isProcessing ? "กำลังประมวลผล..." : "ลงชื่อเข้าทำงาน"}
               </button>
-            ) : (todayStatus.hasCheckedIn && !todayStatus.hasCheckedOut) ? (
+            ) : todayStatus.hasCheckedIn && !todayStatus.hasCheckedOut ? (
               <button
                 onClick={handleCheckOut}
                 disabled={isProcessing}
@@ -646,7 +666,6 @@ export default function EmployeeClientPage({
             </button>
           </div>
         </div>
-        
 
         {/* 📊 CONTENT AREA */}
         <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-gray-50 space-y-8 sm:space-y-12">
@@ -669,9 +688,15 @@ export default function EmployeeClientPage({
                       <tr>
                         <th className="p-4 sm:p-4 text-left">วันที่</th>
                         <th className="p-4 sm:p-4 text-left">รอบเข้างาน</th>
-                        <th className="p-4 sm:p-4 text-left">สถานะการเข้า-ออก</th>
-                        <th className="p-4 sm:p-4 text-left">เวลาเข้า / รูปถ่าย</th>
-                        <th className="p-4 sm:p-4 text-left">เวลาออก / รูปถ่าย</th>
+                        <th className="p-4 sm:p-4 text-left">
+                          สถานะการเข้า-ออก
+                        </th>
+                        <th className="p-4 sm:p-4 text-left">
+                          เวลาเข้า / รูปถ่าย
+                        </th>
+                        <th className="p-4 sm:p-4 text-left">
+                          เวลาออก / รูปถ่าย
+                        </th>
                         <th className="p-4 sm:p-4 text-center">
                           ตำแหน่ง / เขตรับผิดชอบ / ระดับสิทธิ์
                         </th>
@@ -691,129 +716,152 @@ export default function EmployeeClientPage({
                         /* ✅ ตรวจสอบและเรียงลำดับอีกครั้งเพื่อให้มั่นใจว่าล่าสุดอยู่บนสุด */
                         [...records]
                           .sort((a, b) => {
-                            const dateA = new Date(`${a.date} ${a.checkIn !== "-" ? a.checkIn : "00:00"}`).getTime();
-                            const dateB = new Date(`${b.date} ${b.checkIn !== "-" ? b.checkIn : "00:00"}`).getTime();
+                            const dateA = new Date(
+                              `${a.date} ${
+                                a.checkIn !== "-" ? a.checkIn : "00:00"
+                              }`
+                            ).getTime();
+                            const dateB = new Date(
+                              `${b.date} ${
+                                b.checkIn !== "-" ? b.checkIn : "00:00"
+                              }`
+                            ).getTime();
                             return dateB - dateA;
                           })
                           .map((r, i) => (
-                          <tr
-                            key={i}
-                            className="hover:bg-blue-50/10 transition-colors"
-                          >
-                            <td className="p-4 sm:p-4 font-bold text-gray-800 whitespace-nowrap">
-                              {r.date}
-                            </td>
-                            <td className="py-2 sm:py-2 px-4 sm:px-4 font-bold text-gray-600">
-                              <div className="flex flex-col gap-1 whitespace-nowrap">
-                                {r.startTime && r.endTime ? (
-                                  <span className="text-[13px] sm:text-[15px] text-gray-800">
-                                    {r.startTime.slice(0, 5)} - {r.endTime.slice(0, 5)}
-                                  </span>
-                                ) : (
-                                  <span className="text-[12px] sm:text-[14px] font-normal text-gray-400">ไม่มีกะงาน</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-4 sm:p-4 font-bold whitespace-nowrap">
-                              <div className="flex items-center gap-0 border border-slate-200 rounded-lg overflow-hidden shadow-sm w-fit bg-white">
-                                
-                                {/* 1. ส่วนการเข้างาน (Check-in) */}
-                                <div className="px-2 sm:px-3 py-1 sm:py-1.5 flex items-center justify-center min-w-[70px] sm:min-w-[80px]">
-                                  {r.isLate === 1 ? (
-                                    <span className="text-red-600 text-xs sm:text-sm">⚠️ สาย</span>
+                            <tr
+                              key={i}
+                              className="hover:bg-blue-50/10 transition-colors"
+                            >
+                              <td className="p-4 sm:p-4 font-bold text-gray-800 whitespace-nowrap">
+                                {r.date}
+                              </td>
+                              <td className="py-2 sm:py-2 px-4 sm:px-4 font-bold text-gray-600">
+                                <div className="flex flex-col gap-1 whitespace-nowrap">
+                                  {r.startTime && r.endTime ? (
+                                    <span className="text-[13px] sm:text-[15px] text-gray-800">
+                                      {r.startTime.slice(0, 5)} -{" "}
+                                      {r.endTime.slice(0, 5)}
+                                    </span>
                                   ) : (
-                                    <span className="text-emerald-600 text-xs sm:text-sm">✅ ปกติ</span>
+                                    <span className="text-[12px] sm:text-[14px] font-normal text-gray-400">
+                                      ไม่มีกะงาน
+                                    </span>
                                   )}
                                 </div>
+                              </td>
+                              <td className="p-4 sm:p-4 font-bold whitespace-nowrap">
+                                <div className="flex items-center gap-0 border border-slate-200 rounded-lg overflow-hidden shadow-sm w-fit bg-white">
+                                  {/* 1. ส่วนการเข้างาน (Check-in) */}
+                                  <div className="px-2 sm:px-3 py-1 sm:py-1.5 flex items-center justify-center min-w-[70px] sm:min-w-[80px]">
+                                    {r.isLate === 1 ? (
+                                      <span className="text-red-600 text-xs sm:text-sm">
+                                        ⚠️ สาย
+                                      </span>
+                                    ) : (
+                                      <span className="text-emerald-600 text-xs sm:text-sm">
+                                        ✅ ปกติ
+                                      </span>
+                                    )}
+                                  </div>
 
-                                {/* เส้นขีดคั่นแนวตั้ง */}
-                                <div className="h-3 sm:h-4 w-[1px] bg-slate-300"></div>
+                                  {/* เส้นขีดคั่นแนวตั้ง */}
+                                  <div className="h-3 sm:h-4 w-[1px] bg-slate-300"></div>
 
-                                {/* 2. ส่วนการออกงาน (Check-out) */}
-                                <div className="px-2 sm:px-3 py-1 sm:py-1.5 flex items-center justify-center min-w-[80px] sm:min-w-[100px]">
-                                  {!r.checkOut || r.checkOut === "-" ? (
-                                    <span className="text-slate-400 text-xs sm:text-sm font-normal">-</span>
-                                  ) : r.isEarlyExit === "1" ? (
-                                    <span className="text-orange-600 text-xs sm:text-sm">🏃 เลิกก่อน</span>
-                                  ) : (
-                                    <span className="text-emerald-600 text-xs sm:text-sm">✅ ปกติ</span>
+                                  {/* 2. ส่วนการออกงาน (Check-out) */}
+                                  <div className="px-2 sm:px-3 py-1 sm:py-1.5 flex items-center justify-center min-w-[80px] sm:min-w-[100px]">
+                                    {!r.checkOut || r.checkOut === "-" ? (
+                                      <span className="text-slate-400 text-xs sm:text-sm font-normal">
+                                        -
+                                      </span>
+                                    ) : r.isEarlyExit === "1" ? (
+                                      <span className="text-orange-600 text-xs sm:text-sm">
+                                        🏃 เลิกก่อน
+                                      </span>
+                                    ) : (
+                                      <span className="text-emerald-600 text-xs sm:text-sm">
+                                        ✅ ปกติ
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-4 sm:p-4">
+                                <div className="flex items-center gap-2 sm:gap-3 whitespace-nowrap">
+                                  <span className="text-blue-600 font-black bg-blue-50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl">
+                                    {r.checkIn}
+                                  </span>
+                                  {r.imageUrl && (
+                                    <Image
+                                      src={r.imageUrl}
+                                      alt="In"
+                                      width={40}
+                                      height={40}
+                                      className="rounded-lg sm:rounded-xl border-2 border-white shadow-sm object-cover h-8 w-8 sm:h-10 sm:w-10"
+                                      unoptimized
+                                    />
                                   )}
                                 </div>
-
-                              </div>
-                            </td>
-                            <td className="p-4 sm:p-4">
-                              <div className="flex items-center gap-2 sm:gap-3 whitespace-nowrap">
-                                <span className="text-blue-600 font-black bg-blue-50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl">
-                                  {r.checkIn}
-                                </span>
-                                {r.imageUrl && (
-                                  <Image
-                                    src={r.imageUrl}
-                                    alt="In"
-                                    width={40}
-                                    height={40}
-                                    className="rounded-lg sm:rounded-xl border-2 border-white shadow-sm object-cover h-8 w-8 sm:h-10 sm:w-10"
-                                    unoptimized
-                                  />
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-4 sm:p-4">
-                              <div className="flex items-center gap-2 sm:gap-3 whitespace-nowrap">
-                                <span
-                                  className={
-                                    r.checkOut === "-"
-                                      ? "text-gray-300 font-black"
-                                      : "text-slate-900 font-black bg-slate-100 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl"
-                                  }
-                                >
-                                  {r.checkOut}
-                                </span>
-                                {r.checkOutImageUrl && (
-                                  <Image
-                                    src={r.checkOutImageUrl}
-                                    alt="Out"
-                                    width={40}
-                                    height={40}
-                                    className="rounded-lg sm:rounded-xl border-2 border-white shadow-sm object-cover h-8 w-8 sm:h-10 sm:w-10"
-                                    unoptimized
-                                  />
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-4 sm:p-4">
-                              <div className="flex flex-wrap sm:flex-nowrap items-center justify-center gap-2 sm:gap-3 py-1 max-w-[300px] mx-auto sm:max-w-none">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] sm:text-sm font-black text-gray-900 uppercase tracking-tight bg-indigo-600 text-white px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl shadow-sm whitespace-nowrap">
-                                    {r.position}
+                              </td>
+                              <td className="p-4 sm:p-4">
+                                <div className="flex items-center gap-2 sm:gap-3 whitespace-nowrap">
+                                  <span
+                                    className={
+                                      r.checkOut === "-"
+                                        ? "text-gray-300 font-black"
+                                        : "text-slate-900 font-black bg-slate-100 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl"
+                                    }
+                                  >
+                                    {r.checkOut}
                                   </span>
+                                  {r.checkOutImageUrl && (
+                                    <Image
+                                      src={r.checkOutImageUrl}
+                                      alt="Out"
+                                      width={40}
+                                      height={40}
+                                      className="rounded-lg sm:rounded-xl border-2 border-white shadow-sm object-cover h-8 w-8 sm:h-10 sm:w-10"
+                                      unoptimized
+                                    />
+                                  )}
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <div className="flex items-center gap-1 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-gray-100 rounded-lg border border-gray-200 whitespace-nowrap">
-                                    <span className="text-xs sm:text-base">📍</span>
-                                    <span className="text-[9px] sm:text-xs font-bold text-gray-600 uppercase tracking-wide">
-                                      {r.site}
+                              </td>
+                              <td className="p-4 sm:p-4">
+                                <div className="flex flex-wrap sm:flex-nowrap items-center justify-center gap-2 sm:gap-3 py-1 max-w-[300px] mx-auto sm:max-w-none">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] sm:text-sm font-black text-gray-900 uppercase tracking-tight bg-indigo-600 text-white px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl shadow-sm whitespace-nowrap">
+                                      {r.position}
                                     </span>
                                   </div>
-                                  <span className="hidden sm:block text-gray-300">|</span>
-                                  <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                    <div
-                                      className={`w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full shadow-inner ${
-                                        r.role === "หัวหน้างาน"
-                                          ? "bg-amber-400"
-                                          : "bg-emerald-400"
-                                      }`}
-                                    ></div>
-                                    <span className="text-[9px] sm:text-xs font-black text-gray-500 uppercase tracking-widest">
-                                      {r.role}
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-gray-100 rounded-lg border border-gray-200 whitespace-nowrap">
+                                      <span className="text-xs sm:text-base">
+                                        📍
+                                      </span>
+                                      <span className="text-[9px] sm:text-xs font-bold text-gray-600 uppercase tracking-wide">
+                                        {r.site}
+                                      </span>
+                                    </div>
+                                    <span className="hidden sm:block text-gray-300">
+                                      |
                                     </span>
+                                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                      <div
+                                        className={`w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full shadow-inner ${
+                                          r.role === "หัวหน้างาน"
+                                            ? "bg-amber-400"
+                                            : "bg-emerald-400"
+                                        }`}
+                                      ></div>
+                                      <span className="text-[9px] sm:text-xs font-black text-gray-500 uppercase tracking-widest">
+                                        {r.role}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
+                              </td>
+                            </tr>
+                          ))
                       )}
                     </tbody>
                   </table>
@@ -862,20 +910,26 @@ export default function EmployeeClientPage({
                             {l.status}
                           </span>
                         </div>
-                          <div className="mt-4 py-4 border-y border-gray-100">
-                            <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
-                              <span className="text-indigo-600 mr-2 font-black">หมายเหตุ:</span>
-                              {l.remark || "-"}
-                            </div>
-                            <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
-                              <span className="text-indigo-600 mr-2 font-black">ผู้จัดการคำขอ:</span>
-                              {l.approverName || "-"}
-                            </div>
-                            <div className="text-[12px] font-bold text-gray-900 leading-relaxed">
-                              <span className="text-indigo-600 mr-2 font-black">ตำแหน่ง:</span>
-                              {l.approverPosition || "-"}
-                            </div>
+                        <div className="mt-4 py-4 border-y border-gray-100">
+                          <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
+                            <span className="text-indigo-600 mr-2 font-black">
+                              หมายเหตุ:
+                            </span>
+                            {l.remark || "-"}
                           </div>
+                          <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
+                            <span className="text-indigo-600 mr-2 font-black">
+                              ผู้จัดการคำขอ:
+                            </span>
+                            {l.approverName || "-"}
+                          </div>
+                          <div className="text-[12px] font-bold text-gray-900 leading-relaxed">
+                            <span className="text-indigo-600 mr-2 font-black">
+                              ตำแหน่ง:
+                            </span>
+                            {l.approverPosition || "-"}
+                          </div>
+                        </div>
                         <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 text-sm text-gray-600 font-medium italic">
                           {l.reason}
                         </div>

@@ -224,7 +224,7 @@ export default async function LeaderPage() {
         remark: l.remark,
         approverFirst: l.approverFirst,
         approverLast: l.approverLast,
-        approverPosition: l.approverPosition || "ไม่ระบุตำแหน่ง",
+        approverPosition: l.approverPosition || "แอดมิน/HR",
       })),
       myLeaves: (myLeaveRequestsRaw || []).map((l: any) => ({
         ...l,

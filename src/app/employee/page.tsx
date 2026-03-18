@@ -1,10 +1,19 @@
 import { getAttendanceHistory } from "@/server/attendance";
 import { getLeaveHistory } from "@/server/leave";
-import { getCurrentUser } from "@/lib/auth"; 
+import { getCurrentUser } from "@/lib/auth";
 import EmployeeClientPage from "./employeeClientPage";
 import { redirect } from "next/navigation";
 import { db } from "@/db/db"; // นามเข้า db เพื่อเช็คความมีตัวตน
-import { usersTable, positionsTable, sitesTable, departmentsTable, shiftsTable, leaveTable, companyTable, attendanceTable } from "@/db/schema"; // เพิ่ม companyTable และ attendanceTable
+import {
+  usersTable,
+  positionsTable,
+  sitesTable,
+  departmentsTable,
+  shiftsTable,
+  leaveTable,
+  companyTable,
+  attendanceTable,
+} from "@/db/schema"; // เพิ่ม companyTable และ attendanceTable
 import { eq, and, isNull, or, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -21,38 +30,40 @@ export default async function Page() {
 
   // 🔍 ตรวจสอบกับฐานข้อมูลโดยตรงอีกครั้ง (เผื่อกรณี User ถูกลบไปแล้วแต่คุกกี้ยังค้าง)
   const userExists = await db
-  .select({
-    id: usersTable.id,
-    firstName: usersTable.firstName,
-    lastName: usersTable.lastName,
-    avatarUrl: usersTable.avatarUrl,
-    role: usersTable.role,
-    userName: usersTable.userName,      // ✅ เพิ่ม: เพื่อให้ Username Badge แสดงผล
-    positionName: positionsTable.name, 
-    siteName: sitesTable.name,          
-    departmentName: departmentsTable.name, // ✅ เพิ่ม: เพื่อให้ชื่อแผนกแสดงผล
-    // ✅ เพิ่ม: ดึงเวลาจาก shiftsTable
-    startTime: shiftsTable.startTime,
-    endTime: shiftsTable.endTime,
-    // ✅ เพิ่มการดึงข้อมูลบริษัท
-    companyName: companyTable.name,
-    companyLogo: companyTable.logoUrl,
-    companyDescription: companyTable.description,
-  })
-  .from(usersTable)
-  .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
-  .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
-  // ✅ ต้อง Join ตารางแผนกเพิ่มเพื่อให้ได้ชื่อแผนก (ไม่ใช่แค่ ID)
-  .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id)) 
-  // ✅ เพิ่ม Join shiftsTable เพื่อเอาข้อมูลเวลา
-  .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId))
-  // ✅ Join เพื่อดึงข้อมูลบริษัท
-  .leftJoin(companyTable, eq(usersTable.companyId, companyTable.id))
-  .where(and(
-    eq(usersTable.id, userFromAuth.id),
-    isNull(usersTable.deletedAt)
-  ))
-  .limit(1);
+    .select({
+      id: usersTable.id,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      avatarUrl: usersTable.avatarUrl,
+      role: usersTable.role,
+      userName: usersTable.userName, // ✅ เพิ่ม: เพื่อให้ Username Badge แสดงผล
+      positionName: positionsTable.name,
+      siteName: sitesTable.name,
+      departmentName: departmentsTable.name, // ✅ เพิ่ม: เพื่อให้ชื่อแผนกแสดงผล
+      // ✅ เพิ่ม: ดึงเวลาจาก shiftsTable
+      startTime: shiftsTable.startTime,
+      endTime: shiftsTable.endTime,
+      // ✅ เพิ่มการดึงข้อมูลบริษัท
+      companyName: companyTable.name,
+      companyLogo: companyTable.logoUrl,
+      companyDescription: companyTable.description,
+    })
+    .from(usersTable)
+    .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
+    .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
+    // ✅ ต้อง Join ตารางแผนกเพิ่มเพื่อให้ได้ชื่อแผนก (ไม่ใช่แค่ ID)
+    .leftJoin(
+      departmentsTable,
+      eq(usersTable.departmentId, departmentsTable.id)
+    )
+    // ✅ เพิ่ม Join shiftsTable เพื่อเอาข้อมูลเวลา
+    .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId))
+    // ✅ Join เพื่อดึงข้อมูลบริษัท
+    .leftJoin(companyTable, eq(usersTable.companyId, companyTable.id))
+    .where(
+      and(eq(usersTable.id, userFromAuth.id), isNull(usersTable.deletedAt))
+    )
+    .limit(1);
 
   // 🚩 ถ้าหาไม่เจอใน DB (ถูกลบไปแล้ว) ให้กวาดล้างคุกกี้ในมือถือทิ้งทันที
   if (userExists.length === 0) {
@@ -69,7 +80,7 @@ export default async function Page() {
     /* ✅ แก้ไข: เรียงตามวันที่ล่าสุด และเวลาเข้างานล่าสุด */
     .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
     .limit(20); // 🔥 เพิ่มการจำกัดจำนวนประวัติการเข้างาน
-  
+
   // 🔍 ดึงข้อมูลการลาพร้อม Join หาชื่อผู้อนุมัติ/ผู้ปฏิเสธ และ "ชื่อตำแหน่ง" ของผู้อนุมัติ
   const approver = alias(usersTable, "approver");
   const approverPos = alias(positionsTable, "approverPos");
@@ -87,18 +98,21 @@ export default async function Page() {
       approverPositionName: approverPos.name, // ✅ ดึงชื่อตำแหน่งของผู้อนุมัติ
     })
     .from(leaveTable)
-    .leftJoin(approver, or(
-      eq(leaveTable.approvedBy, approver.id),
-      eq(leaveTable.rejectedBy, approver.id)
-    ))
+    .leftJoin(
+      approver,
+      or(
+        eq(leaveTable.approvedBy, approver.id),
+        eq(leaveTable.rejectedBy, approver.id)
+      )
+    )
     .leftJoin(approverPos, eq(approver.positionId, approverPos.id)) // ✅ Join ต่อไปหาชื่อตำแหน่งของผู้อนุมัติ
     .where(eq(leaveTable.user_id, user.id))
     /* ✅ แก้ไข: ใช้ createdAt เรียงลำดับรายการที่เพิ่งสร้างล่าสุดไว้บนสุด (แม่นยำกว่าใช้วันที่ลา) */
-    .orderBy(desc(leaveTable.createdAt)) 
+    .orderBy(desc(leaveTable.createdAt))
     .limit(2); // 🔥 จำกัดจำนวนคำขอลางานให้เหลือเพียง 2 รายการล่าสุดตามที่สั่ง
 
   // 3. Mapping ข้อมูล (เพิ่มฟิลด์สถานะเพื่อให้ตรงกับ UI)
-  const initialRecords = dbRecords.map(r => ({
+  const initialRecords = dbRecords.map((r) => ({
     date: r.date,
     // ปรับการแสดงผลเวลา (ตัดวินาทีออกถ้าเป็น string format)
     checkIn: r.checkIn ? String(r.checkIn).slice(0, 5) : "-",
@@ -114,53 +128,58 @@ export default async function Page() {
     isLate: r.isLate ?? 0,
     isEarlyExit: r.isEarlyExit ?? "-",
     // ✅ เปลี่ยนไปใช้ข้อมูลเวลาจาก Snapshot ใน Record (r) แทน
-    startTime: r.shiftStartTimeSnapshot, 
+    startTime: r.shiftStartTimeSnapshot,
     endTime: r.shiftEndTimeSnapshot,
   }));
-  
-  const initialLeaves = dbLeaves.map(l => ({
+
+  const initialLeaves = dbLeaves.map((l) => ({
     type: l.type,
     start: l.startDate,
     end: l.endDate,
     remark: l.remark,
     reason: l.reason,
     days: 0,
-    status: l.status === "pending" ? "รออนุมัติ" : 
-            l.status === "approved" ? "อนุมัติ" : 
-            l.status === "rejected" ? "ปฏิเสธ" : l.status,
+    status:
+      l.status === "pending"
+        ? "รออนุมัติ"
+        : l.status === "approved"
+        ? "อนุมัติ"
+        : l.status === "rejected"
+        ? "ปฏิเสธ"
+        : l.status,
     // ✅ ดึงชื่อผู้อนุมัติ และชื่อตำแหน่งผู้อนุมัติ จากข้อมูลที่ Join มา
-    approverName: l.approverFirst 
-      ? `${l.approverFirst} ${l.approverLast || ""}`.trim() 
+    approverName: l.approverFirst
+      ? `${l.approverFirst} ${l.approverLast || ""}`.trim()
       : "-",
-    approverPosition: l.approverPositionName || "-" // ✅ ส่งชื่อตำแหน่งผู้อนุมัติไปแสดงผล
+    approverPosition: l.approverPositionName || "-", // ✅ ส่งชื่อตำแหน่งผู้อนุมัติไปแสดงผล
   }));
 
   // เตรียมโปรไฟล์ให้ Client Page
-const userProfile = {
+  const userProfile = {
     id: user.id,
     name: `${user.firstName} ${user.lastName}`,
     firstName: user.firstName,
     lastName: user.lastName,
     avatarUrl: user.avatarUrl,
     role: user.role,
-    userName: user.userName,     // ✅ เพิ่มเพื่อให้ Badge Username แสดงผล
+    userName: user.userName, // ✅ เพิ่มเพื่อให้ Badge Username แสดงผล
     position: user.positionName, // ✅ ส่งชื่อตำแหน่งเข้าไป
-    site: user.siteName,         // ✅ ส่งชื่อไซต์เข้าไป
+    site: user.siteName, // ✅ ส่งชื่อไซต์เข้าไป
     department: user.departmentName, // ✅ อย่าลืม Join แผนกใน Query ด้านบนด้วยถ้าต้องการโชว์
     // ✅ ส่งเวลาเข้า-ออกงานไปที่หน้า Client
     startTime: user.startTime,
-    endTime: user.endTime
+    endTime: user.endTime,
   };
 
   // สร้างชื่อคีย์สำหรับข้อมูลบริษัทเพื่อนำไปใช้ใน UI
   const companyData = {
     name: user.companyName || "Company Name",
     logoUrl: user.companyLogo || null,
-    description: user.companyDescription || ""
+    description: user.companyDescription || "",
   };
 
   return (
-    <EmployeeClientPage 
+    <EmployeeClientPage
       userProfile={userProfile}
       initialRecords={initialRecords}
       initialLeaves={initialLeaves}
