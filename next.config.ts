@@ -9,9 +9,11 @@ const nextConfig = {
     ],
   },
   typescript: {
+    // ห้ามลบ: ช่วยให้ Build ผ่านแม้มี Error ของ Type
     ignoreBuildErrors: true,
   },
   eslint: {
+    // ห้ามลบ: ช่วยให้ Build ผ่านแม้มี Error ของ Lint
     ignoreDuringBuilds: true,
   },
   logging: {
@@ -19,9 +21,8 @@ const nextConfig = {
       fullUrl: true,
     },
   },
-
-  experimental: {
-  }
+  // ปิดส่วน experimental ที่ Vercel ไม่รู้จักออกไปก่อน
+  experimental: {}
 };
 
-module.exports = nextConfig;
+export default nextConfig;
