@@ -88,15 +88,15 @@ export default async function LeaderPage() {
   const isAllSitesLeader = !currentSite;
 
   try {
-    // แก้ไข teamFilter: ยกเว้นตัวเอง (ne) และกรณีไม่มีไซต์ให้ดึงทุกคนในแผนก
-    const teamFilter = and(
-      eq(usersTable.departmentId, currentDept!),
+    // แก้ไข teamFilter: ใช้ Optional Chaining และเช็ค currentDept เพื่อป้องกัน Error
+    const teamFilter = currentDept ? and(
+      eq(usersTable.departmentId, currentDept),
       ne(usersTable.id, user.id), // ยกเว้นข้อมูลของตัวเอง
       isNull(usersTable.deletedAt),
       isAllSitesLeader
         ? undefined // ถ้าไม่มีไซต์งานประจำ ให้ดึงพนักงานทุกคนในแผนก
         : eq(usersTable.site_id, currentSite!)
-    );
+    ) : sql`FALSE`; // ถ้าไม่มีแผนก ให้ Query ไม่ทำงานแทนการ Crash
 
     const [
       myRecordsRaw,
@@ -263,10 +263,7 @@ export default async function LeaderPage() {
       isAllSites: isAllSitesLeader,
       workShift:
         user.startTime && user.endTime
-          ? `${user.startTime.substring(0, 5)} - ${user.endTime.substring(
-              0,
-              5
-            )}`
+          ? `${String(user.startTime).substring(0, 5)} - ${String(user.endTime).substring(0, 5)}`
           : "ไม่ระบุกะงาน",
     },
     myRecords: (myRecordsRaw || []).map((r) => ({
@@ -275,8 +272,8 @@ export default async function LeaderPage() {
       position: user.position || "ไม่ระบุ",
       site: r.site || "ไม่ระบุไซต์",
       role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
-      checkIn: r.checkIn ? r.checkIn.substring(0, 5) : null,
-      checkOut: r.checkOut ? r.checkOut.substring(0, 5) : null,
+      checkIn: r.checkIn ? String(r.checkIn).substring(0, 5) : null,
+      checkOut: r.checkOut ? String(r.checkOut).substring(0, 5) : null,
       isOffsiteIn: r.isOffsiteIn,
       isOffsiteOut: r.isOffsiteOut,
       createdAt: formatThaiDate(r.createdAt), // ✅ แปลงเป็น UTC
@@ -293,8 +290,8 @@ export default async function LeaderPage() {
       startTime: t.startTime || null,
       endTime: t.endTime || null,
       siteName: t.site || "ไม่ระบุไซต์",
-      checkIn: t.checkIn ? t.checkIn.substring(0, 5) : null,
-      checkOut: t.checkOut ? t.checkOut.substring(0, 5) : null,
+      checkIn: t.checkIn ? String(t.checkIn).substring(0, 5) : null,
+      checkOut: t.checkOut ? String(t.checkOut).substring(0, 5) : null,
       isOffsiteIn: t.isOffsiteIn,
       isOffsiteOut: t.isOffsiteOut,
       createdAt: formatThaiDate(t.createdAt), // ✅ แปลงเป็น UTC

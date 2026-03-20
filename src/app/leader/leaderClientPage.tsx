@@ -1464,8 +1464,8 @@ export default function LeaderClientPage({
                   </div>
 
                   <div className="rounded-[2.5rem] border border-slate-100 overflow-hidden bg-white shadow-xl shadow-slate-200/50">
-                    <div className="overflow-x-auto max-h-[550px] overflow-y-auto custom-scrollbar">
-                      <table className="min-w-[1300px] w-full text-sm border-separate border-spacing-0 table-fixed">
+                    <div className="overflow-x-auto max-h-137.5 overflow-y-auto custom-scrollbar">
+                      <table className="min-w-325 w-full text-sm border-separate border-spacing-0 table-fixed">
                         <thead className="sticky top-0 z-20 bg-slate-50/90 backdrop-blur-sm">
                           <tr className="text-slate-600 font-black uppercase text-[12px] tracking-[0.2em]">
                             <th className="py-6 px-6 text-left border-b border-slate-100 w-[250px]">
@@ -1666,7 +1666,7 @@ export default function LeaderClientPage({
                                                   : l.id
                                               )
                                             }
-                                            className={`flex-shrink-0 p-1.5 rounded-lg transition-colors border ${
+                                            className={`shrink-0 p-1.5 rounded-lg transition-colors border ${
                                               viewRemarkId === l.id
                                                 ? "bg-blue-600 text-white border-blue-600"
                                                 : "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
@@ -1741,7 +1741,7 @@ export default function LeaderClientPage({
                                                     </svg>
                                                   </button>
                                                 </div>
-                                                <p className="text-xs text-gray-700 leading-relaxed break-words whitespace-normal text-left">
+                                                <p className="text-xs text-gray-700 leading-relaxed wrap-break-word whitespace-normal text-left">
                                                   {l.remark}
                                                 </p>
                                                 <div className="absolute -bottom-1 right-3 w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45"></div>
@@ -1774,7 +1774,8 @@ export default function LeaderClientPage({
                                 </tr>
                               );
                             })
-                          ) : (
+                          )
+: (
                             <tr>
                               <td
                                 colSpan={8}
