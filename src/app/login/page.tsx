@@ -2,7 +2,8 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
-import { handleLoginServer, clearSessionAction } from "./api/login-server";
+
+import { handleLoginServer, clearSessionAction } from "./login-action";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -11,8 +12,18 @@ export default function LoginPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    // ล้าง Cookies ผ่าน Server Action เมื่อเข้าหน้า Login
-    clearSessionAction();
+    // 🛡️ ป้องกัน ReferenceError ด้วยการเช็คว่าฟังก์ชันถูกโหลดมาหรือยัง
+    const initializePage = async () => {
+      try {
+        if (typeof clearSessionAction === "function") {
+          await clearSessionAction();
+        }
+      } catch (err) {
+        console.error("Session clear failed:", err);
+      }
+    };
+
+    initializePage();
 
     const params = new URLSearchParams(window.location.search);
     if (params.get("invalid") || params.get("expired")) {
@@ -27,7 +38,6 @@ export default function LoginPage() {
 
     startTransition(async () => {
       try {
-        // เรียกใช้ Logic จาก Server Action ที่แยกออกมา
         const result = await handleLoginServer(formData);
         
         if (result.success) {
