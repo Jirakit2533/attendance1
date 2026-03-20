@@ -137,10 +137,18 @@ export default async function Page() {
     // ✅ จัดการ Format createdAt เป็น วันที่/เดือน/ปี ชม.:นาที
     // ✅ จัดการ Format createdAt เป็น วันที่/เดือน/ปี ชม.:นาที (แก้ปัญหา Timezone Offset)
     // ✅ แก้ไข: บังคับ Timezone เป็น UTC เพื่อไม่ให้มันบวก 7 ชั่วโมงซ้ำซ้อนกับใน DB
-    const formattedCreatedAt = l.createdAt
-      ? new Date(l.createdAt)
+    const formattedCreatedAt = (() => {
+      if (!l.createdAt) return "-";
+      
+      const dateObj = new Date(l.createdAt);
+      
+      // 🛡️ ตรวจสอบว่า Date ถูกต้องหรือไม่ (ป้องกัน Invalid Date error)
+      if (isNaN(dateObj.getTime())) return "-";
+    
+      try {
+        return dateObj
           .toLocaleString("en-GB", {
-            timeZone: "UTC", // 👈 เปลี่ยนจาก UTC/Bangkok เป็น UTC เพราะใน DB เป็นเวลาไทยอยู่แล้ว
+            timeZone: "Asia/Bangkok", // แนะนำให้ระบุชัดเจนเพื่อความคงที่ของข้อมูล
             day: "2-digit",
             month: "2-digit",
             year: "numeric",
@@ -148,8 +156,11 @@ export default async function Page() {
             minute: "2-digit",
             hourCycle: "h23",
           })
-          .replace(",", "")
-      : "-";
+          .replace(",", "");
+      } catch (e) {
+        return "-"; // ถ้ามีปัญหาเรื่อง Timezone หรือ Locale ให้คืนค่าพื้นฐาน
+      }
+    })();
 
     return {
       type: l.type,
