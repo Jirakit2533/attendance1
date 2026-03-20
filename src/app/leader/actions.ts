@@ -425,7 +425,10 @@ export async function saveAttendanceAction(data: {
 /**------------------------------------------------------------------------------------------
  * 2. ส่งคำขอลางาน
 --------------------------------------------------------------------------------------------- */
-export async function createLeaveRequestAction(data: {
+/**------------------------------------------------------------------------------------------
+ * 2. ส่งคำขอลางาน (ฉบับปรับปรุงความปลอดภัยเพื่อป้องกัน Server-side Exception)
+ --------------------------------------------------------------------------------------------- */
+ export async function createLeaveRequestAction(data: {
   userId: string;
   type: string;
   startDate: string;
@@ -450,8 +453,9 @@ export async function createLeaveRequestAction(data: {
 
     await db.insert(leaveTable).values({
       user_id: data.userId,
-      department_id: user.departmentId,
-      site_id: user.site_id,
+      // เพิ่มความปลอดภัยด้วยการดักค่าว่าง (Nullish Coalescing) เพื่อไม่ให้พังตอน Insert บน Vercel
+      department_id: user.departmentId ?? "", 
+      site_id: user.site_id ?? null,
       type: data.type,
       startDate: data.startDate,
       endDate: data.endDate,
@@ -467,7 +471,7 @@ export async function createLeaveRequestAction(data: {
     return { success: true };
   } catch (error: any) {
     console.error("Create leave error:", error);
-    return { success: false, error: "ส่งคำขอลาไม่สำเร็จ: " + error.message };
+    return { success: false, error: "ส่งคำขอลาไม่สำเร็จ: " + (error.message || "Unknown Error") };
   }
 }
 
