@@ -2,8 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
-// นำเข้า Logic ที่แยกไปไว้ที่ Server
-import { handleLoginServer, clearSessionAction } from "./api/login-server";
+import { handleLoginServer, clearSessionAction } from "@/app/login/api/login-server";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
