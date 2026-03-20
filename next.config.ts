@@ -19,11 +19,8 @@ const nextConfig = {
       fullUrl: true,
     },
   },
-  // 🚀 เพิ่มส่วนนี้เพื่อปิดการทำงานของ Turbopack ที่ทำให้เกิด Fatal Error
+
   experimental: {
-    turbo: {
-      enabled: false
-    }
   }
 };
 
