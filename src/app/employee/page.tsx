@@ -1,5 +1,3 @@
-import { getAttendanceHistory } from "@/server/attendance";
-import { getLeaveHistory } from "@/server/leave";
 import { getCurrentUser } from "@/lib/auth";
 import EmployeeClientPage from "./employeeClientPage";
 import { redirect } from "next/navigation";
