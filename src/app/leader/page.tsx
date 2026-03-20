@@ -11,7 +11,7 @@ import {
   shiftsTable,
   companyTable,
 } from "@/db/schema";
-import { eq, desc, and, ne, isNull, isNotNull, or, sql } from "drizzle-orm";
+import { eq, desc, and, ne, isNull, isNotNull, or, sql, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import LeaderClientPage from "./leaderClientPage";
 
@@ -88,15 +88,15 @@ export default async function LeaderPage() {
   const isAllSitesLeader = !currentSite;
 
   try {
-    // แก้ไข teamFilter: ใช้ Optional Chaining และเช็ค currentDept เพื่อป้องกัน Error
-    const teamFilter = currentDept ? and(
-      eq(usersTable.departmentId, currentDept),
+    // ปรับปรุง teamFilter ให้ปลอดภัยต่อค่า null (Null-Safety)
+    const teamFilter = and(
+      currentDept ? eq(usersTable.departmentId, currentDept) : isNull(usersTable.departmentId),
       ne(usersTable.id, user.id), // ยกเว้นข้อมูลของตัวเอง
       isNull(usersTable.deletedAt),
       isAllSitesLeader
         ? undefined // ถ้าไม่มีไซต์งานประจำ ให้ดึงพนักงานทุกคนในแผนก
-        : eq(usersTable.site_id, currentSite!)
-    ) : sql`FALSE`; // ถ้าไม่มีแผนก ให้ Query ไม่ทำงานแทนการ Crash
+        : currentSite ? eq(usersTable.site_id, currentSite) : undefined
+    );
 
     const [
       myRecordsRaw,
@@ -120,8 +120,7 @@ export default async function LeaderPage() {
           isEarlyExit: attendanceTable.isEarlyExit,
           isOffsiteIn: attendanceTable.isOffsiteIn,
           isOffsiteOut: attendanceTable.isOffsiteOut,
-          createdAt: attendanceTable.createdAt, // ✅ Map ข้อมูลจาก DB
-          // Snapshot
+          createdAt: attendanceTable.createdAt,
           site: attendanceTable.siteInNameSnapshot,
           department: attendanceTable.departmentNameSnapshot,
           startTime: attendanceTable.shiftStartTimeSnapshot,
@@ -147,7 +146,7 @@ export default async function LeaderPage() {
               status: leaveTable.status,
               fileUrl: leaveTable.fileUrl,
               remark: leaveTable.remark,
-              createdAt: leaveTable.createdAt, // ✅ Map ข้อมูลจาก DB
+              createdAt: leaveTable.createdAt,
               approverFirst: approverUser.firstName,
               approverLast: approverUser.lastName,
               approverPosition: approverPosition.name,
@@ -200,7 +199,7 @@ export default async function LeaderPage() {
               isEarlyExit: attendanceTable.isEarlyExit,
               isOffsiteIn: attendanceTable.isOffsiteIn,
               isOffsiteOut: attendanceTable.isOffsiteOut,
-              createdAt: attendanceTable.createdAt, // ✅ Map ข้อมูลจาก DB
+              createdAt: attendanceTable.createdAt,
               site: attendanceTable.siteInNameSnapshot,
               startTime: attendanceTable.shiftStartTimeSnapshot,
               endTime: attendanceTable.shiftEndTimeSnapshot,
@@ -228,7 +227,7 @@ export default async function LeaderPage() {
           status: leaveTable.status,
           fileUrl: leaveTable.fileUrl,
           remark: leaveTable.remark,
-          createdAt: leaveTable.createdAt, // ✅ Map ข้อมูลจาก DB
+          createdAt: leaveTable.createdAt,
           approverFirst: approverUser.firstName,
           approverLast: approverUser.lastName,
           approverPosition: approverPosition.name,
@@ -250,7 +249,7 @@ export default async function LeaderPage() {
         .limit(30),
     ]);
 
-  // 6. จัดเตรียมข้อมูล (Mapping)
+  // 6. จัดเตรียมข้อมูล (Mapping) พร้อมดัก Error ค่า null
   const finalProps = {
     companyData: {
       name: user.companyName || "บริษัทไม่ระบุชื่อ",
@@ -276,7 +275,7 @@ export default async function LeaderPage() {
       checkOut: r.checkOut ? String(r.checkOut).substring(0, 5) : null,
       isOffsiteIn: r.isOffsiteIn,
       isOffsiteOut: r.isOffsiteOut,
-      createdAt: formatThaiDate(r.createdAt), // ✅ แปลงเป็น UTC
+      createdAt: formatThaiDate(r.createdAt),
     })),
     initialAttendance: (teamAttendanceRaw || []).map((t) => ({
       ...t,
@@ -294,7 +293,7 @@ export default async function LeaderPage() {
       checkOut: t.checkOut ? String(t.checkOut).substring(0, 5) : null,
       isOffsiteIn: t.isOffsiteIn,
       isOffsiteOut: t.isOffsiteOut,
-      createdAt: formatThaiDate(t.createdAt), // ✅ แปลงเป็น UTC
+      createdAt: formatThaiDate(t.createdAt),
     })),
     initialLeaves: (allLeaveRequests || []).map((l: any) => ({
       ...l,
@@ -303,7 +302,7 @@ export default async function LeaderPage() {
       positionName: l.positionName || "พนักงาน",
       siteName: l.siteName || "ทุกไซต์งาน",
       remark: l.remark,
-      createdAt: formatThaiDate(l.createdAt), // ✅ แปลงเป็น UTC
+      createdAt: formatThaiDate(l.createdAt),
       approverFirst: l.approverFirst,
       approverLast: l.approverLast,
       approverPosition: l.approverPosition || "แอดมิน/HR",
@@ -313,20 +312,20 @@ export default async function LeaderPage() {
       start_date: l.startDate,
       end_date: l.endDate,
       remark: l.remark,
-      createdAt: formatThaiDate(l.createdAt), // ✅ แปลงเป็น UTC
+      createdAt: formatThaiDate(l.createdAt),
       approverFirst: l.approverFirst,
       approverLast: l.approverLast,
       approverPosition: l.approverPosition || "admin/HR",
     })),
   };
 
-    const safeData = JSON.parse(
-      JSON.stringify(finalProps, (key, value) =>
-        value === undefined ? null : value
-      )
-    );
+  const safeData = JSON.parse(
+    JSON.stringify(finalProps, (key, value) =>
+      value === undefined ? null : value
+    )
+  );
 
-    return <LeaderClientPage {...safeData} />;
+  return <LeaderClientPage {...safeData} />;
   } catch (error) {
     console.error("Leader Page Critical Error:", error);
     throw error;
