@@ -12,6 +12,8 @@ import {
   changePasswordAction,
 } from "./actions";
 
+import { OffsiteCheckOutConfirm } from "@/app/component/modal/OffsiteCheckOutConfirm";
+
 /* ---------------- COMPONENTS ---------------- */
 
 const Section = ({
@@ -96,7 +98,9 @@ export default function LeaderClientPage({
   const [searchLeave, setSearchLeave] = useState("");
   const [leaveRemarks, setLeaveRemarks] = useState<Record<string, string>>({});
   const [viewRemarkId, setViewRemarkId] = useState<string | null>(null);
-  
+
+  const [showOffsitePopup, setShowOffsitePopup] = useState(false);
+  const [pendingData, setPendingData] = useState<any>(null);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [pwData, setPwData] = useState({ old: "", new: "", confirm: "" });
@@ -290,7 +294,6 @@ export default function LeaderClientPage({
 
   /* ---------------- MEMOIZED VALUES ---------------- */
 
-
   // ✅ 2. แยกใบลาของลูกน้องในทีม (เอาทุกคน "ยกเว้น" ID ของเรา)
   const teamLeaves = useMemo(
     () =>
@@ -325,7 +328,7 @@ export default function LeaderClientPage({
   const todayStatus = useMemo(() => {
     const now = new Date();
     const todayStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Bangkok",
+      timeZone: "UTC",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -346,9 +349,8 @@ export default function LeaderClientPage({
   }, [records]);
   /* ---------------- LEADER ACTIONS ---------------- */
 
-  
   const handleRemarkChange = (id: string, value: string) => {
-    setLeaveRemarks(prev => ({ ...prev, [id]: value }));
+    setLeaveRemarks((prev) => ({ ...prev, [id]: value }));
   };
 
   const handleApprove = async (leaveId: string) => {
@@ -444,10 +446,10 @@ export default function LeaderClientPage({
 
       const uploadedFile = uploadRes[0];
 
-      // 4. เรียก Action บันทึกข้อมูล (Logic สาย/ออกก่อน จะถูกคำนวณที่ตัว saveAttendanceAction)
-      const result = await saveAttendanceAction({
+      // เตรียมข้อมูลสำหรับการส่ง Action
+      const attendancePayload = {
         userId: userProfile.id,
-        type: isCheckingOut ? "OUT" : "IN",
+        type: (isCheckingOut ? "OUT" : "IN") as "IN" | "OUT",
         image: uploadedFile.ufsUrl || uploadedFile.url,
         fileId: uploadedFile.key,
         location: pos
@@ -457,19 +459,59 @@ export default function LeaderClientPage({
           : "ไม่ทราบพิกัด (GPS ปิด)",
         departmentId: userProfile.departmentId,
         siteId: userProfile.site_id,
-      });
+        isConfirmed: false, // ส่งครั้งแรกเป็น false เสมอ
+      };
+
+      // 4. เรียก Action บันทึกข้อมูล
+      const result = await saveAttendanceAction(attendancePayload);
 
       if (result.success) {
         alert(isCheckingOut ? "บันทึกออกงานสำเร็จ" : "บันทึกเข้างานสำเร็จ");
-        // ✅ ใช้ window.location.reload() หรือ router.refresh()
-        // เพื่อให้ข้อมูลในตาราง (isLate/isEarlyExit) อัปเดตล่าสุดจาก DB
         router.refresh();
       } else {
-        alert("ข้อผิดพลาดจากระบบ: " + result.error);
+        // ✅ เพิ่ม Logic ตรวจสอบการยืนยันนอกพื้นที่ (Offsite)
+        if (result.OffsiteCheckOutConfirm) {
+          setPendingData({
+            ...attendancePayload,
+            siteName: result.siteName,
+          });
+          setShowOffsitePopup(true);
+        } else {
+          alert("ข้อผิดพลาดจากระบบ: " + result.error);
+        }
       }
     } catch (err: any) {
       alert(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
       console.error("Capture Error:", err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const executeAttendanceAction = async (isConfirmed = false) => {
+    if (!pendingData) return;
+    setIsProcessing(true);
+    try {
+      // ส่งข้อมูลเดิมที่เก็บไว้ใน pendingData แต่เปลี่ยน isConfirmed เป็น true
+      const result = await saveAttendanceAction({
+        ...pendingData,
+        isConfirmed: isConfirmed,
+      });
+
+      if (result.success) {
+        alert(
+          isCheckingOut
+            ? "บันทึกออกงานนอกพื้นที่สำเร็จ"
+            : "บันทึกเข้างานนอกพื้นที่สำเร็จ"
+        );
+        setShowOffsitePopup(false);
+        setPendingData(null);
+        router.refresh();
+      } else {
+        alert("ข้อผิดพลาด: " + result.error);
+      }
+    } catch (err) {
+      alert("ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง");
     } finally {
       setIsProcessing(false);
     }
@@ -503,7 +545,7 @@ export default function LeaderClientPage({
       window.location.href = "/login";
     }
   };
-  console.log(myLeaves)
+  console.log(myLeaves);
 
   // ✅ อย่าลืมใส่ LoadingOverlay และส่วน Return ของ JSX ด้านล่างต่อจากนี้ตามเดิมของคุณนะครับ
   return (
@@ -511,54 +553,54 @@ export default function LeaderClientPage({
       {isProcessing && <LoadingOverlay />}
       {/* 🟢 TOP NAVIGATION */}
       <nav className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur-xl border-b border-gray-100 shadow-sm">
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-2">
-    <div className="flex items-center gap-3 sm:gap-4 group min-w-0">
-      <div className="relative flex-shrink-0">
-        <Image
-          src={companyData?.logoUrl || "/logo.png"}
-          alt={companyData?.name || "Company Logo"}
-          width={64}
-          height={64}
-          className="w-10 h-10 sm:w-16 sm:h-16 object-cover rounded-xl shadow-sm"
-        />
-      </div>
-      <div className="flex flex-col border-l-2 border-gray-100 pl-3 sm:pl-4 min-w-0">
-        <h1 className="font-black text-gray-900 tracking-tighter text-base sm:text-xl leading-none uppercase truncate">
-          {companyData?.name || "ชื่อบริษัท"}
-        </h1>
-        <span className="hidden sm:block text-[10px] text-gray-400 font-bold tracking-[0.2em] uppercase mt-1 max-w-[440px] line-clamp-2 leading-relaxed whitespace-normal break-words">
-          {companyData?.description || "description"}
-        </span>
-        <span className="block text-[9px] md:text-[10px] font-bold text-blue-600 tracking-[0.2em] md:tracking-[0.25em] uppercase opacity-90 mt-1 truncate">
-          Leader Panel
-        </span>
-      </div>
-    </div>
-    <div className="flex items-center gap-2 sm:gap-6 flex-shrink-0">
-      <div className="hidden md:flex flex-col items-end">
-        <span className="text-sm font-black text-gray-800 uppercase tracking-tight">
-          {userProfile.firstName}
-        </span>
-        <span className="text-[10px] text-blue-500 font-black uppercase flex items-center gap-1">
-          <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>{" "}
-          ONLINE
-        </span>
-      </div>
-      <button
-        onClick={handleLogout}
-        disabled={isProcessing}
-        className="group flex items-center gap-1.5 px-2.5 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95 w-fit"
-      >
-        <span className="text-base sm:text-lg leading-none">
-          {isProcessing ? "⏳" : "🚪"}
-        </span>
-        <span className="text-[9px] sm:text-sm font-bold uppercase tracking-tight leading-none">
-          {isProcessing ? "..." : "ลงชื่อออก"}
-        </span>
-      </button>
-    </div>
-  </div>
-</nav>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 sm:gap-4 group min-w-0">
+            <div className="relative flex-shrink-0">
+              <Image
+                src={companyData?.logoUrl || "/logo.png"}
+                alt={companyData?.name || "Company Logo"}
+                width={64}
+                height={64}
+                className="w-10 h-10 sm:w-16 sm:h-16 object-cover rounded-xl shadow-sm"
+              />
+            </div>
+            <div className="flex flex-col border-l-2 border-gray-100 pl-3 sm:pl-4 min-w-0">
+              <h1 className="font-black text-gray-900 tracking-tighter text-base sm:text-xl leading-none uppercase truncate">
+                {companyData?.name || "ชื่อบริษัท"}
+              </h1>
+              <span className="hidden sm:block text-[10px] text-gray-400 font-bold tracking-[0.2em] uppercase mt-1 max-w-[440px] line-clamp-2 leading-relaxed whitespace-normal break-words">
+                {companyData?.description || "description"}
+              </span>
+              <span className="block text-[9px] md:text-[10px] font-bold text-blue-600 tracking-[0.2em] md:tracking-[0.25em] uppercase opacity-90 mt-1 truncate">
+                Leader Panel
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-6 flex-shrink-0">
+            <div className="hidden md:flex flex-col items-end">
+              <span className="text-sm font-black text-gray-800 uppercase tracking-tight">
+                {userProfile.firstName}
+              </span>
+              <span className="text-[10px] text-blue-500 font-black uppercase flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>{" "}
+                ONLINE
+              </span>
+            </div>
+            <button
+              onClick={handleLogout}
+              disabled={isProcessing}
+              className="group flex items-center gap-1.5 px-2.5 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95 w-fit"
+            >
+              <span className="text-base sm:text-lg leading-none">
+                {isProcessing ? "⏳" : "🚪"}
+              </span>
+              <span className="text-[9px] sm:text-sm font-bold uppercase tracking-tight leading-none">
+                {isProcessing ? "..." : "ลงชื่อออก"}
+              </span>
+            </button>
+          </div>
+        </div>
+      </nav>
 
       <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-10">
         {/* 👤 LEADER PROFILE CARD */}
@@ -629,8 +671,9 @@ export default function LeaderClientPage({
 
           {/* {CHECK IN/OUT BUTTON} */}
           <div className="flex flex-col gap-4 mt-8 w-full md:w-64">
-            {/* 1. กรณี: ยังไม่ได้เช็คอิน OR (ไม่มีไซต์งาน และล่าสุดเพิ่งเช็คเอาท์ไป/สถานะว่าง) */}
-            {(!todayStatus.hasCheckedIn || (userProfile.site === "ทุกไซต์" && todayStatus.hasCheckedOut)) && (
+            {/* 1. เช็คว่ายังไม่ได้เข้างาน หรือ (เป็นกลุ่ม "ทุกไซต์" และเพิ่งเช็คเอาท์ไป) ให้โชว์ปุ่ม CHECK-IN */}
+            {!todayStatus.hasCheckedIn ||
+            (userProfile.site === "ทุกไซต์" && todayStatus.hasCheckedOut) ? (
               <button
                 onClick={() => {
                   setIsCheckingOut(false);
@@ -641,12 +684,11 @@ export default function LeaderClientPage({
               >
                 ลงชื่อเข้างาน (CHECK-IN)
               </button>
-            )}
-
-            {/* 2. กรณี: เช็คอินแล้วแต่ยังไม่ได้เช็คเอาท์ (ใช้ได้ทั้งคนมีไซต์และไม่มีไซต์) */}
-            {todayStatus.hasCheckedIn && !todayStatus.hasCheckedOut && (
+            ) : todayStatus.hasCheckedIn && !todayStatus.hasCheckedOut ? (
+              /* 2. ถ้าเข้างานแล้วแต่ยังไม่ออก ให้โชว์ปุ่ม CHECK-OUT */
               <button
                 onClick={() => {
+                  if (showOffsitePopup) return;
                   setIsCheckingOut(true);
                   openCamera();
                 }}
@@ -656,13 +698,25 @@ export default function LeaderClientPage({
                 <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
                 ลงชื่อออกงาน (CHECK-OUT)
               </button>
+            ) : (
+              /* 3. กรณีมีไซต์ประจำและบันทึกครบแล้ว หรือสถานะอื่นๆ ที่นอกเหนือจากข้างบน */
+              <div className="w-full bg-gray-50 border border-gray-100 text-gray-400 font-black py-4 rounded-2xl uppercase text-center text-xs tracking-widest">
+                บันทึกเวลาครบแล้ว
+              </div>
             )}
 
-            {/* 3. กรณี: มีไซต์งานประจำ และบันทึกครบ 2 รอบแล้ว (ถ้าไม่มีไซต์งานจะไม่เจอสถานะนี้) */}
-            {userProfile.site && todayStatus.hasCheckedIn && todayStatus.hasCheckedOut && (
-              <div className="w-full bg-gray-50 border border-gray-100 text-gray-400 font-black py-4 rounded-2xl uppercase text-center text-xs tracking-widest">
-                วันนี้บันทึกเวลาครบแล้ว
-              </div>
+            {/* --- ส่วนที่ต้องวางแยกไว้ เพื่อรองรับ Logic ยืนยันนอกพื้นที่ --- */}
+            {showOffsitePopup && (
+              <OffsiteCheckOutConfirm
+                siteName={pendingData?.siteName || "ไซต์งาน"}
+                onCancel={() => {
+                  setShowOffsitePopup(false);
+                  setIsCheckingOut(false);
+                }}
+                onConfirm={async () => {
+                  await handleFinalCheckOut(true);
+                }}
+              />
             )}
 
             {/* 4. ปุ่มลางาน */}
@@ -729,9 +783,7 @@ export default function LeaderClientPage({
                         <th className="p-4 text-left">สถานะการเข้างาน</th>
                         <th className="p-4 text-left">เวลาเข้า / รูปถ่าย</th>
                         <th className="p-4 text-left">เวลาออก / รูปถ่าย</th>
-                        <th className="p-4 text-center">
-                          ตำแหน่ง / เขตรับผิดชอบ / ระดับสิทธิ์
-                        </th>
+                        <th className="p-4 text-center">พื้นที่ปฏิบัติงาน</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -747,7 +799,8 @@ export default function LeaderClientPage({
                       ) : (
                         records.map((r, i) => {
                           const formatTime = (time: any) => {
-                            if (!time || time === "-" || time === "null") return "-";
+                            if (!time || time === "-" || time === "null")
+                              return "-";
                             if (typeof time === "string") {
                               const timePart = time.includes(" ")
                                 ? time.split(" ")[1]
@@ -801,6 +854,15 @@ export default function LeaderClientPage({
                                     ✅ ปกติ
                                   </span>
                                 )}
+                                {r.isEarlyExit === 1 ? (
+                                  <span className="text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 shadow-sm text-sm">
+                                    🏃 ออกก่อนเวลา
+                                  </span>
+                                ) : (
+                                  <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
+                                    ✅ ปกติ
+                                  </span>
+                                )}
                               </td>
 
                               {/* เช็คอิน */}
@@ -815,7 +877,9 @@ export default function LeaderClientPage({
                                       alt="In"
                                       width={40}
                                       height={40}
-                                      onClick={() => setViewImage(displayImageIn)}
+                                      onClick={() =>
+                                        setViewImage(displayImageIn)
+                                      }
                                       className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10 cursor-zoom-in hover:border-blue-400 active:scale-95 transition-all"
                                       unoptimized
                                     />
@@ -841,7 +905,9 @@ export default function LeaderClientPage({
                                       alt="Out"
                                       width={40}
                                       height={40}
-                                      onClick={() => setViewImage(displayImageOut)}
+                                      onClick={() =>
+                                        setViewImage(displayImageOut)
+                                      }
                                       className="rounded-xl border-2 border-white shadow-sm object-cover h-10 w-10 cursor-zoom-in hover:border-blue-400 active:scale-95 transition-all"
                                       unoptimized
                                     />
@@ -852,31 +918,10 @@ export default function LeaderClientPage({
                               {/* รายละเอียด - ปรับให้ใช้พื้นที่เต็มที่ */}
                               <td className="p-4">
                                 <div className="flex items-center justify-center gap-3 whitespace-nowrap">
-                                  <span className="text-sm font-black text-gray-900 uppercase tracking-tight bg-indigo-600 text-white px-3 py-1 rounded-xl shadow-sm">
-                                    {r.position || userProfile.position}
-                                  </span>
-
                                   <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-lg border border-gray-200">
                                     <span className="text-base">📍</span>
                                     <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
                                       {r.site || "ทุกไซต์งาน"}
-                                    </span>
-                                  </div>
-
-                                  <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
-                                    <div
-                                      className={`w-2.5 h-2.5 rounded-full shadow-inner ${
-                                        r.role === "leader" ||
-                                        r.role === "หัวหน้างาน" ||
-                                        userProfile.role === "leader"
-                                          ? "bg-amber-400"
-                                          : "bg-emerald-400"
-                                      }`}
-                                    ></div>
-                                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
-                                      {r.role === "leader" || userProfile.role === "leader"
-                                        ? "หัวหน้างาน"
-                                        : "พนักงาน"}
                                     </span>
                                   </div>
                                 </div>
@@ -889,104 +934,121 @@ export default function LeaderClientPage({
                   </table>
                 </div>
               </div>
-          
+
               {/* ตารางที่ 2: คำขออนุมัติลางานของฉัน */}
               <div className="bg-white p-4 sm:p-8 rounded-[1.5rem] sm:rounded-[2.5rem] shadow-sm border border-gray-50">
-  <div className="flex items-center gap-3 mb-6 sm:mb-8">
-    <div className="w-1.5 h-6 sm:w-2 sm:h-8 bg-amber-400 rounded-full"></div>
-    <h2 className="font-black text-gray-900 text-lg sm:text-xl tracking-tighter uppercase">
-      คำขออนุมัติ ลางานของฉัน
-    </h2>
-  </div>
-  <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-    <table className="w-full text-sm min-w-[500px] sm:min-w-[600px]">
-      <thead className="bg-gray-50/50 text-gray-600 uppercase text-[10px] sm:text-[12px] font-black tracking-widest">
-        <tr>
-          <th className="p-4 sm:p-6 text-left">ประเภท / วันที่</th>
-          <th className="p-4 sm:p-6 text-center">จำนวนวัน</th>
-          <th className="p-4 sm:p-6 text-left hidden md:table-cell">เอกสาร & เหตุผล</th>
-          <th className="p-4 sm:p-6 text-center">สถานะ</th>
-          <th className="p-4 sm:p-6 text-center hidden lg:table-cell">หมายเหตุ</th>
-          <th className="p-4 sm:p-6 text-center">ผู้จัดการคำขอ</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-gray-50">
-        {myLeaves.length === 0 ? (
-          <tr>
-            <td
-              colSpan={7}
-              className="p-12 sm:p-16 text-center text-gray-300 font-bold italic"
-            >
-              ไม่มีประวัติการลา
-            </td>
-          </tr>
-        ) : (
-          myLeaves.map((l: any) => {
-            const start = new Date(l.startDate || l.start_date);
-            const end = new Date(l.endDate || l.end_date);
-            const diffTime = Math.abs(end.getTime() - start.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                <div className="flex items-center gap-3 mb-6 sm:mb-8">
+                  <div className="w-1.5 h-6 sm:w-2 sm:h-8 bg-amber-400 rounded-full"></div>
+                  <h2 className="font-black text-gray-900 text-lg sm:text-xl tracking-tighter uppercase">
+                    คำขออนุมัติ ลางานของฉัน
+                  </h2>
+                </div>
+                <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                  <table className="w-full text-sm min-w-[500px] sm:min-w-[600px]">
+                    <thead className="bg-gray-50/50 text-gray-600 uppercase text-[10px] sm:text-[12px] font-black tracking-widest">
+                      <tr>
+                        <th className="p-4 sm:p-6 text-center">ขอเมื่อ</th>
+                        <th className="p-4 sm:p-6 text-left">
+                          ประเภท / วันที่
+                        </th>
+                        <th className="p-4 sm:p-6 text-center">จำนวนวัน</th>
+                        <th className="p-4 sm:p-6 text-left hidden md:table-cell">
+                          เอกสาร & เหตุผล
+                        </th>
+                        <th className="p-4 sm:p-6 text-center">สถานะ</th>
+                        <th className="p-4 sm:p-6 text-center hidden lg:table-cell">
+                          หมายเหตุ
+                        </th>
+                        <th className="p-4 sm:p-6 text-center">
+                          ผู้จัดการคำขอ
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {myLeaves.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="p-12 sm:p-16 text-center text-gray-300 font-bold italic"
+                          >
+                            ไม่มีประวัติการลา
+                          </td>
+                        </tr>
+                      ) : (
+                        myLeaves.map((l: any) => {
+                          const start = new Date(l.startDate || l.start_date);
+                          const end = new Date(l.endDate || l.end_date);
+                          const diffTime = Math.abs(
+                            end.getTime() - start.getTime()
+                          );
+                          const diffDays =
+                            Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-            return (
-              <tr
-                key={l.id}
-                className="hover:bg-amber-50/10 transition-colors"
-              >
-                <td className="p-4 sm:p-6">
-                  <div className="flex flex-col gap-1">
-                    <div className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-black text-[10px] w-fit uppercase">
-                      {l.type}
-                    </div>
-                    <div className="text-[10px] sm:text-[11px] text-gray-500 font-bold">
-                      {l.startDate || l.start_date}
-                      <span className="text-gray-300 mx-1">→</span>
-                      {l.endDate || l.end_date}
-                    </div>
-                    {/* แสดงเหตุผลในมือถือใต้ประเภท */}
-                    <span className="text-[10px] text-gray-400 italic line-clamp-1 md:hidden">
-                      {l.reason}
-                    </span>
-                  </div>
-                </td>
-                <td className="p-4 sm:p-6 text-center">
-                  <span className="bg-orange-500 text-white px-2.5 py-1 rounded-full font-black text-[10px] sm:text-xs shadow-sm shadow-orange-200 whitespace-nowrap">
-                    {isNaN(diffDays) ? "-" : `${diffDays} วัน`}
-                  </span>
-                </td>
-                <td className="p-4 sm:p-6 hidden md:table-cell">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs text-gray-400 italic line-clamp-1">
-                      {l.reason}
-                    </span>
-                    {l.fileUrl && (
-                      <a
-                        href={l.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-[10px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-all mt-1 w-fit group"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-3 w-3 group-hover:scale-110 transition-transform"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={3}
-                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                          />
-                        </svg>
-                        ดูหลักฐาน
-                      </a>
-                    )}
-                  </div>
-                </td>
-                <td className="p-4 sm:p-6 text-center">
-                  <span
-                    className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-tighter shadow-sm border whitespace-nowrap
+                          return (
+                            <tr
+                              key={l.id}
+                              className="hover:bg-amber-50/10 transition-colors"
+                            >
+                              <td className="px-4 py-2 text-sm text-gray-600">
+                                {l.createdAt || "-"}
+                              </td>
+                              <td className="p-4 sm:p-6">
+                                <div className="flex flex-col gap-1">
+                                  <div className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-black text-[10px] w-fit uppercase">
+                                    {l.type}
+                                  </div>
+                                  <div className="text-[10px] sm:text-[11px] text-gray-500 font-bold">
+                                    {l.startDate || l.start_date}
+                                    <span className="text-gray-300 mx-1">
+                                      →
+                                    </span>
+                                    {l.endDate || l.end_date}
+                                  </div>
+                                  {/* แสดงเหตุผลในมือถือใต้ประเภท */}
+                                  <span className="text-[10px] text-gray-400 italic line-clamp-1 md:hidden">
+                                    {l.reason}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="p-4 sm:p-6 text-center">
+                                <span className="bg-orange-500 text-white px-2.5 py-1 rounded-full font-black text-[10px] sm:text-xs shadow-sm shadow-orange-200 whitespace-nowrap">
+                                  {isNaN(diffDays) ? "-" : `${diffDays} วัน`}
+                                </span>
+                              </td>
+                              <td className="p-4 sm:p-6 hidden md:table-cell">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-xs text-gray-400 italic line-clamp-1">
+                                    {l.reason}
+                                  </span>
+                                  {l.fileUrl && (
+                                    <a
+                                      href={l.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1.5 text-[10px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-all mt-1 w-fit group"
+                                    >
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        className="h-3 w-3 group-hover:scale-110 transition-transform"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={3}
+                                          d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                                        />
+                                      </svg>
+                                      ดูหลักฐาน
+                                    </a>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-4 sm:p-6 text-center">
+                                <span
+                                  className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-tighter shadow-sm border whitespace-nowrap
                     ${
                       l.status === "approved" || l.status === "อนุมัติแล้ว"
                         ? "bg-green-50 text-green-600 border-green-100"
@@ -994,86 +1056,155 @@ export default function LeaderClientPage({
                         ? "bg-red-50 text-red-600 border-red-100"
                         : "bg-amber-50 text-amber-600 border-amber-100"
                     }`}
-                  >
-                    {l.status === "pending" ? "รออนุมัติ" : l.status === "approved" ? "อนุมัติแล้ว" : l.status === "rejected" ? "ปฏิเสธ" : l.status}
-                  </span>
-                </td>
-                <td className="p-4 sm:p-6 hidden lg:table-cell">
-                  <div className="flex items-center gap-2 justify-center">
-                    {l.status !== 'pending' && l.remark ? (
-                      <>
-                        <div className="relative group">
-                          <input
-                            type="text"
-                            readOnly
-                            value={l.remark}
-                            className="text-[11px] bg-gray-50 border border-gray-100 text-gray-500 rounded-lg px-3 py-1.5 w-24 xl:w-32 focus:outline-none cursor-default font-medium"
-                            title={l.remark}
-                          />
-                          <div className="absolute inset-0 bg-white/10 rounded-lg pointer-events-none"></div>
-                        </div>
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={() => setViewRemarkId(viewRemarkId === l.id ? null : l.id)}
-                            className={`flex-shrink-0 p-1.5 rounded-lg transition-all border ${
-                              viewRemarkId === l.id 
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200' 
-                                : 'bg-white text-indigo-500 border-gray-200 hover:border-indigo-200 hover:bg-indigo-50'
-                            }`}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <circle cx="11" cy="11" r="8"></circle>
-                              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                          </button>
-                          {viewRemarkId === l.id && (
-                            <>
-                              <div className="fixed inset-0 z-40" onClick={() => setViewRemarkId(null)}></div>
-                              <div className="absolute right-0 bottom-full mb-2 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl p-3 animate-in fade-in zoom-in duration-200">
-                                <div className="flex justify-between items-center mb-2 pb-1 border-b border-gray-100">
-                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">หมายเหตุ</span>
-                                  <button onClick={() => setViewRemarkId(null)} className="text-gray-400 hover:text-gray-600">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
-                                  </button>
+                                >
+                                  {l.status === "pending"
+                                    ? "รออนุมัติ"
+                                    : l.status === "approved"
+                                    ? "อนุมัติแล้ว"
+                                    : l.status === "rejected"
+                                    ? "ปฏิเสธ"
+                                    : l.status}
+                                </span>
+                              </td>
+                              <td className="p-4 sm:p-6 hidden lg:table-cell">
+                                <div className="flex items-center gap-2 justify-center">
+                                  {l.status !== "pending" && l.remark ? (
+                                    <>
+                                      <div className="relative group">
+                                        <input
+                                          type="text"
+                                          readOnly
+                                          value={l.remark}
+                                          className="text-[11px] bg-gray-50 border border-gray-100 text-gray-500 rounded-lg px-3 py-1.5 w-24 xl:w-32 focus:outline-none cursor-default font-medium"
+                                          title={l.remark}
+                                        />
+                                        <div className="absolute inset-0 bg-white/10 rounded-lg pointer-events-none"></div>
+                                      </div>
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setViewRemarkId(
+                                              viewRemarkId === l.id
+                                                ? null
+                                                : l.id
+                                            )
+                                          }
+                                          className={`flex-shrink-0 p-1.5 rounded-lg transition-all border ${
+                                            viewRemarkId === l.id
+                                              ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200"
+                                              : "bg-white text-indigo-500 border-gray-200 hover:border-indigo-200 hover:bg-indigo-50"
+                                          }`}
+                                        >
+                                          <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            width="14"
+                                            height="14"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          >
+                                            <circle
+                                              cx="11"
+                                              cy="11"
+                                              r="8"
+                                            ></circle>
+                                            <line
+                                              x1="21"
+                                              y1="21"
+                                              x2="16.65"
+                                              y2="16.65"
+                                            ></line>
+                                          </svg>
+                                        </button>
+                                        {viewRemarkId === l.id && (
+                                          <>
+                                            <div
+                                              className="fixed inset-0 z-40"
+                                              onClick={() =>
+                                                setViewRemarkId(null)
+                                              }
+                                            ></div>
+                                            <div className="absolute right-0 bottom-full mb-2 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl p-3 animate-in fade-in zoom-in duration-200">
+                                              <div className="flex justify-between items-center mb-2 pb-1 border-b border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                  หมายเหตุ
+                                                </span>
+                                                <button
+                                                  onClick={() =>
+                                                    setViewRemarkId(null)
+                                                  }
+                                                  className="text-gray-400 hover:text-gray-600"
+                                                >
+                                                  <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    width="12"
+                                                    height="12"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="3"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                  >
+                                                    <line
+                                                      x1="18"
+                                                      y1="6"
+                                                      x2="6"
+                                                      y2="18"
+                                                    ></line>
+                                                    <line
+                                                      x1="6"
+                                                      y1="6"
+                                                      x2="18"
+                                                      y2="18"
+                                                    ></line>
+                                                  </svg>
+                                                </button>
+                                              </div>
+                                              <p className="text-xs text-gray-700 leading-relaxed break-words font-medium">
+                                                {l.remark}
+                                              </p>
+                                              <div className="absolute -bottom-1 right-3 w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45"></div>
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <span className="text-gray-200">—</span>
+                                  )}
                                 </div>
-                                <p className="text-xs text-gray-700 leading-relaxed break-words font-medium">{l.remark}</p>
-                                <div className="absolute -bottom-1 right-3 w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45"></div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-gray-200">—</span>
-                    )}
-                  </div>
-                </td>
-                <td className="p-4 sm:p-6 text-center">
-                  {l.status !== 'pending' && l.approverFirst ? (
-                    <div className="inline-flex flex-col items-center">
-                      <span className="text-[11px] sm:text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
-                        {`${l.approverFirst} ${l.approverLast || ""}`.trim()}
-                      </span>
-                      <span className="text-[8px] sm:text-[9px] text-indigo-500 font-black uppercase tracking-widest mt-0.5">
-                        {l.approverPosition}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-gray-300 font-medium">—</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })
-        )}
-      </tbody>
-    </table>
-  </div>
-</div>
+                              </td>
+                              <td className="p-4 sm:p-6 text-center">
+                                {l.status !== "pending" && l.approverFirst ? (
+                                  <div className="inline-flex flex-col items-center">
+                                    <span className="text-[11px] sm:text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
+                                      {`${l.approverFirst} ${
+                                        l.approverLast || ""
+                                      }`.trim()}
+                                    </span>
+                                    <span className="text-[8px] sm:text-[9px] text-indigo-500 font-black uppercase tracking-widest mt-0.5">
+                                      {l.approverPosition}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-300 font-medium">
+                                    —
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
               {/* ตารางที่ 3: การเข้างานของพนักงานในทีม */}
               <div className="print:hidden mt-12">
@@ -1107,23 +1238,23 @@ export default function LeaderClientPage({
                             <th className="py-6 px-6 text-left border-b border-slate-100">
                               รอบเข้างาน
                             </th>
-                            <th className="py-6 px-6 text-left border-b border-slate-100">
-                              สถานะการเข้างาน
+                            <th className="py-6 px-6 text-center border-b border-slate-100">
+                              เวลาเข้า
+                            </th>
+                            <th className="py-6 px-6 text-center border-b border-slate-100">
+                              เวลาออก
                             </th>
                             <th className="py-6 px-6 text-left border-b border-slate-100">
-                              สถานะการออกงาน
+                              สถานะการ เข้า-ออก งาน
+                            </th>
+                            <th className="py-6 px-6 text-left border-b border-slate-100">
+                              สถานะการลงชื่อพิกัด เข้า-ออก
                             </th>
                             <th className="py-6 px-6 text-left border-b border-slate-100">
                               ตำแหน่ง
                             </th>
                             <th className="py-6 px-6 text-left border-b border-slate-100">
                               ไซต์งาน
-                            </th>
-                            <th className="py-6 px-6 text-center border-b border-slate-100">
-                              เวลาเข้า
-                            </th>
-                            <th className="py-6 px-6 text-center border-b border-slate-100">
-                              เวลาออก
                             </th>
                             <th className="py-6 px-6 text-center border-b border-slate-100">
                               หลักฐานเข้า-ออก
@@ -1188,6 +1319,12 @@ export default function LeaderClientPage({
                                     )}
                                   </div>
                                 </td>
+                                <td className="py-5 px-6 text-center font-black text-green-600 text-lg italic whitespace-nowrap">
+                                  {a.checkIn ? a.checkIn : "--:--"}
+                                </td>
+                                <td className="py-5 px-6 text-center font-black text-red-600 text-lg italic whitespace-nowrap">
+                                  {a.checkOut ? a.checkOut : "--:--"}
+                                </td>
                                 <td className="p-4 font-bold whitespace-nowrap">
                                   {a.isLate === 1 ? (
                                     <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
@@ -1198,21 +1335,33 @@ export default function LeaderClientPage({
                                       ✅ ปกติ
                                     </span>
                                   )}
+                                  {a.isEarlyExit === 1 ? (
+                                    <span className="text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 shadow-sm text-sm">
+                                      🏃 ออกก่อนเวลา
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
+                                      ✅ ปกติ
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="p-4 font-bold whitespace-nowrap">
-                                  {a.checkOut ? (
-                                    Number(a.isEarlyExit) === 1 ? (
-                                      <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
-                                        ⚠️ ออกก่อนเวลา
-                                      </span>
-                                    ) : (
-                                      <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
-                                        ✅ ปกติ
-                                      </span>
-                                    )
+                                  {String(a.isOffsiteIn) === "1" ? (
+                                    <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
+                                      ⚠️ เข้าไม่ตรง
+                                    </span>
                                   ) : (
-                                    <span className="text-slate-400 font-medium px-3 py-1.5">
-                                      -
+                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
+                                      ✅ ปกติ
+                                    </span>
+                                  )}
+                                  {String(a.isOffsiteOut) === "1" ? (
+                                    <span className="text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 shadow-sm text-sm">
+                                      🏃 ออกไม่ตรง
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
+                                      ✅ ปกติ
                                     </span>
                                   )}
                                 </td>
@@ -1227,12 +1376,6 @@ export default function LeaderClientPage({
                                   <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase">
                                     {a.siteName || "พนักงาน"}
                                   </span>
-                                </td>
-                                <td className="py-5 px-6 text-center font-black text-green-600 text-lg italic whitespace-nowrap">
-                                  {a.checkIn ? a.checkIn : "--:--"}
-                                </td>
-                                <td className="py-5 px-6 text-center font-black text-red-600 text-lg italic whitespace-nowrap">
-                                  {a.checkOut ? a.checkOut : "--:--"}
                                 </td>
                                 <td className="py-5 px-6">
                                   <div className="flex justify-center gap-3">
@@ -1329,6 +1472,9 @@ export default function LeaderClientPage({
                               พนักงาน
                             </th>
                             <th className="py-6 px-4 text-center border-b border-slate-100 w-[180px]">
+                              ขอเมื่อ
+                            </th>
+                            <th className="py-6 px-4 text-center border-b border-slate-100 w-[180px]">
                               ประเภท & ระยะเวลา
                             </th>
                             <th className="py-6 px-4 text-center border-b border-slate-100 w-[100px]">
@@ -1390,6 +1536,9 @@ export default function LeaderClientPage({
                                         </div>
                                       </div>
                                     </div>
+                                  </td>
+                                  <td className="px-4 py-2 text-sm text-gray-600">
+                                    {l.createdAt || "-"}
                                   </td>
                                   <td className="py-5 px-4 text-center">
                                     <div className="inline-block bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg font-black text-[11px] mb-1">
@@ -1467,52 +1616,129 @@ export default function LeaderClientPage({
                                         <button
                                           disabled={isProcessing}
                                           onClick={() =>
-                                            updateLeaveStatusAction(l.id, "pending")
+                                            updateLeaveStatusAction(
+                                              l.id,
+                                              "pending"
+                                            )
                                           }
                                           className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-200 transition-all flex items-center gap-2 italic disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                          <span>{isProcessing ? "⏳" : "✏️"}</span> แก้ไข
+                                          <span>
+                                            {isProcessing ? "⏳" : "✏️"}
+                                          </span>{" "}
+                                          แก้ไข
                                         </button>
                                       )}
                                     </div>
                                   </td>
                                   <td className="py-4 px-4">
                                     <div className="relative flex items-center gap-2">
-                                      <input 
-                                        type="text" 
+                                      <input
+                                        type="text"
                                         placeholder="ระบุหมายเหตุ..."
                                         className={`border rounded-xl px-3 py-1.5 text-xs w-full transition-all outline-none ${
-                                          l.status !== 'pending' 
-                                            ? 'bg-gray-50 text-gray-700 border-gray-200 shadow-sm' 
-                                            : 'bg-white border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-100'
+                                          l.status !== "pending"
+                                            ? "bg-gray-50 text-gray-700 border-gray-200 shadow-sm"
+                                            : "bg-white border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
                                         }`}
-                                        value={l.status === 'pending' ? (leaveRemarks[l.id] ?? l.remark ?? "") : (l.remark ?? "-")}
-                                        onChange={(e) => handleRemarkChange(l.id, e.target.value)}
-                                        readOnly={l.status !== 'pending'}
+                                        value={
+                                          l.status === "pending"
+                                            ? leaveRemarks[l.id] ??
+                                              l.remark ??
+                                              ""
+                                            : l.remark ?? "-"
+                                        }
+                                        onChange={(e) =>
+                                          handleRemarkChange(
+                                            l.id,
+                                            e.target.value
+                                          )
+                                        }
+                                        readOnly={l.status !== "pending"}
                                       />
-                                      {l.status !== 'pending' && l.remark && (
+                                      {l.status !== "pending" && l.remark && (
                                         <div className="relative shrink-0">
                                           <button
-                                            onClick={() => setViewRemarkId(viewRemarkId === l.id ? null : l.id)}
+                                            onClick={() =>
+                                              setViewRemarkId(
+                                                viewRemarkId === l.id
+                                                  ? null
+                                                  : l.id
+                                              )
+                                            }
                                             className={`flex-shrink-0 p-1.5 rounded-lg transition-colors border ${
-                                              viewRemarkId === l.id 
-                                                ? 'bg-blue-600 text-white border-blue-600' 
-                                                : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
+                                              viewRemarkId === l.id
+                                                ? "bg-blue-600 text-white border-blue-600"
+                                                : "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
                                             }`}
                                           >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                              <circle cx="11" cy="11" r="8"></circle>
-                                              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                            <svg
+                                              xmlns="http://www.w3.org/2000/svg"
+                                              width="14"
+                                              height="14"
+                                              viewBox="0 0 24 24"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth="2.5"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            >
+                                              <circle
+                                                cx="11"
+                                                cy="11"
+                                                r="8"
+                                              ></circle>
+                                              <line
+                                                x1="21"
+                                                y1="21"
+                                                x2="16.65"
+                                                y2="16.65"
+                                              ></line>
                                             </svg>
                                           </button>
                                           {viewRemarkId === l.id && (
                                             <>
-                                              <div className="fixed inset-0 z-40" onClick={() => setViewRemarkId(null)}></div>
+                                              <div
+                                                className="fixed inset-0 z-40"
+                                                onClick={() =>
+                                                  setViewRemarkId(null)
+                                                }
+                                              ></div>
                                               <div className="absolute right-0 bottom-full mb-2 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl p-3 animate-in fade-in zoom-in duration-200">
                                                 <div className="flex justify-between items-center mb-2 pb-1 border-b border-gray-100">
-                                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">หมายเหตุจากผู้อนุมัติ</span>
-                                                  <button onClick={() => setViewRemarkId(null)} className="text-gray-400 hover:text-gray-600">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                    หมายเหตุจากผู้อนุมัติ
+                                                  </span>
+                                                  <button
+                                                    onClick={() =>
+                                                      setViewRemarkId(null)
+                                                    }
+                                                    className="text-gray-400 hover:text-gray-600"
+                                                  >
+                                                    <svg
+                                                      xmlns="http://www.w3.org/2000/svg"
+                                                      width="12"
+                                                      height="12"
+                                                      viewBox="0 0 24 24"
+                                                      fill="none"
+                                                      stroke="currentColor"
+                                                      strokeWidth="3"
+                                                      strokeLinecap="round"
+                                                      strokeLinejoin="round"
+                                                    >
+                                                      <line
+                                                        x1="18"
+                                                        y1="6"
+                                                        x2="6"
+                                                        y2="18"
+                                                      ></line>
+                                                      <line
+                                                        x1="6"
+                                                        y1="6"
+                                                        x2="18"
+                                                        y2="18"
+                                                      ></line>
+                                                    </svg>
                                                   </button>
                                                 </div>
                                                 <p className="text-xs text-gray-700 leading-relaxed break-words whitespace-normal text-left">
@@ -1527,17 +1753,22 @@ export default function LeaderClientPage({
                                     </div>
                                   </td>
                                   <td className="p-6 text-center">
-                                    {l.status !== 'pending' && l.approverFirst ? (
+                                    {l.status !== "pending" &&
+                                    l.approverFirst ? (
                                       <div className="inline-flex flex-col items-center">
                                         <span className="text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
-                                          {`${l.approverFirst} ${l.approverLast || ""}`.trim()}
+                                          {`${l.approverFirst} ${
+                                            l.approverLast || ""
+                                          }`.trim()}
                                         </span>
                                         <span className="text-[9px] text-indigo-500 font-black uppercase tracking-widest mt-0.5 whitespace-nowrap">
                                           {l.approverPosition}
                                         </span>
                                       </div>
                                     ) : (
-                                      <span className="text-gray-300 font-medium">—</span>
+                                      <span className="text-gray-300 font-medium">
+                                        —
+                                      </span>
                                     )}
                                   </td>
                                 </tr>
@@ -2063,6 +2294,13 @@ export default function LeaderClientPage({
           animation: scan 3s linear infinite;
         }
       `}</style>
+      {showOffsitePopup && (
+        <OffsiteConfirmPopup
+          siteName={pendingData?.siteName || "ไซต์งาน"}
+          onCancel={() => setShowOffsitePopup(false)}
+          onConfirm={() => executeAttendanceAction(true)}
+        />
+      )}
     </div>
   );
 }

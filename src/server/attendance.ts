@@ -38,7 +38,7 @@ export async function checkInAction(userId: string, imageIn: string, locationIn:
     await db.insert(attendanceTable).values({
       user_id: userId,
       date: today,
-      checkIn: sql`timezone('Asia/Bangkok', now())::time`,
+      checkIn: sql`timezone('UTC', now())::time`,
       imageIn,
       locationIn,
     });
@@ -58,7 +58,7 @@ export async function checkOutAction(userId: string, imageOut: string, locationO
 
     await db.update(attendanceTable)
       .set({
-        checkOut: sql`timezone('Asia/Bangkok', now())::time`,
+        checkOut: sql`timezone('UTC', now())::time`,
         imageOut,
         locationOut,
       })

@@ -93,6 +93,7 @@ export default async function Page() {
       remark: leaveTable.remark,
       reason: leaveTable.reason,
       status: leaveTable.status,
+      createdAt: leaveTable.createdAt, // ✅ ดึง createdAt มาใช้
       approverFirst: approver.firstName,
       approverLast: approver.lastName,
       approverPositionName: approverPos.name, // ✅ ดึงชื่อตำแหน่งของผู้อนุมัติ
@@ -122,7 +123,7 @@ export default async function Page() {
     checkOutImageUrl: r.imageOut,
     position: user.positionName || "-",
     // ✅ เปลี่ยนไปใช้ข้อมูลจาก Snapshot ใน Record (r) แทน
-    site: r.siteNameSnapshot || "-",
+    site: r.siteInNameSnapshot || "-",
     role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
     // ✅ เพิ่มสถานะเพื่อให้ Client Page ตรวจสอบการแสดงสี/ไอคอนได้เหมือน Admin
     isLate: r.isLate ?? 0,
@@ -132,27 +133,47 @@ export default async function Page() {
     endTime: r.shiftEndTimeSnapshot,
   }));
 
-  const initialLeaves = dbLeaves.map((l) => ({
-    type: l.type,
-    start: l.startDate,
-    end: l.endDate,
-    remark: l.remark,
-    reason: l.reason,
-    days: 0,
-    status:
-      l.status === "pending"
-        ? "รออนุมัติ"
-        : l.status === "approved"
-        ? "อนุมัติ"
-        : l.status === "rejected"
-        ? "ปฏิเสธ"
-        : l.status,
-    // ✅ ดึงชื่อผู้อนุมัติ และชื่อตำแหน่งผู้อนุมัติ จากข้อมูลที่ Join มา
-    approverName: l.approverFirst
-      ? `${l.approverFirst} ${l.approverLast || ""}`.trim()
-      : "-",
-    approverPosition: l.approverPositionName || "-", // ✅ ส่งชื่อตำแหน่งผู้อนุมัติไปแสดงผล
-  }));
+  const initialLeaves = dbLeaves.map((l) => {
+    // ✅ จัดการ Format createdAt เป็น วันที่/เดือน/ปี ชม.:นาที
+    // ✅ จัดการ Format createdAt เป็น วันที่/เดือน/ปี ชม.:นาที (แก้ปัญหา Timezone Offset)
+    // ✅ แก้ไข: บังคับ Timezone เป็น UTC เพื่อไม่ให้มันบวก 7 ชั่วโมงซ้ำซ้อนกับใน DB
+    const formattedCreatedAt = l.createdAt
+      ? new Date(l.createdAt)
+          .toLocaleString("en-GB", {
+            timeZone: "UTC", // 👈 เปลี่ยนจาก UTC/Bangkok เป็น UTC เพราะใน DB เป็นเวลาไทยอยู่แล้ว
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+          })
+          .replace(",", "")
+      : "-";
+
+    return {
+      type: l.type,
+      start: l.startDate,
+      end: l.endDate,
+      remark: l.remark,
+      reason: l.reason,
+      requestDate: formattedCreatedAt, // ✅ ชื่อคีย์สำหรับนำไปวางฝั่ง UI
+      days: 0,
+      status:
+        l.status === "pending"
+          ? "รออนุมัติ"
+          : l.status === "approved"
+          ? "อนุมัติ"
+          : l.status === "rejected"
+          ? "ปฏิเสธ"
+          : l.status,
+      // ✅ ดึงชื่อผู้อนุมัติ และชื่อตำแหน่งผู้อนุมัติ จากข้อมูลที่ Join มา
+      approverName: l.approverFirst
+        ? `${l.approverFirst} ${l.approverLast || ""}`.trim()
+        : "-",
+      approverPosition: l.approverPositionName || "-", // ✅ ส่งชื่อตำแหน่งผู้อนุมัติไปแสดงผล
+    };
+  });
 
   // เตรียมโปรไฟล์ให้ Client Page
   const userProfile = {

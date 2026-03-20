@@ -23,12 +23,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // --- LOGIC 2: ถ้า Login อยู่แล้ว แต่พยายามจะเข้าหน้า /login ---
+  // --- LOGIC 2: ถ้า Login อยู่แล้ว แต่พยายามจะเข้าหน้า / login ---
   if (userId && pathname === '/login') {
     if (!userRole) {
       return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
     }
-    
+
     const roleRedirects: Record<string, string> = {
       superAdmin: '/superAdmin',
       admin: '/administrator',
@@ -55,7 +55,7 @@ export function middleware(request: NextRequest) {
       const fallback = userRole === 'employee' ? '/employee' : '/login';
       return NextResponse.redirect(new URL(fallback, request.url));
     }
-    
+
     if (pathname.startsWith('/administrator')) {
       if (!(userRole === 'admin' || userRole === 'administrator')) {
         return NextResponse.redirect(new URL('/login', request.url));

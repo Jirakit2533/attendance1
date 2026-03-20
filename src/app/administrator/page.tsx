@@ -1,10 +1,10 @@
 import { db } from "@/db/db";
-import { 
-  usersTable, 
-  attendanceTable, 
-  leaveTable, 
-  sitesTable, 
-  adminsTable, 
+import {
+  usersTable,
+  attendanceTable,
+  leaveTable,
+  sitesTable,
+  adminsTable,
   companyTable,
   positionsTable,
   departmentsTable,
@@ -12,7 +12,7 @@ import {
 } from "@/db/schema";
 import { desc, eq, and, or, isNull, is } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation"; 
+import { redirect } from "next/navigation";
 import AdminClientPage from "./adminClientPage";
 
 export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
@@ -24,168 +24,182 @@ export default async function AdminDashboardPage() {
     const adminId = cookieStore.get("session_user_id")?.value;
 
     if (!adminId) {
-      redirect('/api/auth/logout-cleanup');
+      redirect("/api/auth/logout-cleanup");
     }
 
     // 2. ดึงข้อมูลแอดมิน (ดึงฟิลด์ที่จำเป็นสำหรับ Modal Profile ตามที่บอก)
     const adminData = await db
       .select({
         id: usersTable.id,
-        userName: usersTable.userName, 
+        userName: usersTable.userName,
         firstName: usersTable.firstName,
         lastName: usersTable.lastName,
-        email: adminsTable.email,       // ดึงจาก adminsTable ตาม Schema
-        phone: companyTable.phone,     
+        email: adminsTable.email, // ดึงจาก adminsTable ตาม Schema
+        phone: companyTable.phone,
         avatarUrl: usersTable.avatarUrl,
-        companyId: adminsTable.company, 
+        companyId: adminsTable.company,
         companyName: companyTable.name,
       })
       .from(usersTable)
       .innerJoin(adminsTable, eq(usersTable.id, adminsTable.user_id))
       .innerJoin(companyTable, eq(adminsTable.company, companyTable.id))
-      .where(and(
-        eq(usersTable.id, adminId),
-        isNull(usersTable.deletedAt)
-      ))
+      .where(and(eq(usersTable.id, adminId), isNull(usersTable.deletedAt)))
       .limit(1);
 
     const currentAdmin = adminData?.[0]; // 🛡️ แก้ไข: เพิ่ม ? ป้องกัน null
     if (!currentAdmin) {
-      redirect('/api/auth/logout-cleanup');
+      redirect("/api/auth/logout-cleanup");
     }
 
     const companyId = currentAdmin.companyId;
 
     // 3. Fetch ข้อมูลแบบ Parallel พร้อมทำการ Join (ห้ามลบ ห้ามเปลี่ยน)
     const [
-      rawEmployees, 
-      rawAttendance, 
-      rawLeaves, 
-      sitesData, 
-      positionsData, 
+      rawEmployees,
+      rawAttendance,
+      rawLeaves,
+      sitesData,
+      positionsData,
       departmentsData,
       defaultShiftData,
-      companyInfoData // ✅ เพิ่มการ Query ข้อมูลบริษัทเพื่อใช้ในฟอร์มแก้ไข
+      companyInfoData, // ✅ เพิ่มการ Query ข้อมูลบริษัทเพื่อใช้ในฟอร์มแก้ไข
     ] = await Promise.all([
       // --- พนักงาน ---
-      db.select({
-        id: usersTable.id,
-        userName: usersTable.userName, 
-        firstName: usersTable.firstName,
-        lastName: usersTable.lastName,
-        role: usersTable.role,
-        departmentId: usersTable.departmentId,
-        positionName: positionsTable.name, // ✅ ดึงชื่อตำแหน่งจาก positionsTable
-        siteName: sitesTable.name, 
-        siteId: usersTable.site_id,
-        positionId: usersTable.positionId,
-        avatarUrl: usersTable.avatarUrl,
-        // ✅ ดึงเวลาเข้า-ออกงานรายบุคคลมาด้วย
-        startTime: shiftsTable.startTime,
-        endTime: shiftsTable.endTime,
-      })
-      .from(usersTable)
-      .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
-      .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id)) // ✅ Join Position เพื่อเอาชื่อมาแสดง
-      .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId)) // Join เพื่อเอาเวลาพนักงาน
-      .where(
-        and(
-          or(eq(usersTable.role, 'employee'), eq(usersTable.role, 'leader')),
-          eq(usersTable.createdBy, adminId),
-          isNull(usersTable.deletedAt)
+      db
+        .select({
+          id: usersTable.id,
+          userName: usersTable.userName,
+          firstName: usersTable.firstName,
+          lastName: usersTable.lastName,
+          role: usersTable.role,
+          departmentId: usersTable.departmentId,
+          positionName: positionsTable.name, // ✅ ดึงชื่อตำแหน่งจาก positionsTable
+          siteName: sitesTable.name,
+          siteId: usersTable.site_id,
+          positionId: usersTable.positionId,
+          avatarUrl: usersTable.avatarUrl,
+          // ✅ ดึงเวลาเข้า-ออกงานรายบุคคลมาด้วย
+          startTime: shiftsTable.startTime,
+          endTime: shiftsTable.endTime,
+        })
+        .from(usersTable)
+        .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
+        .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id)) // ✅ Join Position เพื่อเอาชื่อมาแสดง
+        .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId)) // Join เพื่อเอาเวลาพนักงาน
+        .where(
+          and(
+            or(eq(usersTable.role, "employee"), eq(usersTable.role, "leader")),
+            eq(usersTable.createdBy, adminId),
+            isNull(usersTable.deletedAt)
+          )
         )
-      )
-      .orderBy(desc(usersTable.created_at)),
-
+        .orderBy(desc(usersTable.created_at)),
 
       // --- การลงเวลา (Report) ---
       // ปรับปรุง: ใช้ leftJoin กับ sitesTable เพื่อให้คนไม่มีไซต์ไม่หลุด และใช้ createdBy ของ Admin เป็นตัวตั้งต้น
-      db.select({
-        id: attendanceTable.id,
-        date: attendanceTable.date,
-        checkIn: attendanceTable.checkIn,
-        checkOut: attendanceTable.checkOut,
-        user_id: attendanceTable.user_id,
-        locationIn: attendanceTable.locationIn,
-        locationOut: attendanceTable.locationOut,
-        imageIn: attendanceTable.imageIn,
-        imageOut: attendanceTable.imageOut,
-        firstName: usersTable.firstName,
-        lastName: usersTable.lastName,
-        siteNameSnapshot: attendanceTable.siteNameSnapshot, 
-        departmentNameSnapshot: attendanceTable.departmentNameSnapshot,
-        siteName: sitesTable.name, // จะเป็น null ได้ถ้าพนักงานไม่มีไซต์
-        siteIdInAttendance: attendanceTable.site_id, 
-        siteNameFromTable: sitesTable.name,
-        startTime: shiftsTable.startTime,
-        endTime: shiftsTable.endTime,
-        isEarlyExit: attendanceTable.isEarlyExit,
-      })
-      .from(attendanceTable)
-      .innerJoin(usersTable, eq(attendanceTable.user_id, usersTable.id)) 
-      .leftJoin(sitesTable, eq(attendanceTable.site_id, sitesTable.id)) // ✅ เปลี่ยนเป็น leftJoin เพื่อให้พนักงาน "ทุกไซต์" มาครบ
-      .leftJoin(shiftsTable, eq(attendanceTable.shift_id, shiftsTable.id))
-      .where(eq(usersTable.createdBy, adminId)) 
-      .orderBy(desc(attendanceTable.date), desc(attendanceTable.createdAt)),
+      db
+        .select({
+          id: attendanceTable.id,
+          date: attendanceTable.date,
+          checkIn: attendanceTable.checkIn,
+          checkOut: attendanceTable.checkOut,
+          user_id: attendanceTable.user_id,
+          locationIn: attendanceTable.locationIn,
+          locationOut: attendanceTable.locationOut,
+          imageIn: attendanceTable.imageIn,
+          imageOut: attendanceTable.imageOut,
+          firstName: usersTable.firstName,
+          lastName: usersTable.lastName,
+          siteInNameSnapshot: attendanceTable.siteInNameSnapshot,
+          departmentNameSnapshot: attendanceTable.departmentNameSnapshot,
+          siteName: sitesTable.name, // จะเป็น null ได้ถ้าพนักงานไม่มีไซต์
+          siteIdInAttendance: attendanceTable.site_id,
+          siteNameFromTable: sitesTable.name,
+          startTime: shiftsTable.startTime,
+          endTime: shiftsTable.endTime,
+          isEarlyExit: attendanceTable.isEarlyExit,
+        })
+        .from(attendanceTable)
+        .innerJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
+        .leftJoin(sitesTable, eq(attendanceTable.site_id, sitesTable.id)) // ✅ เปลี่ยนเป็น leftJoin เพื่อให้พนักงาน "ทุกไซต์" มาครบ
+        .leftJoin(shiftsTable, eq(attendanceTable.shift_id, shiftsTable.id))
+        .where(eq(usersTable.createdBy, adminId))
+        .orderBy(desc(attendanceTable.date), desc(attendanceTable.createdAt)),
 
       // --- การลางาน ---
-      db.select({
-        id: leaveTable.id,
-        type: leaveTable.type,
-        startDate: leaveTable.startDate,
-        endDate: leaveTable.endDate,
-        status: leaveTable.status,
-        reason: leaveTable.reason,
-        remark: leaveTable.remark, // ✅ เพิ่มการดึงค่า Remark จาก Database
-        fileUrl: leaveTable.fileUrl,
-        fileName: leaveTable.fileName,
-        firstName: usersTable.firstName,
-        lastName: usersTable.lastName,
-        userName: usersTable.userName, 
-        avatarUrl: usersTable.avatarUrl,
-      })
-      .from(leaveTable)
-      .leftJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
-      .where(eq(usersTable.createdBy, adminId)) // ✅ ดึงเฉพาะการลาของพนักงานที่ Admin คนนี้ดูแล
-      .orderBy(desc(leaveTable.startDate)),
+      db
+        .select({
+          id: leaveTable.id,
+          type: leaveTable.type,
+          startDate: leaveTable.startDate,
+          endDate: leaveTable.endDate,
+          status: leaveTable.status,
+          reason: leaveTable.reason,
+          remark: leaveTable.remark, // ✅ เพิ่มการดึงค่า Remark จาก Database
+          fileUrl: leaveTable.fileUrl,
+          fileName: leaveTable.fileName,
+          firstName: usersTable.firstName,
+          lastName: usersTable.lastName,
+          userName: usersTable.userName,
+          avatarUrl: usersTable.avatarUrl,
+        })
+        .from(leaveTable)
+        .leftJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
+        .where(eq(usersTable.createdBy, adminId)) // ✅ ดึงเฉพาะการลาของพนักงานที่ Admin คนนี้ดูแล
+        .orderBy(desc(leaveTable.startDate)),
 
       // --- ข้อมูลพื้นฐาน ---
-      db.select().from(sitesTable).where(eq(sitesTable.companyId, companyId || "")),
-      db.select().from(positionsTable).where(eq(positionsTable.company_id, companyId || "")),
-      db.select().from(departmentsTable).where(eq(departmentsTable.companyId, companyId || "")),
+      db
+        .select()
+        .from(sitesTable)
+        .where(eq(sitesTable.companyId, companyId || "")),
+      db
+        .select()
+        .from(positionsTable)
+        .where(eq(positionsTable.company_id, companyId || "")),
+      db
+        .select()
+        .from(departmentsTable)
+        .where(eq(departmentsTable.companyId, companyId || "")),
 
       // ✅ ดึงเวลาเริ่มต้นกลางของบริษัท (Query 1 รอบ)
-      db.select({
-        startTime: shiftsTable.startTime,
-        endTime: shiftsTable.endTime
-      })
-      .from(shiftsTable)
-      .where(and(
-        eq(shiftsTable.companyId, companyId || ""),
-        isNull(shiftsTable.userId) // ดึงกะที่เป็นค่ากลางของบริษัท (ถ้ามี)
-      ))
-      .limit(1),
+      db
+        .select({
+          startTime: shiftsTable.startTime,
+          endTime: shiftsTable.endTime,
+        })
+        .from(shiftsTable)
+        .where(
+          and(
+            eq(shiftsTable.companyId, companyId || ""),
+            isNull(shiftsTable.userId) // ดึงกะที่เป็นค่ากลางของบริษัท (ถ้ามี)
+          )
+        )
+        .limit(1),
 
       // ✅ ดึงข้อมูลบริษัทแบบละเอียด (เพิ่ม description เข้าไปในผลลัพธ์การ Query)
-      db.select({
-        id: companyTable.id,
-        name: companyTable.name,
-        description: companyTable.description, // ✅ ดึง Description มาจากฐานข้อมูล
-        address: companyTable.address,
-        phone: companyTable.phone,
-        email: companyTable.email,
-        logoUrl: companyTable.logoUrl,
-        companyCode: companyTable.companyCode,
-      })
-      .from(companyTable)
-      .where(eq(companyTable.id, companyId || ""))
-      .limit(1)
+      db
+        .select({
+          id: companyTable.id,
+          name: companyTable.name,
+          description: companyTable.description, // ✅ ดึง Description มาจากฐานข้อมูล
+          address: companyTable.address,
+          phone: companyTable.phone,
+          email: companyTable.email,
+          logoUrl: companyTable.logoUrl,
+          companyCode: companyTable.companyCode,
+        })
+        .from(companyTable)
+        .where(eq(companyTable.id, companyId || ""))
+        .limit(1),
     ]);
 
     // 4. Mapping ข้อมูลให้ตรงกับ Client Page
-    const employees = (rawEmployees || []).map(emp => {
+    const employees = (rawEmployees || []).map((emp) => {
       const isUuid = emp?.userName && emp.userName.length > 30;
-      const finalUserName = isUuid ? emp.firstName?.toLowerCase() : (emp?.userName || "user");
+      const finalUserName = isUuid
+        ? emp.firstName?.toLowerCase()
+        : emp?.userName || "user";
 
       return {
         id: String(emp?.id || ""),
@@ -193,7 +207,9 @@ export default async function AdminDashboardPage() {
         username: finalUserName,
         firstName: String(emp?.firstName || ""),
         lastName: String(emp?.lastName || ""),
-        employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
+        employeeName:
+          `${emp?.firstName || ""} ${emp?.lastName || ""}`.trim() ||
+          "ไม่ระบุชื่อ",
         role: String(emp?.role || "employee"),
         departmentId: emp?.departmentId ? String(emp.departmentId) : null,
         positionId: emp?.positionId ? String(emp.positionId) : null,
@@ -201,7 +217,7 @@ export default async function AdminDashboardPage() {
         site: String(emp?.siteName || "ไม่ระบุ"),
         siteName: emp?.siteName || "ไม่ระบุ",
         // ✅ แมพชื่อตำแหน่งจาก positionsTable.name มาใส่ในคีย์ position (เพื่อให้ UI แสดงผล {e.position})
-        position: String(emp?.positionName || "พนักงาน"), 
+        position: String(emp?.positionName || "พนักงาน"),
         avatarUrl: emp?.avatarUrl || null,
         // ✅ เพิ่มเวลาสำหรับการแก้ไขพนักงาน
         startTime: emp?.startTime || null,
@@ -212,28 +228,31 @@ export default async function AdminDashboardPage() {
     // ✅ จัดการเวลามาตรฐาน (Standard Time) สำหรับพนักงานใหม่
     const standardTime = {
       startTime: defaultShiftData?.[0]?.startTime || "08:00",
-      endTime: defaultShiftData?.[0]?.endTime || "17:00"
+      endTime: defaultShiftData?.[0]?.endTime || "17:00",
     };
 
-    const attendance = (rawAttendance || []).map(at => {
+    const attendance = (rawAttendance || []).map((at) => {
       // 🕒 Logic ตรวจสอบการมาสายรายวัน
       let isLate = 0;
       if (at?.checkIn && at?.startTime) {
-        const checkInTime = parseInt(at.checkIn.replace(':', ''), 10);
-        const startTime = parseInt(at.startTime.replace(':', ''), 10);
+        const checkInTime = parseInt(at.checkIn.replace(":", ""), 10);
+        const startTime = parseInt(at.startTime.replace(":", ""), 10);
         if (checkInTime > startTime) {
           isLate = 1;
         }
       }
-    
+
       return {
         id: String(at?.id || ""),
         date: at?.date ? String(at.date) : "",
-        checkIn: at?.checkIn || null, 
+        checkIn: at?.checkIn || null,
         checkOut: at?.checkOut || null,
         userId: String(at?.user_id || ""),
-        employeeName: `${at?.firstName || ''} ${at?.lastName || ''}`.trim() || "ไม่ระบุชื่อ",
-        siteSnapName: at?.siteNameSnapshot || at?.siteName || "ทั่วไป (ไม่มีไซต์)",
+        employeeName:
+          `${at?.firstName || ""} ${at?.lastName || ""}`.trim() ||
+          "ไม่ระบุชื่อ",
+        siteSnapName:
+          at?.siteInNameSnapshot || at?.siteName || "ทั่วไป (ไม่มีไซต์)",
         departmentSnapName: at?.departmentNameSnapshot || "ไม่ระบุแผนก", //
         siteName: at?.siteName || "ทั่วไป (ไม่มีไซต์)", // ✅ แสดงผลให้ชัดเจนถ้าเป็นพนักงานทุกไซต์
         locationIn: String(at?.locationIn || "-"),
@@ -243,12 +262,12 @@ export default async function AdminDashboardPage() {
         startTime: at?.startTime || null,
         endTime: at?.endTime || null,
         // ✅ ใส่ไว้ตรงนี้เพื่อให้ UI ในตารางลงเวลาใช้งานได้
-        isLate: isLate, 
+        isLate: isLate,
         isEarlyExit: at.isEarlyExit ? String(at.isEarlyExit) : "-",
       };
     });
 
-    const leaves = (rawLeaves || []).map(l => ({
+    const leaves = (rawLeaves || []).map((l) => ({
       id: String(l?.id || ""),
       type: String(l?.type || "ลากิจ"),
       startDate: l?.startDate ? String(l.startDate) : "",
@@ -258,25 +277,32 @@ export default async function AdminDashboardPage() {
       remark: String(l?.remark || ""), // ✅ Mapping Remark ส่งไปที่ Client Page
       fileUrl: l?.fileUrl || null,
       fileName: l?.fileName || null,
-      employeeName: `${l?.firstName || ''} ${l?.lastName || ''}`.trim() || "ไม่ระบุพนักงาน",
+      employeeName:
+        `${l?.firstName || ""} ${l?.lastName || ""}`.trim() || "ไม่ระบุพนักงาน",
       userName: String(l?.userName || ""),
-      avatarUrl: l?.avatarUrl || null
+      avatarUrl: l?.avatarUrl || null,
     }));
 
     // 📍 ปรับปรุง: Mapping ข้อมูล Sites พร้อมเช็คโหมด "ทุกไซต์" จากฐานข้อมูล
-    const sites = (sitesData || []).map(s => ({ 
-      id: String(s?.id || ""), 
+    const sites = (sitesData || []).map((s) => ({
+      id: String(s?.id || ""),
       name: String(s?.name || ""),
       address: s?.address || "",
       lat: s?.lat || "",
-      lng: s?.lng || ""
+      lng: s?.lng || "",
     }));
 
     // ✅ เพิ่มการตรวจเช็คพิเศษ: ส่งสถานะไปว่าบริษัทนี้มี "ทุกไซต์" แล้วหรือยัง
-    const hasMultiSiteActive = sites.some(s => s.name === "ทุกไซต์");
+    const hasMultiSiteActive = sites.some((s) => s.name === "ทุกไซต์");
 
-    const positions = (positionsData || []).map(p => ({ id: String(p?.id || ""), name: String(p?.name || "") }));
-    const departments = (departmentsData || []).map(d => ({ id: String(d?.id || ""), name: String(d?.name || "") }));
+    const positions = (positionsData || []).map((p) => ({
+      id: String(p?.id || ""),
+      name: String(p?.name || ""),
+    }));
+    const departments = (departmentsData || []).map((d) => ({
+      id: String(d?.id || ""),
+      name: String(d?.name || ""),
+    }));
 
     // ✅ ข้อมูลบริษัทสำหรับ Client Page (รวม description เรียบร้อย)
     const initialCompanyData = companyInfoData?.[0] || null;
@@ -284,7 +310,9 @@ export default async function AdminDashboardPage() {
     // ✅ ปรับปรุง Admin Profile: ส่งข้อมูลให้ครบถ้วนเพื่อใช้ใน Modal แก้ไขข้อมูล (ห้ามลบ)
     const adminProfile = {
       id: currentAdmin?.id || "",
-      name: `${currentAdmin?.firstName || ''} ${currentAdmin?.lastName || ''}`.trim(),
+      name: `${currentAdmin?.firstName || ""} ${
+        currentAdmin?.lastName || ""
+      }`.trim(),
       firstName: currentAdmin?.firstName || "",
       lastName: currentAdmin?.lastName || "",
       userName: currentAdmin?.userName || "",
@@ -293,7 +321,7 @@ export default async function AdminDashboardPage() {
       phone: currentAdmin?.phone || "",
       avatarUrl: currentAdmin?.avatarUrl || null,
       company: String(currentAdmin?.companyName || "บริษัท"),
-      role: "admin"
+      role: "admin",
     };
 
     const rawProps = {
@@ -301,27 +329,31 @@ export default async function AdminDashboardPage() {
       initialAttendance: attendance,
       initialLeaves: leaves,
       admin: adminProfile,
-      sites: sites, 
+      sites: sites,
       hasMultiSiteActive: hasMultiSiteActive, // ✅ ส่ง Flag นี้ไปให้ Client ตรวจสอบได้ทันที
       positions: positions,
       departments: departments,
       standardTime: standardTime, // ✅ ส่งเวลามาตรฐานไปใช้ใน Client Page
-      initialCompanyData: initialCompanyData // ✅ ส่งข้อมูลบริษัทไปแก้ Error companyData is not defined
+      initialCompanyData: initialCompanyData, // ✅ ส่งข้อมูลบริษัทไปแก้ Error companyData is not defined
     };
 
     // 🛡️ ป้องกัน Error undefined ในขั้นตอนสุดท้าย
     const safeProps = JSON.parse(
-      JSON.stringify(rawProps, (key, value) => (value === undefined ? null : value))
+      JSON.stringify(rawProps, (key, value) =>
+        value === undefined ? null : value
+      )
     );
 
     return <AdminClientPage {...safeProps} />;
-
   } catch (error: any) {
-    if (error.message === 'NEXT_REDIRECT' || error.digest?.includes('NEXT_REDIRECT')) {
+    if (
+      error.message === "NEXT_REDIRECT" ||
+      error.digest?.includes("NEXT_REDIRECT")
+    ) {
       throw error;
     }
 
     console.error("Critical Dashboard Error:", error);
-      redirect('/api/auth/logout-cleanup');
+    redirect("/api/auth/logout-cleanup");
   }
 }

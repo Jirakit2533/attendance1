@@ -2,7 +2,8 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
-import { loginAction } from "@/server/auth";
+// นำเข้า Logic ที่แยกไปไว้ที่ Server
+import { handleLoginServer, clearSessionAction } from "./api/login-server";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -11,10 +12,8 @@ export default function LoginPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    const cookiesToClear = ["session_user_id", "user_role", "role", "session"];
-    cookiesToClear.forEach(name => {
-      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-    });
+    // ล้าง Cookies ผ่าน Server Action เมื่อเข้าหน้า Login
+    clearSessionAction();
 
     const params = new URLSearchParams(window.location.search);
     if (params.get("invalid") || params.get("expired")) {
@@ -29,12 +28,14 @@ export default function LoginPage() {
 
     startTransition(async () => {
       try {
-        const result = await loginAction(formData);
+        // เรียกใช้ Logic จาก Server Action ที่แยกออกมา
+        const result = await handleLoginServer(formData);
+        
         if (result.success) {
           setIsProcessing(true);
-          window.location.href = result.redirect;
+          window.location.href = result.redirect || "/";
         } else {
-          setError(result.message || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+          setError(result.message);
           setIsProcessing(false);
         }
       } catch (err) {

@@ -10,7 +10,7 @@ export const superAdminTable = pgTable("super_admins", {
   passwordHash: text("password_hash").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   role: text("role").default("superAdmin").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`), 
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`), 
 });
 
 export const companyTable = pgTable("company", {
@@ -25,9 +25,9 @@ export const companyTable = pgTable("company", {
   email: varchar("email", { length: 255 }),
   logoUrl: text("logo_url"),
   createdByName: varchar("created_by_name", { length: 255 }),
-  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
+  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
   updateByName: varchar("update_by_name", { length: 255 }), 
-  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('Asia/Bangkok', now())`), 
+  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`), 
   deletedByName: varchar("deleted_by_name", { length: 255 }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
@@ -39,9 +39,9 @@ export const adminsTable = pgTable("admins", {
   company: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
   email: varchar("email", { length: 255 }),
   createdByName: varchar("created_by_name", { length: 255 }), 
-  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
+  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
   updateByName: varchar("update_by_name", { length: 255 }),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('Asia/Bangkok', now())`), 
+  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`), 
   deletedByName: varchar("deleted_by_name", { length: 255 }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
@@ -51,9 +51,9 @@ export const departmentsTable = pgTable("departments", {
   name: varchar("name", { length: 255 }).notNull(),
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
   createdBy: uuid("created_by_id").references(() => usersTable.id),
-  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
+  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
   updateBy: uuid("update_by_id").references(() => usersTable.id),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('Asia/Bangkok', now())`), 
+  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`), 
   deletedBy: uuid("deleted_by_id").references(() => usersTable.id),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
@@ -66,9 +66,9 @@ export const sitesTable = pgTable("sites", {
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
   departmentId: uuid("department_id").references(() => departmentsTable.id),
   createdBy: uuid("created_by_id").references(() => usersTable.id),
-  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
+  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
   updateBy: uuid("update_by_id").references(() => usersTable.id),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('Asia/Bangkok', now())`), 
+  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`), 
 });
 
 export const positionsTable = pgTable("positions", {
@@ -76,7 +76,7 @@ export const positionsTable = pgTable("positions", {
   name: varchar("name", { length: 255 }).notNull(),
   company_id: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
   createdBy: uuid("created_by_id").references(() => usersTable.id), 
-  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
+  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
 });
 
 export const shiftsTable = pgTable("shifts", {
@@ -115,7 +115,7 @@ export const temporaryShiftsTable = pgTable("temporary_shifts", {
   overtimeId: uuid("overtime_id").references(() => overtimeTable.id),
   remark: text("remark"),
   createdBy: uuid("created_by_id").references(() => usersTable.id),
-  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
 });
 
 export const usersTable = pgTable("users", {
@@ -132,9 +132,9 @@ export const usersTable = pgTable("users", {
   avatarUrl: text("avatar_url"), 
   avatarId: text("avatar_id"),
   createdBy: uuid("created_by_id").references(() => usersTable.id),
-  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
+  created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
   updateBy: uuid("update_by_id").references(() => usersTable.id),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('Asia/Bangkok', now())`), 
+  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`), 
   deletedBy: uuid("deleted_by_id").references(() => usersTable.id),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
@@ -146,7 +146,8 @@ export const attendanceTable = pgTable("attendance", {
   shift_id: uuid("shift_id").references(() => shiftsTable.id),
   site_id: uuid("site_id").references(() => sitesTable.id),
   temp_shift_id: uuid("temp_shift_id").references(() => temporaryShiftsTable.id),
-  siteNameSnapshot: varchar("site_name_snapshot", { length: 255 }),
+  siteInNameSnapshot: varchar("site_in_name_snapshot", { length: 255 }),
+  siteOutNameSnapshot: varchar("site_out_name_snapshot", { length: 255 }),
   siteCoordinatesSnapshot: varchar("site_coordinates_snapshot", { length: 255 }),
   shiftStartTimeSnapshot: time("shift_start_time_snapshot"),
   shiftEndTimeSnapshot: time("shift_end_time_snapshot"),
@@ -162,8 +163,11 @@ export const attendanceTable = pgTable("attendance", {
   locationOut: varchar("location_out", { length: 255 }),
   isLate: integer("is_late").default(0),      // 0 = ปกติ, 1 = สาย
   isEarlyExit: text("is_early_exit", { length: 255 }), // 0 = ปกติ, 1 = ออกสาย
+  isOffsiteIn: text("is_offsite_in", { length: 255 }), // 0 = ปกติ, 1 = ออกไซต์
+  isOffsiteInCoordinates: text("is_offsite_in_coordinates", { length: 255 }), 
   isOffsiteOut: text("is_offsite_out", { length: 255 }), // 0 = ปกติ, 1 = ออกไซต์
-  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
+  isOffsiteOutCoordinates: text("is_offsite_out_coordinates", { length: 255 }), 
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
 });
 
 export const leaveTable = pgTable("leave", {
@@ -184,7 +188,7 @@ export const leaveTable = pgTable("leave", {
   fileUrl: text("file_url"), 
   fileId: text("file_id"),
   fileName: text("file_name"),
-  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('Asia/Bangkok', now())`).notNull(), 
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
 });
 
 export const usersRelations = relations(usersTable, ({ one, many }) => ({

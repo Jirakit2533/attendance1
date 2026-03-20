@@ -11,6 +11,8 @@ import {
   changePasswordAction,
 } from "./actions";
 
+import { OffsiteCheckOutConfirm } from "@/app/component/modal/OffsiteCheckOutConfirm";
+
 // --- เพิ่ม Component LoadingOverlay เหมือนหน้า Leader ---
 const LoadingOverlay = () => (
   <div className="fixed inset-0 z-[9999] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
@@ -23,6 +25,63 @@ const LoadingOverlay = () => (
     <p className="mt-4 text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] animate-pulse">
       กำลังดำเนินการ...
     </p>
+  </div>
+);
+
+// --- ส่วนที่เพิ่ม: Component Popup สำหรับยืนยันเมื่ออยู่นอกพื้นที่ ---
+const OffsiteConfirmPopup = ({
+  onConfirm,
+  onCancel,
+  siteName,
+}: {
+  onConfirm: () => void;
+  onCancel: () => void;
+  siteName: string;
+}) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl border border-amber-100">
+      <div className="text-center">
+        <div className="flex justify-center mb-4 text-amber-500">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-12 h-12"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 mb-2">
+          อยู่นอกพื้นที่งาน
+        </h3>
+        <p className="text-gray-600 mb-6 text-sm">
+          คุณไม่ได้อยู่ในรัศมีของ{" "}
+          <span className="font-semibold text-blue-600">"{siteName}"</span>{" "}
+          <br />
+          ต้องการยืนยันการบันทึกข้อมูลหรือไม่?
+        </p>
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={onCancel}
+          className="flex-1 px-4 py-2.5 font-semibold text-gray-700 bg-gray-100 rounded-xl active:scale-95 transition-transform"
+        >
+          ยกเลิก
+        </button>
+        <button
+          onClick={onConfirm}
+          className="flex-1 px-4 py-2.5 font-semibold text-white bg-amber-500 rounded-xl hover:bg-amber-600 shadow-md active:scale-95 transition-transform"
+        >
+          ยืนยัน
+        </button>
+      </div>
+    </div>
   </div>
 );
 
@@ -72,6 +131,9 @@ export default function EmployeeClientPage({
   const [leaveEnd, setLeaveEnd] = useState("");
   const [leaveReason, setLeaveReason] = useState("");
   const [leaveError, setLeaveError] = useState("");
+
+  const [showOffsitePopup, setShowOffsitePopup] = useState(false);
+  const [pendingData, setPendingData] = useState<any>(null);
 
   const [leaveFileBase64, setLeaveFileBase64] = useState<string | null>(null);
   const [leaveFileName, setLeaveFileName] = useState("");
@@ -123,7 +185,7 @@ export default function EmployeeClientPage({
     if (!start || !end)
       return { isValid: false, error: "⚠️ กรุณาระบุวันที่เริ่มต้นและสิ้นสุด" };
 
-    // ดึงวันที่ปัจจุบันแบบไทย (Asia/Bangkok) เพื่อใช้เปรียบเทียบ
+    // ดึงวันที่ปัจจุบันแบบไทย (UTC) เพื่อใช้เปรียบเทียบ
     const now = new Date();
     const today = new Date(
       now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
@@ -162,7 +224,7 @@ export default function EmployeeClientPage({
   const todayStatus = useMemo(() => {
     const now = new Date();
     const todayStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Bangkok",
+      timeZone: "UTC",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -211,11 +273,11 @@ export default function EmployeeClientPage({
    * ฟังก์ชันลดขนาดรูปภาพโดยใช้ Canvas
    * คุมขนาดไม่ให้เกิน ~1MB และลดขนาดกว้างยาวลง
    */
-  const compressImage = (file) => {
+  const compressImage = (file: any) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = (event) => {
+      reader.onload = (event: any) => {
         const img = new window.Image();
         img.src = event.target.result;
         img.onload = () => {
@@ -257,6 +319,37 @@ export default function EmployeeClientPage({
     startCamera();
   };
 
+  // ✅ ฟังก์ชันช่วยเรียก Action สำหรับงาน Attendance (รักษาโครงสร้างเดิม)
+  const executeAttendanceAction = async (isConfirmed = false) => {
+    setIsProcessing(true);
+    try {
+      const { id, img, loc } = pendingData;
+      let res;
+      if (isCheckingOut) {
+        res = await checkOutAction(id, img, loc, isConfirmed);
+      } else {
+        res = await checkInAction(id, img, loc, isConfirmed);
+      }
+
+      if (res.success) {
+        if (res.OffsiteCheckOutConfirm) {
+          setPendingData({ ...pendingData, siteName: res.siteName });
+          setShowOffsitePopup(true);
+        } else {
+          alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
+          setShowOffsitePopup(false);
+          router.refresh();
+        }
+      } else {
+        alert(res.error || "บันทึกไม่สำเร็จ");
+      }
+    } catch (err) {
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleCapture = async () => {
     if (!videoRef.current || !streamRef.current) return;
     setIsProcessing(true);
@@ -274,7 +367,7 @@ export default function EmployeeClientPage({
     try {
       const pos = await new Promise<GeolocationPosition>((res, rej) =>
         navigator.geolocation.getCurrentPosition(res, rej, {
-          enableHighAccuracy: true, // เพิ่มเพื่อกระตุ้นการใช้ GPS ความแม่นยำสูง
+          enableHighAccuracy: true,
           timeout: 10000,
           maximumAge: 0,
         })
@@ -283,33 +376,47 @@ export default function EmployeeClientPage({
         6
       )}, ${pos.coords.longitude.toFixed(6)}`;
 
+      // 1. เก็บข้อมูลไว้ใน state
+      const currentData = {
+        id: userProfile.id,
+        img: capturedImg,
+        loc: locationStr,
+      };
+      setPendingData(currentData);
+
+      // 2. ลองส่งข้อมูลครั้งแรก (isConfirmed = false)
+      let res;
       if (isCheckingOut) {
-        const res = await checkOutAction(
-          userProfile.id,
-          capturedImg,
-          locationStr
+        res = await checkOutAction(
+          currentData.id,
+          currentData.img,
+          currentData.loc,
+          false
         );
-        if (res.success) {
-          alert("ลงชื่อเลิกงานสำเร็จ");
-          router.refresh();
-        } else {
-          alert(res.error || "บันทึกไม่สำเร็จ");
-        }
       } else {
-        const res = await checkInAction(
-          userProfile.id,
-          capturedImg,
-          locationStr
+        res = await checkInAction(
+          currentData.id,
+          currentData.img,
+          currentData.loc,
+          false
         );
-        if (res.success) {
-          alert("ลงชื่อเข้างานสำเร็จ");
-          router.refresh();
+      }
+
+      if (res.success) {
+        // กรณีสำเร็จปกติ (ไม่อยู่นอกพื้นที่)
+        alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
+        router.refresh();
+      } else {
+        // 🚩 จุดแก้ไข: ถ้า success เป็น false แต่มี OffsiteCheckOutConfirm เป็น true ให้เปิด Popup แทนการ Alert Error
+        if (res.OffsiteCheckOutConfirm) {
+          setPendingData({ ...currentData, siteName: res.siteName });
+          setShowOffsitePopup(true);
         } else {
+          // กรณี Error จริงๆ (เช่น พิกัดเพี้ยน หรือ Error อื่นจาก Server)
           alert(res.error || "บันทึกไม่สำเร็จ");
         }
       }
     } catch (error: any) {
-      // เพิ่มการแจ้งเตือนแยกตามสาเหตุโดยไม่ลบโครงสร้างเดิม
       if (error.code === 1) {
         alert("กรุณาอนุญาตสิทธิ์การเข้าถึงตำแหน่งในเบราว์เซอร์");
       } else if (error.code === 2 || error.code === 3) {
@@ -328,7 +435,7 @@ export default function EmployeeClientPage({
   /* ---------------- LEAVE HANDLERS ---------------- */
 
   // 1. ฟังก์ชันเลือกไฟล์และแปลงเป็น Base64
-  const handleFileChange = async (e) => {
+  const handleFileChange = async (e: any) => {
     const file = e.target.files?.[0];
     if (file) {
       setIsProcessing(true); // เริ่มแสดง Loading
@@ -336,8 +443,8 @@ export default function EmployeeClientPage({
         // 🚀 เรียกใช้ฟังก์ชันที่คุณส่งมา (ส่งตัวแปร file เข้าไปโดยตรง)
         const compressedBase64 = await compressImage(file);
 
-        setLeaveFileBase64(compressedBase64); // สำหรับส่งไป Server
-        setLeaveFilePreview(compressedBase64); // สำหรับแสดงตัวอย่างรูป
+        setLeaveFileBase64(compressedBase64 as string); // สำหรับส่งไป Server
+        setLeaveFilePreview(compressedBase64 as string); // สำหรับแสดงตัวอย่างรูป
         setLeaveFileName(file.name);
       } catch (error) {
         console.error("Compression failed:", error);
@@ -531,7 +638,7 @@ export default function EmployeeClientPage({
                 ตำแหน่ง : {userProfile.position || "ไม่ได้ระบุตำแหน่ง"}
               </p>
               <p className="text-gray-500 font-bold text-sm sm:text-lg tracking-tight">
-                ไซต์งาน : {userProfile.site || "ทุกไซต์งาน"}
+                เขตรับผิดชอบ : {userProfile.site || "ทุกไซต์งาน"}
               </p>
               <p className="text-gray-500 font-bold text-sm sm:text-lg tracking-tight">
                 รอบเข้างาน :{" "}
@@ -595,7 +702,11 @@ export default function EmployeeClientPage({
               </button>
             ) : todayStatus.hasCheckedIn && !todayStatus.hasCheckedOut ? (
               <button
-                onClick={handleCheckOut}
+                onClick={() => {
+                  // เพิ่มการตรวจสอบสถานะ Pop-up ก่อนเรียก handleCheckOut
+                  if (showOffsitePopup) return;
+                  handleCheckOut();
+                }}
                 disabled={isProcessing}
                 className="w-full bg-slate-900 hover:bg-black text-white font-black px-6 py-4 sm:px-8 sm:py-5 rounded-[1.2rem] sm:rounded-[1.5rem] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 text-sm sm:text-base"
               >
@@ -623,7 +734,7 @@ export default function EmployeeClientPage({
             ) : (
               <div className="w-full bg-green-50 text-green-600 font-black px-6 py-4 sm:px-8 sm:py-5 rounded-[1.2rem] sm:rounded-[1.5rem] text-center border border-green-100 flex items-center justify-center gap-2 text-sm sm:text-base">
                 <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                บันทึกเวลาครบแล้ววันนี้
+                บันทึกเวลาครบแล้ว
               </div>
             )}
 
@@ -664,6 +775,22 @@ export default function EmployeeClientPage({
                 </span>
               </div>
             </button>
+
+            {/* ส่วนเรียกใช้ Pop-up ยืนยันนอกพื้นที่ */}
+            {showOffsitePopup && (
+              <OffsiteCheckOutConfirm
+                siteName={pendingData?.siteName || "ไซต์งาน"}
+                onCancel={() => {
+                  setShowOffsitePopup(false);
+                  setIsCheckingOut?.(false);
+                }}
+                onConfirm={async () => {
+                  // เรียก handleCheckOut อีกครั้งโดยส่งพารามิเตอร์ยืนยัน (ถ้าฟังก์ชันรองรับ)
+                  // หรือเรียก API บันทึกข้อมูลโดยตรง
+                  await handleFinalCheckOut?.(true);
+                }}
+              />
+            )}
           </div>
         </div>
 
@@ -680,40 +807,32 @@ export default function EmployeeClientPage({
                     </h2>
                   </div>
                 </div>
-                {/* ✅ ปรับ max-h บน Desktop เป็น 350px เพื่อให้เห็นประมาณ 5 บรรทัดแรก */}
+
+                {/* ✅ ปรับความกว้างรวมของตารางให้ลดลง (min-w) เพื่อไม่ให้แผ่กว้างเกินไป */}
                 <div className="overflow-x-auto overflow-y-auto max-h-[450px] sm:max-h-[350px] rounded-[1.5rem] sm:rounded-[2rem] border border-gray-50">
-                  <table className="w-full text-xs sm:text-sm min-w-[1000px] sm:min-w-[1200px] table-auto">
-                    {/* ✅ เพิ่ม sticky top-0 และ z-10 เพื่อให้หัวตารางอยู่กับที่เวลา Scroll */}
+                  <table className="w-full text-xs sm:text-sm min-w-[700px] sm:min-w-[800px] table-auto">
                     <thead className="bg-gray-50/50 text-gray-400 uppercase text-[9px] sm:text-[10px] font-black tracking-widest sticky top-0 z-10 backdrop-blur-md">
                       <tr>
-                        <th className="p-4 sm:p-4 text-left">วันที่</th>
-                        <th className="p-4 sm:p-4 text-left">รอบเข้างาน</th>
-                        <th className="p-4 sm:p-4 text-left">
+                        <th className="p-4 text-left w-[120px]">วันที่</th>
+                        <th className="p-4 text-left w-[150px]">รอบเข้างาน</th>
+                        <th className="p-4 text-left w-[200px]">
                           สถานะการเข้า-ออก
                         </th>
-                        <th className="p-4 sm:p-4 text-left">
-                          เวลาเข้า / รูปถ่าย
-                        </th>
-                        <th className="p-4 sm:p-4 text-left">
-                          เวลาออก / รูปถ่าย
-                        </th>
-                        <th className="p-4 sm:p-4 text-center">
-                          ตำแหน่ง / เขตรับผิดชอบ / ระดับสิทธิ์
-                        </th>
+                        <th className="p-4 text-left w-[120px]">เวลาเข้า</th>
+                        <th className="p-4 text-left w-[120px]">เวลาออก</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {records.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={6}
+                            colSpan={5}
                             className="p-10 sm:p-20 text-center text-gray-300 font-bold italic"
                           >
                             ยังไม่มีข้อมูลการเข้างานในระบบ
                           </td>
                         </tr>
                       ) : (
-                        /* ✅ ตรวจสอบและเรียงลำดับอีกครั้งเพื่อให้มั่นใจว่าล่าสุดอยู่บนสุด */
                         [...records]
                           .sort((a, b) => {
                             const dateA = new Date(
@@ -733,10 +852,10 @@ export default function EmployeeClientPage({
                               key={i}
                               className="hover:bg-blue-50/10 transition-colors"
                             >
-                              <td className="p-4 sm:p-4 font-bold text-gray-800 whitespace-nowrap">
+                              <td className="p-4 font-bold text-gray-800 whitespace-nowrap">
                                 {r.date}
                               </td>
-                              <td className="py-2 sm:py-2 px-4 sm:px-4 font-bold text-gray-600">
+                              <td className="p-4 font-bold text-gray-600">
                                 <div className="flex flex-col gap-1 whitespace-nowrap">
                                   {r.startTime && r.endTime ? (
                                     <span className="text-[13px] sm:text-[15px] text-gray-800">
@@ -750,114 +869,55 @@ export default function EmployeeClientPage({
                                   )}
                                 </div>
                               </td>
-                              <td className="p-4 sm:p-4 font-bold whitespace-nowrap">
-                                <div className="flex items-center gap-0 border border-slate-200 rounded-lg overflow-hidden shadow-sm w-fit bg-white">
-                                  {/* 1. ส่วนการเข้างาน (Check-in) */}
-                                  <div className="px-2 sm:px-3 py-1 sm:py-1.5 flex items-center justify-center min-w-[70px] sm:min-w-[80px]">
+                              <td className="p-4 font-bold whitespace-nowrap">
+                                <div className="flex items-center gap-0 border border-slate-200 rounded-lg overflow-hidden shadow-sm w-fit bg-white text-[11px] sm:text-xs">
+                                  {/* ส่วนการเข้างาน */}
+                                  <div className="px-2 py-1 flex items-center justify-center min-w-[65px]">
                                     {r.isLate === 1 ? (
-                                      <span className="text-red-600 text-xs sm:text-sm">
+                                      <span className="text-red-600">
                                         ⚠️ สาย
                                       </span>
                                     ) : (
-                                      <span className="text-emerald-600 text-xs sm:text-sm">
+                                      <span className="text-emerald-600">
                                         ✅ ปกติ
                                       </span>
                                     )}
                                   </div>
-
-                                  {/* เส้นขีดคั่นแนวตั้ง */}
-                                  <div className="h-3 sm:h-4 w-[1px] bg-slate-300"></div>
-
-                                  {/* 2. ส่วนการออกงาน (Check-out) */}
-                                  <div className="px-2 sm:px-3 py-1 sm:py-1.5 flex items-center justify-center min-w-[80px] sm:min-w-[100px]">
+                                  <div className="h-3 w-[1px] bg-slate-300"></div>
+                                  {/* ส่วนการออกงาน */}
+                                  <div className="px-2 py-1 flex items-center justify-center min-w-[65px]">
                                     {!r.checkOut || r.checkOut === "-" ? (
-                                      <span className="text-slate-400 text-xs sm:text-sm font-normal">
-                                        -
-                                      </span>
+                                      <span className="text-slate-400">-</span>
                                     ) : r.isEarlyExit === "1" ? (
-                                      <span className="text-orange-600 text-xs sm:text-sm">
+                                      <span className="text-orange-600">
                                         🏃 เลิกก่อน
                                       </span>
                                     ) : (
-                                      <span className="text-emerald-600 text-xs sm:text-sm">
+                                      <span className="text-emerald-600">
                                         ✅ ปกติ
                                       </span>
                                     )}
                                   </div>
                                 </div>
                               </td>
-                              <td className="p-4 sm:p-4">
-                                <div className="flex items-center gap-2 sm:gap-3 whitespace-nowrap">
-                                  <span className="text-blue-600 font-black bg-blue-50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl">
+                              <td className="p-4">
+                                <div className="flex items-center whitespace-nowrap">
+                                  <span className="text-blue-600 font-black bg-blue-50 px-2.5 py-1 rounded-lg">
                                     {r.checkIn}
                                   </span>
-                                  {r.imageUrl && (
-                                    <Image
-                                      src={r.imageUrl}
-                                      alt="In"
-                                      width={40}
-                                      height={40}
-                                      className="rounded-lg sm:rounded-xl border-2 border-white shadow-sm object-cover h-8 w-8 sm:h-10 sm:w-10"
-                                      unoptimized
-                                    />
-                                  )}
                                 </div>
                               </td>
-                              <td className="p-4 sm:p-4">
-                                <div className="flex items-center gap-2 sm:gap-3 whitespace-nowrap">
+                              <td className="p-4">
+                                <div className="flex items-center whitespace-nowrap">
                                   <span
                                     className={
                                       r.checkOut === "-"
-                                        ? "text-gray-300 font-black"
-                                        : "text-slate-900 font-black bg-slate-100 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl"
+                                        ? "text-gray-300 font-black px-2.5 py-1"
+                                        : "text-slate-900 font-black bg-slate-100 px-2.5 py-1 rounded-lg"
                                     }
                                   >
                                     {r.checkOut}
                                   </span>
-                                  {r.checkOutImageUrl && (
-                                    <Image
-                                      src={r.checkOutImageUrl}
-                                      alt="Out"
-                                      width={40}
-                                      height={40}
-                                      className="rounded-lg sm:rounded-xl border-2 border-white shadow-sm object-cover h-8 w-8 sm:h-10 sm:w-10"
-                                      unoptimized
-                                    />
-                                  )}
-                                </div>
-                              </td>
-                              <td className="p-4 sm:p-4">
-                                <div className="flex flex-wrap sm:flex-nowrap items-center justify-center gap-2 sm:gap-3 py-1 max-w-[300px] mx-auto sm:max-w-none">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] sm:text-sm font-black text-gray-900 uppercase tracking-tight bg-indigo-600 text-white px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl shadow-sm whitespace-nowrap">
-                                      {r.position}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex items-center gap-1 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-gray-100 rounded-lg border border-gray-200 whitespace-nowrap">
-                                      <span className="text-xs sm:text-base">
-                                        📍
-                                      </span>
-                                      <span className="text-[9px] sm:text-xs font-bold text-gray-600 uppercase tracking-wide">
-                                        {r.site}
-                                      </span>
-                                    </div>
-                                    <span className="hidden sm:block text-gray-300">
-                                      |
-                                    </span>
-                                    <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                      <div
-                                        className={`w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full shadow-inner ${
-                                          r.role === "หัวหน้างาน"
-                                            ? "bg-amber-400"
-                                            : "bg-emerald-400"
-                                        }`}
-                                      ></div>
-                                      <span className="text-[9px] sm:text-xs font-black text-gray-500 uppercase tracking-widest">
-                                        {r.role}
-                                      </span>
-                                    </div>
-                                  </div>
                                 </div>
                               </td>
                             </tr>
@@ -891,11 +951,14 @@ export default function EmployeeClientPage({
                         <div className="absolute top-0 left-0 w-2 h-full bg-indigo-500"></div>
                         <div className="flex justify-between items-start mb-6">
                           <div>
-                            <p className="font-black text-gray-900 text-lg uppercase tracking-tight">
+                            <div className="text-[13px] font-black text-gray-600">
+                              ขอเมื่อ : {l.requestDate}
+                            </div>
+                            <p className="font-black text-indigo-900 text-lg uppercase tracking-tight">
                               {l.type}
                             </p>
-                            <p className="text-xs font-bold text-indigo-500 mt-1">
-                              {l.start} ถึง {l.end}
+                            <p className="text-xs font-bold text-black-500 mt-1">
+                              ตั้งแต่ {l.start} ถึง {l.end}
                             </p>
                           </div>
                           <span
@@ -1444,6 +1507,14 @@ export default function EmployeeClientPage({
           animation: shake 0.2s ease-in-out 0s 2;
         }
       `}</style>
+      {/* --- 3. FLOATING POPUPS & CAMERA --- */}
+      {showOffsitePopup && (
+        <OffsiteConfirmPopup
+          siteName={pendingData?.siteName || "ไซต์งาน"}
+          onCancel={() => setShowOffsitePopup(false)}
+          onConfirm={() => executeAttendanceAction(true)}
+        />
+      )}
     </div>
   );
 }
