@@ -351,6 +351,6 @@ export default async function AdminDashboardPage() {
     }
 
     console.error("Critical Dashboard Error:", error);
-    redirect("/api/auth/logout-cleanup");
+    // redirect("/api/auth/logout-cleanup");
   }
 }
