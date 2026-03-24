@@ -864,7 +864,26 @@ export default function LeaderClientPage({
                                   </span>
                                 )}
                               </td>
-
+                              {/* <td className="p-4 font-bold whitespace-nowrap">
+                                  {String(r.isOffsiteIn) === "1" ? (
+                                    <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
+                                      ⚠️ เข้าไม่ตรง
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
+                                      ✅ ปกติ
+                                    </span>
+                                  )}
+                                  {String(r.isOffsiteOut) === "1" ? (
+                                    <span className="text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 shadow-sm text-sm">
+                                      🏃 ออกไม่ตรง
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
+                                      ✅ ปกติ
+                                    </span>
+                                  )}
+                                </td>       */}
                               {/* เช็คอิน */}
                               <td className="p-4 whitespace-nowrap">
                                 <div className="flex items-center gap-3">

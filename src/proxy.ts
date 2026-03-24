@@ -78,6 +78,10 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
+// เพิ่มเพื่อให้รองรับทั้งระบบ middleware มาตรฐานและระบบ proxy (Next.js config บางประเภท)
+export const proxy = middleware;
+export default middleware;
+
 // กำหนดขอบเขตของ Middleware
 export const config = {
   matcher: [

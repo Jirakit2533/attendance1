@@ -16,7 +16,6 @@ export const superAdminTable = pgTable("super_admins", {
 export const companyTable = pgTable("company", {
   id: uuid("id").primaryKey().defaultRandom(),
   superAdminCreatorId: uuid("user_id").references(() => superAdminTable.id),
-  adminCreatorId: uuid("admin_creator_id").references(() => adminsTable.id),
   companyCode: varchar("company_code", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
@@ -174,7 +173,7 @@ export const leaveTable = pgTable("leave", {
   id: uuid("id").primaryKey().defaultRandom(),
   user_id: uuid("user_id").references(() => usersTable.id),
   department_id: uuid("department_id").references(() => departmentsTable.id),
-  site_id: uuid("site_id").references(() => sitesTable.id),
+  site_id: uuid("site_id").references(() => sitesTable.id, { onDelete: "cascade" }),
   type: varchar("type", { length: 255 }).notNull(),
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),

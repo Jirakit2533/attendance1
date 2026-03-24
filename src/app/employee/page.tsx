@@ -146,7 +146,7 @@ export default async function Page() {
       try {
         return dateObj
           .toLocaleString("en-GB", {
-            timeZone: "Asia/Bangkok", // แนะนำให้ระบุชัดเจนเพื่อความคงที่ของข้อมูล
+            timeZone: "UTC", // แนะนำให้ระบุชัดเจนเพื่อความคงที่ของข้อมูล
             day: "2-digit",
             month: "2-digit",
             year: "numeric",

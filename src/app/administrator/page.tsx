@@ -96,7 +96,6 @@ export default async function AdminDashboardPage() {
         .orderBy(desc(usersTable.created_at)),
 
       // --- การลงเวลา (Report) ---
-      // ปรับปรุง: ใช้ leftJoin กับ sitesTable เพื่อให้คนไม่มีไซต์ไม่หลุด และใช้ createdBy ของ Admin เป็นตัวตั้งต้น
       db
         .select({
           id: attendanceTable.id,
@@ -112,16 +111,19 @@ export default async function AdminDashboardPage() {
           lastName: usersTable.lastName,
           siteInNameSnapshot: attendanceTable.siteInNameSnapshot,
           departmentNameSnapshot: attendanceTable.departmentNameSnapshot,
-          siteName: sitesTable.name, // จะเป็น null ได้ถ้าพนักงานไม่มีไซต์
+          siteName: sitesTable.name,
           siteIdInAttendance: attendanceTable.site_id,
           siteNameFromTable: sitesTable.name,
+          // ✅ เพิ่ม Snapshot Time เพื่อความแม่นยำในการคำนวณสาย
+          shiftStartTimeSnapshot: attendanceTable.shiftStartTimeSnapshot,
           startTime: shiftsTable.startTime,
           endTime: shiftsTable.endTime,
           isEarlyExit: attendanceTable.isEarlyExit,
+          isLateFromDb: attendanceTable.isLate, // ✅ ดึงค่าจาก DB มาด้วย
         })
         .from(attendanceTable)
         .innerJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
-        .leftJoin(sitesTable, eq(attendanceTable.site_id, sitesTable.id)) // ✅ เปลี่ยนเป็น leftJoin เพื่อให้พนักงาน "ทุกไซต์" มาครบ
+        .leftJoin(sitesTable, eq(attendanceTable.site_id, sitesTable.id))
         .leftJoin(shiftsTable, eq(attendanceTable.shift_id, shiftsTable.id))
         .where(eq(usersTable.createdBy, adminId))
         .orderBy(desc(attendanceTable.date), desc(attendanceTable.createdAt)),
@@ -177,7 +179,7 @@ export default async function AdminDashboardPage() {
         )
         .limit(1),
 
-      // ✅ ดึงข้อมูลบริษัทแบบละเอียด (เพิ่ม description เข้าไปในผลลัพธ์การ Query)
+      // ✅ ดึงข้อมูลบริษัทแบบละเอียด
       db
         .select({
           id: companyTable.id,
@@ -216,29 +218,30 @@ export default async function AdminDashboardPage() {
         siteId: emp?.siteId ? String(emp.siteId) : null,
         site: String(emp?.siteName || "ไม่ระบุ"),
         siteName: emp?.siteName || "ไม่ระบุ",
-        // ✅ แมพชื่อตำแหน่งจาก positionsTable.name มาใส่ในคีย์ position (เพื่อให้ UI แสดงผล {e.position})
         position: String(emp?.positionName || "พนักงาน"),
         avatarUrl: emp?.avatarUrl || null,
-        // ✅ เพิ่มเวลาสำหรับการแก้ไขพนักงาน
         startTime: emp?.startTime || null,
         endTime: emp?.endTime || null,
       };
     });
 
-    // ✅ จัดการเวลามาตรฐาน (Standard Time) สำหรับพนักงานใหม่
     const standardTime = {
       startTime: defaultShiftData?.[0]?.startTime || "08:00",
       endTime: defaultShiftData?.[0]?.endTime || "17:00",
     };
 
     const attendance = (rawAttendance || []).map((at) => {
-      // 🕒 Logic ตรวจสอบการมาสายรายวัน
-      let isLate = 0;
-      if (at?.checkIn && at?.startTime) {
-        const checkInTime = parseInt(at.checkIn.replace(":", ""), 10);
-        const startTime = parseInt(at.startTime.replace(":", ""), 10);
-        if (checkInTime > startTime) {
-          isLate = 1;
+      // 🕒 Logic ตรวจสอบการมาสายรายวัน (ใช้ค่าจาก DB หรือคำนวณสด)
+      let isLate = at.isLateFromDb ?? 0;
+      if (!isLate && at?.checkIn) {
+        // ใช้เวลาจาก Snapshot ก่อน ถ้าไม่มีให้ใช้จาก Shift หลัก
+        const compareTime = at.shiftStartTimeSnapshot || at.startTime;
+        if (compareTime) {
+          const checkInTime = parseInt(at.checkIn.replace(":", ""), 10);
+          const startTime = parseInt(compareTime.replace(":", ""), 10);
+          if (checkInTime > startTime) {
+            isLate = 1;
+          }
         }
       }
 
@@ -253,15 +256,14 @@ export default async function AdminDashboardPage() {
           "ไม่ระบุชื่อ",
         siteSnapName:
           at?.siteInNameSnapshot || at?.siteName || "ทั่วไป (ไม่มีไซต์)",
-        departmentSnapName: at?.departmentNameSnapshot || "ไม่ระบุแผนก", //
-        siteName: at?.siteName || "ทั่วไป (ไม่มีไซต์)", // ✅ แสดงผลให้ชัดเจนถ้าเป็นพนักงานทุกไซต์
+        departmentSnapName: at?.departmentNameSnapshot || "ไม่ระบุแผนก",
+        siteName: at?.siteName || "ทั่วไป (ไม่มีไซต์)",
         locationIn: String(at?.locationIn || "-"),
         locationOut: String(at?.locationOut || "-"),
         imageIn: at?.imageIn || null,
         imageOut: at?.imageOut || null,
-        startTime: at?.startTime || null,
+        startTime: at?.shiftStartTimeSnapshot || at?.startTime || null,
         endTime: at?.endTime || null,
-        // ✅ ใส่ไว้ตรงนี้เพื่อให้ UI ในตารางลงเวลาใช้งานได้
         isLate: isLate,
         isEarlyExit: at.isEarlyExit ? String(at.isEarlyExit) : "-",
       };
@@ -274,7 +276,7 @@ export default async function AdminDashboardPage() {
       endDate: l?.endDate ? String(l.endDate) : "",
       status: String(l?.status || "pending"),
       reason: String(l?.reason || ""),
-      remark: String(l?.remark || ""), // ✅ Mapping Remark ส่งไปที่ Client Page
+      remark: String(l?.remark || ""),
       fileUrl: l?.fileUrl || null,
       fileName: l?.fileName || null,
       employeeName:
@@ -283,7 +285,6 @@ export default async function AdminDashboardPage() {
       avatarUrl: l?.avatarUrl || null,
     }));
 
-    // 📍 ปรับปรุง: Mapping ข้อมูล Sites พร้อมเช็คโหมด "ทุกไซต์" จากฐานข้อมูล
     const sites = (sitesData || []).map((s) => ({
       id: String(s?.id || ""),
       name: String(s?.name || ""),
@@ -292,7 +293,6 @@ export default async function AdminDashboardPage() {
       lng: s?.lng || "",
     }));
 
-    // ✅ เพิ่มการตรวจเช็คพิเศษ: ส่งสถานะไปว่าบริษัทนี้มี "ทุกไซต์" แล้วหรือยัง
     const hasMultiSiteActive = sites.some((s) => s.name === "ทุกไซต์");
 
     const positions = (positionsData || []).map((p) => ({
@@ -304,10 +304,8 @@ export default async function AdminDashboardPage() {
       name: String(d?.name || ""),
     }));
 
-    // ✅ ข้อมูลบริษัทสำหรับ Client Page (รวม description เรียบร้อย)
     const initialCompanyData = companyInfoData?.[0] || null;
 
-    // ✅ ปรับปรุง Admin Profile: ส่งข้อมูลให้ครบถ้วนเพื่อใช้ใน Modal แก้ไขข้อมูล (ห้ามลบ)
     const adminProfile = {
       id: currentAdmin?.id || "",
       name: `${currentAdmin?.firstName || ""} ${
@@ -316,7 +314,7 @@ export default async function AdminDashboardPage() {
       firstName: currentAdmin?.firstName || "",
       lastName: currentAdmin?.lastName || "",
       userName: currentAdmin?.userName || "",
-      username: currentAdmin?.userName || "", // ส่งไปทั้งสองแบบกันพลาด
+      username: currentAdmin?.userName || "",
       email: currentAdmin?.email || "",
       phone: currentAdmin?.phone || "",
       avatarUrl: currentAdmin?.avatarUrl || null,
@@ -330,14 +328,13 @@ export default async function AdminDashboardPage() {
       initialLeaves: leaves,
       admin: adminProfile,
       sites: sites,
-      hasMultiSiteActive: hasMultiSiteActive, // ✅ ส่ง Flag นี้ไปให้ Client ตรวจสอบได้ทันที
+      hasMultiSiteActive: hasMultiSiteActive,
       positions: positions,
       departments: departments,
-      standardTime: standardTime, // ✅ ส่งเวลามาตรฐานไปใช้ใน Client Page
-      initialCompanyData: initialCompanyData, // ✅ ส่งข้อมูลบริษัทไปแก้ Error companyData is not defined
+      standardTime: standardTime,
+      initialCompanyData: initialCompanyData,
     };
 
-    // 🛡️ ป้องกัน Error undefined ในขั้นตอนสุดท้าย
     const safeProps = JSON.parse(
       JSON.stringify(rawProps, (key, value) =>
         value === undefined ? null : value

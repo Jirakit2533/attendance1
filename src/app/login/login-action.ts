@@ -38,6 +38,25 @@ export async function handleLoginServer(formData: FormData) {
     const result = await loginAction(formData);
     
     if (result.success) {
+      const cookieStore = await cookies();
+
+      // เพิ่มการตั้งค่าคุกกี้เพื่อให้ Middleware ตรวจสอบสิทธิ์ได้
+      cookieStore.set("session_user_id", result.userId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 // 1 วัน
+      });
+
+      cookieStore.set("user_role", result.role, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 // 1 วัน
+      });
+
       return { 
         success: true, 
         redirect: result.redirect 

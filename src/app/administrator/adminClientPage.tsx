@@ -1198,7 +1198,7 @@ export default function AdminClientPage({
 
                   <button
                     onClick={() => {
-                      setShowAddPosition(true);
+                      setShowAddPosition(false);
                       setIsSidebarOpen(false);
                     }}
                     className="flex items-center gap-4 md:gap-5 p-4 md:p-5 bg-amber-50/40 hover:bg-amber-50 rounded-[1.2rem] md:rounded-[1.5rem] border border-amber-100/50 transition-all group active:scale-[0.97]"
