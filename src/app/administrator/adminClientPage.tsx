@@ -596,24 +596,16 @@ export default function AdminClientPage({
       setIsProcessing(false);
     }
   };
-  /* ==========================================================================
-   ฟังก์ชันจัดการ ไซต์งาน
-   ========================================================================== */
+/* ==========================================================================
+     ฟังก์ชันจัดการ ไซต์งาน (Sites)
+     ========================================================================== */
 
-  /* --- ฟังก์ชันแก้ไขไซต์งาน --- */
   const handleUpdateSite = (site: any) => {
     setEditingSite(site); // เก็บข้อมูลไซต์ที่เลือกลง State
     const [latVal, lngVal] = (site.coordinates || ",").split(","); // แยกพิกัด
     setLat(latVal || "");
     setLng(lngVal || "");
     setShowAddSite(true); // เปิด Modal อันเดิมที่มีอยู่แล้ว
-    setShowManageModal(false);
-  };
-
-  /* --- ฟังก์ชันแก้ไขตำแหน่ง --- */
-  const handleEditPos = (pos: any) => {
-    setEditingPos(pos); // เก็บข้อมูลตำแหน่งที่เลือก
-    setShowAddPosition(true); // เปิด Modal อันเดิม
     setShowManageModal(false);
   };
 
@@ -645,11 +637,20 @@ export default function AdminClientPage({
   };
 
   /* ==========================================================================
-     ฟังก์ชันจัดการ ตำแหน่ง
+     ฟังก์ชันจัดการ ตำแหน่ง (Positions)
      ========================================================================== */
+
+  /* --- เตรียมข้อมูลเพื่อแก้ไขตำแหน่ง --- */
+  const handleEditPos = (pos: any) => {
+    setEditingPos(pos); // เก็บข้อมูลตำแหน่งที่เลือก
+    setShowAddPosition(true); // เปิด Modal อันเดิม
+    setShowManageModal(false);
+  };
+
+  /* --- บันทึกการแก้ไขตำแหน่งไปยัง Server --- */
   const handleUpdatePosition = async (id: string, name: string) => {
     const prev = [...allPositions];
-    // 🚀 เปลี่ยนชื่อทันทีในตาราง
+    // 🚀 Optimistic Update: เปลี่ยนชื่อทันทีในตาราง
     setAllPositions(
       allPositions.map((p) => (p.id === id ? { ...p, name } : p))
     );
@@ -668,52 +669,29 @@ export default function AdminClientPage({
     }
   };
 
+  /* --- ลบตำแหน่งงาน --- */
   const handleDeletePos = async (id: string) => {
-    // 1. ถามยืนยันก่อนลบ
     const isConfirmed = confirm(
-      "⚠️ ยืนยันการลบตำแหน่งนี้?\nพนักงานที่ใช้ตำแหน่งนี้จะไม่มีตำแหน่งระบุในระบบ"
+      "⚠️ ยืนยันการลบตำแหน่งงานนี้?\nพนักงานที่ใช้ตำแหน่งนี้อาจได้รับผลกระทบ"
     );
     if (!isConfirmed) return;
 
     const prev = [...allPositions];
-    // 🚀 หายทันทีจากตารางและการ์ด
+    // 🚀 Optimistic Update: ลบออกจาก UI ทันที
     setAllPositions(allPositions.filter((p) => p.id !== id));
 
     try {
       const res = await deletePositionAction(id);
       if (res.success) {
-        // 2. แจ้งเมื่อลบสำเร็จ
         alert("✅ ลบตำแหน่งเรียบร้อยแล้ว");
       } else {
-        // 3. แจ้งเมื่อลบไม่สำเร็จ
         alert("❌ ไม่สามารถลบได้: " + res.error);
-        setAllPositions(prev); // คืนค่าข้อมูลกลับมา
+        setAllPositions(prev);
       }
     } catch (error) {
-      alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+      alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อ");
       setAllPositions(prev);
     }
-  };
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      alert("เบราว์เซอร์ของคุณไม่รองรับการดึงพิกัด");
-      return;
-    }
-
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setCoords(`${latitude}, ${longitude}`); // เก็บลง State
-        setIsLocating(false);
-      },
-      (error) => {
-        console.error(error);
-        alert("ไม่สามารถดึงพิกัดได้ โปรดตรวจสอบการอนุญาตสิทธิ์ตำแหน่ง");
-        setIsLocating(false);
-      },
-      { enableHighAccuracy: true } // ใช้ความแม่นยำสูง
-    );
   };
 
   const handleAddDepartment = async (e) => {
@@ -768,30 +746,44 @@ export default function AdminClientPage({
   };
   const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isProcessing) return;
     setIsProcessing(true);
 
     try {
       const formData = new FormData(e.currentTarget);
+      const isAllSiteChecked = formData.get("isAllSite") === "on";
+      const siteNameValue = isAllSiteChecked
+        ? "ทุกไซต์"
+        : (formData.get("siteName") as string);
+
       const siteData = {
-        name: formData.get("siteName") as string,
-        address: formData.get("address") as string,
-        lat: lat,
-        lng: lng,
+        name: siteNameValue,
+        address: isAllSiteChecked
+          ? "ไม่ประจำไซต์"
+          : (formData.get("address") as string),
+        lat: isAllSiteChecked ? "" : lat,
+        lng: isAllSiteChecked ? "" : lng,
       };
 
-      const res = editingSite
-        ? await updateSiteAction(editingSite.id, siteData)
-        : await saveSiteAction(siteData);
+      let res;
+      if (editingSite) {
+        res = await updateSiteAction(editingSite.id, siteData);
+      } else {
+        res = await saveSiteAction(siteData);
+      }
 
       if (res.success) {
-        alert(res.message);
         setShowAddSite(false);
+        setEditingSite(null);
+        setLat("");
+        setLng("");
+        setIsAllSite(false);
+        setShowManageModal(true);
       } else {
-        alert(res.error);
+        alert(res.error || "เกิดข้อผิดพลาดในการบันทึก");
       }
-    } catch (error) {
-      console.error("Error adding site:", error);
-      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsProcessing(false);
     }
@@ -1166,6 +1158,7 @@ export default function AdminClientPage({
                   จัดการโครงสร้าง
                 </p>
                 <div className="grid grid-cols-1 gap-3 md:gap-3.5">
+                
                   <button
                     onClick={() => {
                       setShowAddSite(true);
@@ -1177,10 +1170,23 @@ export default function AdminClientPage({
                       📍
                     </span>
                     <span className="text-[11px] md:text-xs font-black text-emerald-900 uppercase tracking-tighter">
-                      จัดการไซต์งาน
+                      เพิ่มไซต์ไซต์งาน
                     </span>
                   </button>
-
+                  <button
+                    onClick={() => {
+                      setShowAddPosition(true);
+                      setIsSidebarOpen(false);
+                    }}
+                    className="flex items-center gap-4 md:gap-5 p-4 md:p-5 bg-amber-50/40 hover:bg-amber-50 rounded-[1.2rem] md:rounded-[1.5rem] border border-amber-100/50 transition-all group active:scale-[0.97]"
+                  >
+                    <span className="text-xl md:text-2xl group-hover:scale-125 transition-transform">
+                      💼
+                    </span>
+                    <span className="text-[11px] md:text-xs font-black text-amber-900 uppercase tracking-tighter">
+                      เพิ่มตำแหน่งพนักงาน
+                    </span>
+                  </button>
                   <button
                     onClick={() => {
                       setShowAddDepartment(true);
@@ -1192,22 +1198,7 @@ export default function AdminClientPage({
                       🏢
                     </span>
                     <span className="text-[11px] md:text-xs font-black text-indigo-900 uppercase tracking-tighter">
-                      จัดการแผนก
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowAddPosition(false);
-                      setIsSidebarOpen(false);
-                    }}
-                    className="flex items-center gap-4 md:gap-5 p-4 md:p-5 bg-amber-50/40 hover:bg-amber-50 rounded-[1.2rem] md:rounded-[1.5rem] border border-amber-100/50 transition-all group active:scale-[0.97]"
-                  >
-                    <span className="text-xl md:text-2xl group-hover:scale-125 transition-transform">
-                      💼
-                    </span>
-                    <span className="text-[11px] md:text-xs font-black text-amber-900 uppercase tracking-tighter">
-                      จัดการตำแหน่ง
+                      เพิ่มแผนก
                     </span>
                   </button>
                 </div>
@@ -2139,300 +2130,7 @@ export default function AdminClientPage({
             </h3>
 
             <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (isProcessing) return;
-                setIsProcessing(true);
-
-                try {
-                  const formData = new FormData(e.currentTarget);
-                  const isAllSiteChecked = formData.get("isAllSite") === "on";
-                  const siteNameValue = isAllSiteChecked
-                    ? "ทุกไซต์"
-                    : (formData.get("siteName") as string);
-
-                  const siteData = {
-                    name: siteNameValue,
-                    address: isAllSiteChecked
-                      ? "ไม่ประจำไซต์"
-                      : (formData.get("address") as string),
-                    lat: isAllSiteChecked ? "" : lat,
-                    lng: isAllSiteChecked ? "" : lng,
-                  };
-
-                  let res;
-                  if (editingSite) {
-                    res = await updateSiteAction(editingSite.id, siteData);
-                  } else {
-                    res = await saveSiteAction(siteData);
-                  }
-
-                  if (res.success) {
-                    setShowAddSite(false);
-                    setEditingSite(null);
-                    setLat("");
-                    setLng("");
-                    setIsAllSite(false);
-                  } else {
-                    alert(res.error || "เกิดข้อผิดพลาดในการบันทึก");
-                  }
-                } catch (err) {
-                  console.error(err);
-                } finally {
-                  setIsProcessing(false);
-                }
-              }}
-              className="space-y-5"
-            >
-              <div className="space-y-3">
-                <input
-                  name="siteName"
-                  id="siteNameInput"
-                  value={
-                    isAllSite ? "ทุกไซต์" : editingSite ? undefined : undefined
-                  }
-                  defaultValue={editingSite?.name || ""}
-                  readOnly={isAllSite}
-                  placeholder="ชื่อไซต์งาน..."
-                  required
-                  className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${
-                    isAllSite
-                      ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                      : "bg-slate-50"
-                  }`}
-                />
-
-                {/* ✅ แก้ไข: ซ่อนส่วนเลือก "ทุกไซต์" ทันทีหากเป็นการแก้ไขไซต์งาน (editingSite) */}
-                <div
-                  id="special-site-logic"
-                  className={`p-4 rounded-[2rem] border-2 border-dashed border-slate-100 bg-slate-50/50 space-y-3 transition-all ${
-                    editingSite ? "hidden" : ""
-                  }`}
-                >
-                  <label className="flex items-center justify-between cursor-pointer group">
-                    <div className="flex flex-col">
-                      <span className="text-[11px] font-black text-slate-700 uppercase italic">
-                        เปิดโหมด "ทุกไซต์"
-                      </span>
-                      <p className="text-[9px] text-slate-400 font-bold leading-tight max-w-[180px]">
-                        พนักงานจะสามารถเลือกไซต์นี้เพื่อเข้าทำงานได้ทุกสถานที่โดยไม่ต้องกำหนดไซต์งานให้พนักงาน
-                      </p>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        name="isAllSite"
-                        className="sr-only peer"
-                        checked={isAllSite}
-                        onChange={(e) => setIsAllSite(e.target.checked)}
-                      />
-                      <div className="w-12 h-7 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:start-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </div>
-                  </label>
-                </div>
-
-                <input
-                  name="address"
-                  value={
-                    isAllSite
-                      ? "ไม่ประจำไซต์"
-                      : editingSite
-                      ? undefined
-                      : undefined
-                  }
-                  defaultValue={editingSite?.address || ""}
-                  readOnly={isAllSite}
-                  placeholder="ที่อยู่ไซต์งาน..."
-                  className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${
-                    isAllSite
-                      ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                      : "bg-slate-50"
-                  }`}
-                />
-              </div>
-
-              <div className="space-y-3 relative">
-                <button
-                  type="button"
-                  disabled={isProcessing || isAllSite}
-                  onClick={handleGetCurrentLocation}
-                  className={`w-full py-4 relative overflow-hidden text-white rounded-2xl font-black uppercase text-[12px] shadow-lg transition-all flex items-center justify-center gap-3 border-b-4 
-              ${
-                isProcessing || isAllSite
-                  ? "bg-slate-400 border-slate-500 cursor-not-allowed"
-                  : "bg-blue-600 border-blue-800 hover:bg-blue-700 active:scale-95 shadow-blue-100"
-              }`}
-                >
-                  {isProcessing ? (
-                    <>
-                      <svg
-                        className="animate-spin h-4 w-4 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      <span>กำลังประมวลผล...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-lg">🎯</span>
-                      กดเพื่อดึงพิกัดจากเครื่อง
-                    </>
-                  )}
-                </button>
-
-                <div
-                  className={`flex gap-2 transition-opacity duration-300 ${
-                    isProcessing || isAllSite ? "opacity-30" : "opacity-60"
-                  }`}
-                >
-                  <div
-                    className={`flex-1 rounded-xl border border-slate-200 p-2 ${
-                      isAllSite ? "bg-slate-200" : "bg-slate-50"
-                    }`}
-                  >
-                    <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">
-                      Lat
-                    </span>
-                    <input
-                      name="latitude"
-                      value={isAllSite ? "" : lat}
-                      readOnly={isProcessing || isAllSite}
-                      onChange={(e) => setLat(e.target.value)}
-                      placeholder="0.0000"
-                      className="w-full bg-transparent outline-none font-bold text-xs px-1"
-                    />
-                  </div>
-                  <div
-                    className={`flex-1 rounded-xl border border-slate-200 p-2 ${
-                      isAllSite ? "bg-slate-200" : "bg-slate-50"
-                    }`}
-                  >
-                    <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">
-                      Lng
-                    </span>
-                    <input
-                      name="longitude"
-                      value={isAllSite ? "" : lng}
-                      readOnly={isProcessing || isAllSite}
-                      onChange={(e) => setLng(e.target.value)}
-                      placeholder="0.0000"
-                      className="w-full bg-transparent outline-none font-bold text-xs px-1"
-                    />
-                  </div>
-                </div>
-                <p className="text-center text-[9px] text-slate-400 font-bold uppercase italic">
-                  * หากดึงพิกัดไม่ได้ กรุณาอนุญาตสิทธิ์เข้าถึงตำแหน่ง
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={() => {
-                    setShowAddSite(false);
-                    setEditingSite(null);
-                    setIsAllSite(false);
-                  }}
-                  className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px] disabled:opacity-30"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={isProcessing}
-                  className={`flex-[2] py-4 ${
-                    editingSite
-                      ? "bg-blue-600 shadow-blue-100"
-                      : "bg-emerald-600 shadow-emerald-100"
-                  } text-white rounded-2xl font-black uppercase text-[10px] shadow-xl disabled:bg-slate-300`}
-                >
-                  {isProcessing
-                    ? "กำลังบันทึก..."
-                    : editingSite
-                    ? "ยืนยันการแก้ไข"
-                    : "ยืนยันเพิ่มไซต์งาน"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      {showAddSite && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic flex items-center gap-2">
-              <span
-                className={`${
-                  editingSite
-                    ? "bg-blue-100 text-blue-600"
-                    : "bg-emerald-100 text-emerald-600"
-                } p-2 rounded-lg text-sm not-italic`}
-              >
-                {editingSite ? "✏️" : "📍"}
-              </span>
-              {editingSite ? "แก้ไขไซต์งาน" : "เพิ่มไซต์งานใหม่"}
-            </h3>
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (isProcessing) return;
-                setIsProcessing(true);
-
-                try {
-                  const formData = new FormData(e.currentTarget);
-                  const isAllSiteChecked = formData.get("isAllSite") === "on";
-                  const siteNameValue = isAllSiteChecked
-                    ? "ทุกไซต์"
-                    : (formData.get("siteName") as string);
-
-                  const siteData = {
-                    name: siteNameValue,
-                    address: isAllSiteChecked
-                      ? "ไม่ประจำไซต์"
-                      : (formData.get("address") as string),
-                    lat: isAllSiteChecked ? "" : lat,
-                    lng: isAllSiteChecked ? "" : lng,
-                  };
-
-                  let res;
-                  if (editingSite) {
-                    res = await updateSiteAction(editingSite.id, siteData);
-                  } else {
-                    res = await saveSiteAction(siteData);
-                  }
-
-                  if (res.success) {
-                    setShowAddSite(false);
-                    setEditingSite(null);
-                    setLat("");
-                    setLng("");
-                    setIsAllSite(false);
-                  } else {
-                    alert(res.error || "เกิดข้อผิดพลาดในการบันทึก");
-                  }
-                } catch (err) {
-                  console.error(err);
-                } finally {
-                  setIsProcessing(false);
-                }
-              }}
+              onSubmit={handleAddSite}
               className="space-y-5"
             >
               <div className="space-y-3">
@@ -2638,6 +2336,58 @@ export default function AdminClientPage({
           </div>
         </div>
       )}
+
+      {/* --- 💼 MODAL: ADD POSITION --- */}
+      {showAddPosition && (
+  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+      <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic flex items-center gap-2">
+        <span className="bg-amber-100 text-amber-600 p-2 rounded-lg text-sm not-italic">
+          💼
+        </span>
+        จัดการตำแหน่งงาน
+      </h3>
+
+      <form
+        onSubmit={handleAddPosition}
+        className="space-y-5"
+      >
+        <div className="space-y-3">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-2 italic">
+            ชื่อตำแหน่งงาน (Position Name)
+          </label>
+          <input
+            name="posName"
+            type="text"
+            placeholder="เช่น Senior Developer, HR Manager..."
+            required
+            autoFocus
+            className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder:text-slate-300 text-slate-700"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+          <button
+            type="button"
+            disabled={isProcessing}
+            onClick={() => setShowAddPosition(false)}
+            className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px] hover:text-slate-600 transition-colors disabled:opacity-30"
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="submit"
+            disabled={isProcessing}
+            className="flex-[2] py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-amber-100 transition-all active:scale-95 disabled:bg-slate-300"
+          >
+            {isProcessing ? "กำลังบันทึก..." : "ยืนยันเพิ่มตำแหน่ง"}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
       {/* --- 🛡️ MODAL: EDIT ADMIN PROFILE --- */}
       {showAdminEdit && (
         <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[500] p-4 backdrop-blur-md animate-in fade-in duration-300">
