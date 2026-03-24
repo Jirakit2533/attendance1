@@ -242,8 +242,8 @@ export async function createLeaveRequest(data: {
 
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-    let fileUrl = "no-file";
-    let fileId = "no-id";
+    let fileUrl = null;
+    let fileId = null;
 
     if (data.base64File) {
       const base64Data = data.base64File.replace(/^data:.*?;base64,/, "");
@@ -264,7 +264,7 @@ export async function createLeaveRequest(data: {
       status: "pending",
       fileUrl: fileUrl,
       fileId: fileId,
-      fileName: data.fileName || "leave_document",
+      fileName: data.fileName || null,
     });
 
     revalidatePath("/employee");

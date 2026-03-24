@@ -92,6 +92,10 @@ export default function AdminClientPage({
     null
   );
 
+  const [activeTab, setActiveTab] = useState("employee");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [isAllSite, setIsAllSite] = useState(false);
 
@@ -110,8 +114,9 @@ export default function AdminClientPage({
   const [showPass, setShowPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null);
-  const [viewImage, setViewImage] = useState(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [viewImage, setViewImage] = useState<string | null>(null);
+
   const [isProcessing, setIsProcessing] = useState(false);
 
   const [showManageModal, setShowManageModal] = useState(false);
@@ -596,7 +601,7 @@ export default function AdminClientPage({
       setIsProcessing(false);
     }
   };
-/* ==========================================================================
+  /* ==========================================================================
      ฟังก์ชันจัดการ ไซต์งาน (Sites)
      ========================================================================== */
 
@@ -1158,7 +1163,6 @@ export default function AdminClientPage({
                   จัดการโครงสร้าง
                 </p>
                 <div className="grid grid-cols-1 gap-3 md:gap-3.5">
-                
                   <button
                     onClick={() => {
                       setShowAddSite(true);
@@ -1361,66 +1365,734 @@ export default function AdminClientPage({
           </div>
         </div>
 
-        {/* --- 1. EMPLOYEES TABLE --- */}
-        <div className="print:hidden">
-          <Section title="จัดการข้อมูลพนักงาน">
-            <div className="mb-6 relative max-w-md">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <span className="text-gray-400">🔍</span>
-              </div>
-              <input
-                type="text"
-                placeholder="ค้นหาชื่อ หรือ รหัสพนักงาน..."
-                className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-                value={searchEmp}
-                onChange={(e) => setSearchEmp(e.target.value)}
-              />
-            </div>
-            <div className="rounded-[2rem] border border-slate-100 overflow-hidden bg-white shadow-sm">
-              <div className="overflow-x-auto max-h-[580px] overflow-y-auto custom-scrollbar">
-                <table className="min-w-[1000px] w-full text-sm border-separate border-spacing-0">
-                  <thead className="sticky top-0 z-20 bg-white">
-                    <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
-                      <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">
-                        รูป
-                      </th>
-                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                        พนักงาน
-                      </th>
-                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                        แผนก
-                      </th>
-                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                        รอบเข้างาน
-                      </th>
-                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                        ไซต์งาน
-                      </th>
-                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                        ตำแหน่ง
-                      </th>
-                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                        ระดับสิทธิ์
-                      </th>
-                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                        จัดการ
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
+        {/* --- Tab Navigator --- */}
+        <div className="flex items-center gap-1 md:gap-2 bg-slate-100/50 p-1 md:p-1.5 rounded-full md:rounded-[2rem] w-full sm:w-fit mb-6 md:mb-8 border border-slate-200/60 backdrop-blur-sm print:hidden overflow-x-auto no-scrollbar">
+          {[
+            { id: "employee", label: "จัดการข้อมูลพนักงาน", icon: "👤" },
+            { id: "attendance", label: "ตารางเข้า-ออกงาน", icon: "🕒" },
+            { id: "leave", label: "คำขอลาพนักงาน", icon: "📝" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`
+                relative flex items-center justify-center gap-2 px-3 py-2 md:px-6 md:py-2.5 rounded-full md:rounded-[1.5rem] text-xs md:text-sm font-bold transition-all duration-300 flex-1 sm:flex-none whitespace-nowrap
+                ${
+                  activeTab === tab.id
+                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50 scale-[1.02]"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+                }
+              `}
+            >
+              <span className="relative z-10 text-base md:text-sm">
+                {tab.icon}
+              </span>
+              <span className="relative z-10 hidden sm:inline-block">
+                {tab.label}
+              </span>
+              {/* แสดง Label แบบย่อบน Mobile เฉพาะ Tab ที่เลือก (Optional) */}
+              {activeTab === tab.id && (
+                <span className="relative z-10 inline-block sm:hidden text-[10px]">
+                  {tab.label.split(" ")[0]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* --- ส่วนแสดงเนื้อหาตาม Tab ที่เลือก --- */}
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* --- Tab: จัดการข้อมูลพนักงาน --- */}
+          {activeTab === "employee" && (
+            <div className="print:hidden">
+              <Section title="จัดการข้อมูลพนักงาน">
+                <div className="mb-6 relative max-w-md">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <span className="text-gray-400">🔍</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="ค้นหาชื่อ หรือ รหัสพนักงาน..."
+                    className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                    value={searchEmp}
+                    onChange={(e) => {
+                      setSearchEmp(e.target.value);
+                      setCurrentPage(1); // รีเซ็ตไปหน้าแรกเมื่อค้นหา
+                    }}
+                  />
+                </div>
+
+                {/* --- Mobile & Tablet Card View (5 Items Per Page) --- */}
+                <div className="lg:hidden">
+                  <div className="grid grid-cols-1 gap-4 mb-6">
                     {filteredEmployees.length > 0 ? (
-                      filteredEmployees.map((e) => (
-                        <tr
-                          key={e.id}
-                          className="group hover:bg-blue-50/40 transition-colors"
-                        >
+                      filteredEmployees
+                        .slice((currentPage - 1) * 5, currentPage * 5) // จำกัด 5 รายการต่อหน้า
+                        .map((e) => (
+                          <div
+                            key={e.id}
+                            className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm relative"
+                          >
+                            <div className="flex items-start gap-4 mb-4">
+                              <div className="w-16 h-16 relative rounded-[1.5rem] overflow-hidden border-2 border-slate-50 shadow-sm bg-slate-100 flex-shrink-0">
+                                <Image
+                                  src={
+                                    e.avatarUrl &&
+                                    typeof e.avatarUrl === "string" &&
+                                    e.avatarUrl.trim() !== ""
+                                      ? e.avatarUrl
+                                      : "https://utfs.io/f/default-avatar-placeholder.png"
+                                  }
+                                  alt="profile"
+                                  fill
+                                  className="object-cover"
+                                  unoptimized
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-black text-gray-800 text-base truncate">
+                                  {e.firstName} {e.lastName}
+                                </div>
+                                <div className="text-blue-500 font-mono text-xs truncate">
+                                  @{e.userName || e.id}
+                                </div>
+                                <div className="mt-1">
+                                  <span
+                                    className={`inline-block font-black text-[9px] uppercase px-2 py-0.5 rounded-md ${
+                                      e.role === "leader"
+                                        ? "bg-blue-600 text-white"
+                                        : "bg-slate-100 text-slate-400"
+                                    }`}
+                                  >
+                                    {e.role === "leader"
+                                      ? "หัวหน้า"
+                                      : "พนักงาน"}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="relative group">
+                                <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-50 transition-colors">
+                                  <span className="text-gray-400 text-lg">
+                                    ⋮
+                                  </span>
+                                </button>
+                                <div className="absolute right-0 top-8 w-32 bg-white border border-slate-100 rounded-2xl shadow-xl z-30 hidden group-hover:block group-focus-within:block transition-all">
+                                  <div className="p-2 flex flex-col gap-1">
+                                    <button
+                                      onClick={() => handleEditEmployee(e)}
+                                      className="flex items-center gap-2 w-full px-3 py-2 text-xs font-bold text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
+                                    >
+                                      <span>✏️</span> แก้ไข
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteEmployee(e.id)}
+                                      className="flex items-center gap-2 w-full px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                    >
+                                      <span>{isProcessing ? "⏳" : "🗑️"}</span>{" "}
+                                      ลบข้อมูล
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                                  แผนก
+                                </span>
+                                <span className="text-xs font-bold text-slate-600 truncate">
+                                  {e.departmentName || "ไม่ระบุ"}
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                                  ตำแหน่ง
+                                </span>
+                                <span className="text-xs font-bold text-blue-600 truncate">
+                                  {e.position || "พนักงาน"}
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                                  ไซต์งาน
+                                </span>
+                                <span className="text-xs font-bold text-purple-600 truncate">
+                                  {!e.site || e.site === "ไม่ระบุ"
+                                    ? "ทุกไซต์"
+                                    : e.site}
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                                  รอบเข้างาน
+                                </span>
+                                <span className="text-xs font-bold text-slate-800">
+                                  {e.startTime && e.endTime
+                                    ? `${e.startTime.slice(
+                                        0,
+                                        5
+                                      )} - ${e.endTime.slice(0, 5)}`
+                                    : "ยังไม่ระบุ"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="py-10 text-center text-slate-400 italic font-black bg-white rounded-[2rem] border border-slate-100">
+                        ไม่พบข้อมูลพนักงาน...
+                      </div>
+                    )}
+                  </div>
+
+                  {/* --- Pagination Controls for Mobile --- */}
+                  {filteredEmployees.length > 5 && (
+  <div className="flex justify-center items-center gap-2 mt-8 mb-12">
+    {/* ปุ่มย้อนกลับ */}
+    <button
+      disabled={currentPage === 1}
+      onClick={() => setCurrentPage((prev) => prev - 1)}
+      className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+    >
+      {"<"}
+    </button>
+
+    {/* รายการตัวเลขหน้า */}
+    <div className="flex gap-1">
+      {[...Array(Math.ceil(filteredEmployees.length / 5))].map((_, i) => (
+        <button
+          key={i + 1}
+          onClick={() => setCurrentPage(i + 1)}
+          className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
+            currentPage === i + 1
+              ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
+              : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+          }`}
+        >
+          {i + 1}
+        </button>
+      ))}
+    </div>
+
+    {/* ปุ่มไปข้างหน้า */}
+    <button
+      disabled={currentPage === Math.ceil(filteredEmployees.length / 5)}
+      onClick={() => setCurrentPage((prev) => prev + 1)}
+      className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+    >
+      {">"}
+    </button>
+  </div>
+)}
+                </div>
+
+                {/* --- Desktop Table View (แสดงทั้งหมดพร้อม Scroll) --- */}
+                <div className="hidden lg:block rounded-[2rem] border border-slate-100 overflow-hidden bg-white shadow-sm">
+                  <div className="overflow-x-auto max-h-[580px] overflow-y-auto custom-scrollbar">
+                    <table className="min-w-[1000px] w-full text-sm border-separate border-spacing-0">
+                      <thead className="sticky top-0 z-20 bg-white">
+                        <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
+                          <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">
+                            รูป
+                          </th>
+                          <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
+                            พนักงาน
+                          </th>
+                          <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
+                            แผนก
+                          </th>
+                          <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
+                            รอบเข้างาน
+                          </th>
+                          <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
+                            ไซต์งาน
+                          </th>
+                          <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
+                            ตำแหน่ง
+                          </th>
+                          <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
+                            ระดับสิทธิ์
+                          </th>
+                          <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
+                            จัดการ
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {filteredEmployees.length > 0 ? (
+                          filteredEmployees.map((e) => (
+                            <tr
+                              key={e.id}
+                              className="group hover:bg-blue-50/40 transition-colors"
+                            >
+                              <td className="py-4 px-6">
+                                <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100">
+                                  <Image
+                                    src={
+                                      e.avatarUrl &&
+                                      typeof e.avatarUrl === "string" &&
+                                      e.avatarUrl.trim() !== ""
+                                        ? e.avatarUrl
+                                        : "https://utfs.io/f/default-avatar-placeholder.png"
+                                    }
+                                    alt="profile"
+                                    fill
+                                    className="object-cover"
+                                    unoptimized
+                                  />
+                                </div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div className="font-black text-gray-800">
+                                  {e.firstName} {e.lastName}
+                                </div>
+                                <div className="text-blue-500 font-mono text-[11px]">
+                                  @{e.userName || e.id}
+                                </div>
+                              </td>
+                              <td className="py-4 px-6 font-bold text-gray-600">
+                                {e.departmentName || "ไม่ระบุแผนก"}
+                              </td>
+                              <td className="py-4 px-6 font-bold text-gray-600">
+                                <div className="flex flex-col">
+                                  {e.startTime && e.endTime ? (
+                                    <span className="text-[15px] text-black-600">
+                                      {e.startTime.slice(0, 5)} -{" "}
+                                      {e.endTime.slice(0, 5)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[13px] text-slate-400 font-medium italic">
+                                      ยังไม่ได้ระบุ
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-full font-bold text-[11px] uppercase tracking-wider">
+                                  {!e.site || e.site === "ไม่ระบุ"
+                                    ? "ทุกไซต์"
+                                    : e.site}
+                                </span>
+                              </td>
+                              <td className="py-4 px-6">
+                                <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full font-bold text-[11px] uppercase tracking-wider">
+                                  {e.position || "พนักงาน"}
+                                </span>
+                              </td>
+                              <td className="py-4 px-6">
+                                <span
+                                  className={`font-black text-[10px] uppercase px-3 py-1 rounded-lg ${
+                                    e.role === "leader"
+                                      ? "bg-blue-600 text-white"
+                                      : "bg-slate-100 text-slate-400"
+                                  }`}
+                                >
+                                  {e.role === "leader" ? "หัวหน้า" : "พนักงาน"}
+                                </span>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div className="flex justify-center gap-2">
+                                  <button
+                                    onClick={() => handleEditEmployee(e)}
+                                    disabled={isProcessing}
+                                    className="w-10 h-10 flex items-center justify-center bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-all"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteEmployee(e.id)}
+                                    disabled={isProcessing}
+                                    className="w-10 h-10 flex items-center justify-center bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all"
+                                  >
+                                    {isProcessing ? "⏳" : "🗑️"}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td
+                              colSpan={8}
+                              className="py-24 text-center text-slate-400 italic font-black"
+                            >
+                              ไม่พบข้อมูลพนักงาน...
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </Section>
+            </div>
+          )}
+          {/* --- Tab: ตารางเข้า-ออกงาน --- */}
+          {activeTab === "attendance" && (
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-3">
+                <span className="w-2 h-8 bg-emerald-500 rounded-full"></span>
+                ตารางเข้า-ออกงานของพนักงาน
+              </h2>
+
+              <div className="mb-6 relative max-w-md">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <span className="text-gray-400">🔍</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="ค้นหาชื่อพนักงาน หรือ วันที่..."
+                  className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                  value={searchAtt}
+                  onChange={(e) => setSearchAtt(e.target.value)}
+                />
+              </div>
+
+              <div className="rounded-[2rem] border border-slate-100 overflow-hidden bg-white shadow-sm">
+                <div className="overflow-x-auto max-h-[650px] overflow-y-auto custom-scrollbar">
+                  <table className="min-w-[1800px] w-full text-sm border-separate border-spacing-0">
+                    <thead className="sticky top-0 z-30 bg-white">
+                      <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest">
+                        <th className="py-5 px-6 text-left w-20 bg-slate-50/50 border-b border-slate-100">
+                          รูป
+                        </th>
+                        <th className="py-5 px-6 text-left bg-slate-50/50 border-b border-slate-100">
+                          พนักงาน
+                        </th>
+                        <th className="py-5 px-6 text-left bg-slate-50/50 border-b border-slate-100">
+                          วันที่
+                        </th>
+                        <th className="py-5 px-6 text-left bg-slate-50/50 border-b border-slate-100">
+                          ไซต์งาน
+                        </th>
+                        <th className="py-5 px-6 text-left bg-slate-50/50 border-b border-slate-100">
+                          รอบงาน
+                        </th>
+                        <th className="py-5 px-6 text-center bg-slate-50/50 border-b border-slate-100">
+                          สถานะเข้า
+                        </th>
+                        <th className="py-5 px-6 text-center bg-slate-50/50 border-b border-slate-100">
+                          สถานะออก
+                        </th>
+                        <th className="py-5 px-6 text-center bg-slate-50/50 border-b border-slate-100 text-emerald-600">
+                          เวลาเข้า
+                        </th>
+                        <th className="py-5 px-6 text-center bg-slate-50/50 border-b border-slate-100 text-rose-600">
+                          เวลาออก
+                        </th>
+                        <th className="py-5 px-6 text-center bg-slate-50/50 border-b border-slate-100">
+                          รูปเข้า
+                        </th>
+                        <th className="py-5 px-6 text-center bg-slate-50/50 border-b border-slate-100">
+                          รูปออก
+                        </th>
+                        <th className="py-5 px-6 text-center bg-slate-50/50 border-b border-slate-100">
+                          พิกัดเข้า
+                        </th>
+                        <th className="py-5 px-6 text-center bg-slate-50/50 border-b border-slate-100">
+                          พิกัดออก
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {filteredAttendance.length > 0 ? (
+                        filteredAttendance.map((a, index) => {
+                          // Logic สำหรับแสดงตัวคั่นวันที่ (เหมือน Line)
+                          const currentDate = a.date
+                            ? new Date(a.date).toLocaleDateString("th-TH", {
+                                day: "2-digit",
+                                month: "long",
+                                year: "numeric",
+                              })
+                            : "";
+                          const prevDate =
+                            index > 0 && filteredAttendance[index - 1].date
+                              ? new Date(
+                                  filteredAttendance[index - 1].date
+                                ).toLocaleDateString("th-TH", {
+                                  day: "2-digit",
+                                  month: "long",
+                                  year: "numeric",
+                                })
+                              : null;
+                          const showDivider = currentDate !== prevDate;
+
+                          return (
+                            <React.Fragment key={index}>
+                              {showDivider && (
+                                <tr className="sticky top-[61px] z-20">
+                                  <td
+                                    colSpan={13}
+                                    className="bg-slate-100/90 backdrop-blur-md py-3 px-6"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[12px] font-black text-slate-500 uppercase tracking-tighter bg-white px-3 py-1 rounded-full shadow-sm">
+                                        📅 {currentDate}
+                                      </span>
+                                      <div className="h-[1px] flex-grow bg-slate-200"></div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                              <tr className="group hover:bg-blue-50/30 transition-colors">
+                                <td className="py-4 px-6">
+                                  <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100 group-hover:scale-105 transition-transform">
+                                    <Image
+                                      src={
+                                        a.avatarUrl ||
+                                        "https://utfs.io/f/default-avatar-placeholder.png"
+                                      }
+                                      alt="profile"
+                                      fill
+                                      className="object-cover"
+                                    />
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6">
+                                  <div className="font-black text-slate-800 text-base">
+                                    {a.employeeName || "ไม่ระบุชื่อ"}
+                                  </div>
+                                  <div className="text-blue-500 font-bold text-[11px]">
+                                    @{a.userName || "user"}
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6 font-bold text-slate-500 italic">
+                                  {a.date
+                                    ? new Date(a.date).toLocaleDateString(
+                                        "th-TH",
+                                        {
+                                          day: "2-digit",
+                                          month: "short",
+                                          year: "2-digit",
+                                        }
+                                      )
+                                    : "-"}
+                                </td>
+                                <td className="py-4 px-6">
+                                  <div className="font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-lg inline-block">
+                                    {a.siteSnapName || "ไม่ระบุไซต์"}
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6 font-bold text-slate-600">
+                                  <div className="flex flex-col">
+                                    {a.startTime && a.endTime ? (
+                                      <span className="text-[14px] bg-white border border-slate-100 px-2 py-1 rounded shadow-sm w-fit">
+                                        {a.startTime.slice(0, 5)} -{" "}
+                                        {a.endTime.slice(0, 5)}
+                                      </span>
+                                    ) : (
+                                      "-"
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-6 text-center">
+                                  {a.isLate === 1 ? (
+                                    <span className="text-red-600 bg-red-50 px-3 py-2 rounded-xl border border-red-100 font-black text-xs shadow-sm inline-flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>{" "}
+                                      สาย
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100 font-black text-xs shadow-sm">
+                                      ✅ ปกติ
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-6 text-center">
+                                  {a.isEarlyExit === "1" ? (
+                                    <span className="text-amber-600 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 font-black text-xs shadow-sm">
+                                      ⚠️ ออกก่อน
+                                    </span>
+                                  ) : a.isEarlyExit === "0" ? (
+                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100 font-black text-xs shadow-sm">
+                                      ✅ ปกติ
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-300">-</span>
+                                  )}
+                                </td>
+                                <td className="py-4 px-6 text-center font-black text-emerald-600 text-lg">
+                                  {a.checkIn
+                                    ? a.checkIn.split(":").slice(0, 2).join(":")
+                                    : "-"}
+                                </td>
+                                <td className="py-4 px-6 text-center font-black text-rose-600 text-lg">
+                                  {a.checkOut
+                                    ? a.checkOut
+                                        .split(":")
+                                        .slice(0, 2)
+                                        .join(":")
+                                    : "-"}
+                                </td>
+                                <td className="py-4 px-6">
+                                  <div className="flex justify-center">
+                                    {a.imageIn ? (
+                                      <a
+                                        href={a.checkInPhoto || a.imageIn}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-11 h-11 relative rounded-xl overflow-hidden border-2 border-white shadow-md cursor-pointer active:scale-95 transition-all hover:ring-2 hover:ring-blue-400 block"
+                                      >
+                                        <Image
+                                          src={a.imageIn}
+                                          alt="In"
+                                          fill
+                                          className="object-cover"
+                                          unoptimized={true}
+                                        />
+                                      </a>
+                                    ) : (
+                                      <span className="text-slate-300 italic text-[10px]">
+                                        N/A
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6">
+                                  <div className="flex justify-center">
+                                    {a.imageOut ? (
+                                      <a
+                                        href={a.checkOutPhoto || a.imageOut}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-11 h-11 relative rounded-xl overflow-hidden border-2 border-white shadow-md cursor-pointer active:scale-95 transition-all hover:ring-2 hover:ring-blue-400 block"
+                                      >
+                                        <Image
+                                          src={a.imageOut}
+                                          alt="Out"
+                                          fill
+                                          className="object-cover"
+                                          unoptimized={true}
+                                        />
+                                      </a>
+                                    ) : (
+                                      <span className="text-slate-300 italic text-[10px]">
+                                        N/A
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6 text-center">
+                                  {a.locationIn ? (
+                                    <a
+                                      href={`https://www.google.com/maps?q=${a.locationIn}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] bg-slate-900 text-white px-3 py-2 rounded-xl font-black hover:bg-blue-600 transition-all inline-flex items-center gap-1 shadow-sm"
+                                    >
+                                      📍 MAP IN
+                                    </a>
+                                  ) : (
+                                    <span className="text-slate-300 text-[10px]">
+                                      ไม่มีข้อมูล
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-4 px-6 text-center">
+                                  {a.locationOut ? (
+                                    <a
+                                      href={`https://www.google.com/maps?q=${a.locationOut}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] bg-slate-400 text-white px-3 py-2 rounded-xl font-black hover:bg-rose-600 transition-all inline-flex items-center gap-1 shadow-sm"
+                                    >
+                                      📍 MAP OUT
+                                    </a>
+                                  ) : (
+                                    <span className="text-slate-300 text-[10px]">
+                                      ไม่มีข้อมูล
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            </React.Fragment>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={13} className="py-32 text-center">
+                            <div className="flex flex-col items-center justify-center gap-3">
+                              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-4xl animate-bounce">
+                                📅
+                              </div>
+                              <p className="text-slate-400 font-black text-xl tracking-tight">
+                                ไม่พบข้อมูลการลงเวลาในขณะนี้
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
+          {/* --- Tab: คำขอลาพนักงาน --- */}
+          {activeTab === "leave" && (
+  <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-3 px-4 md:px-0">
+      <span className="w-2 h-8 bg-amber-500 rounded-full"></span>
+      คำขอลาพนักงาน
+    </h2>
+
+    {/* Search Bar */}
+    <div className="mb-6 relative max-w-md px-4 md:px-0">
+      <div className="absolute inset-y-0 left-4 md:left-0 pl-4 flex items-center pointer-events-none">
+        <span className="text-gray-400">🔍</span>
+      </div>
+      <input
+        type="text"
+        placeholder="ค้นชื่อพนักงาน หรือ ประเภทลา..."
+        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+        value={searchLeave}
+        onChange={(e) => {
+          setSearchLeave(e.target.value);
+          setCurrentPage(1); // Reset หน้าเมื่อมีการค้นหา
+        }}
+      />
+    </div>
+
+    {/* Logic สำหรับ Pagination */}
+    {(() => {
+      const indexOfLastItem = currentPage * itemsPerPage;
+      const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+      const currentItems = filteredLeaves.slice(indexOfFirstItem, indexOfLastItem);
+      const totalPages = Math.ceil(filteredLeaves.length / itemsPerPage);
+
+      return (
+        <>
+          {/* --- Desktop Table View --- */}
+          <div className="hidden lg:block rounded-[2rem] border border-slate-100 overflow-hidden bg-white shadow-sm">
+            <div className="overflow-x-auto max-h-[580px] overflow-y-auto custom-scrollbar">
+              <table className="min-w-[1400px] w-full text-sm border-separate border-spacing-0">
+                <thead className="sticky top-0 z-20 bg-white">
+                  <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
+                    <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">รูป</th>
+                    <th className="py-5 px-6 text-left bg-white border-b border-gray-100">พนักงาน</th>
+                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">ประเภท</th>
+                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">วันที่</th>
+                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">จำนวนวัน</th>
+                    <th className="py-5 px-6 text-left bg-white border-b border-gray-100">เหตุผล</th>
+                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">เอกสาร</th>
+                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">สถานะ</th>
+                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">จัดการคำขอ</th>
+                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">หมายเหตุ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {currentItems.length > 0 ? (
+                    currentItems.map((l) => {
+                      const start = new Date(l.startDate);
+                      const end = new Date(l.endDate);
+                      const diffTime = Math.abs(end.getTime() - start.getTime());
+                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+                      return (
+                        <tr key={l.id} className="group hover:bg-blue-50/40 transition-colors">
                           <td className="py-4 px-6">
                             <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100">
                               <Image
-                                src={
-                                  e.avatarUrl ||
-                                  "https://utfs.io/f/default-avatar-placeholder.png"
-                                }
+                                src={l.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(l.employeeName || "User")}&background=random`}
                                 alt="profile"
                                 fill
                                 className="object-cover"
@@ -1428,653 +2100,214 @@ export default function AdminClientPage({
                             </div>
                           </td>
                           <td className="py-4 px-6">
-                            <div className="font-black text-gray-800">
-                              {e.firstName} {e.lastName}
-                            </div>
-                            <div className="text-blue-500 font-mono text-[11px]">
-                              @{e.userName || e.id}
-                            </div>
+                            <div className="font-black text-gray-800 text-base">{l.employeeName || "ไม่ระบุชื่อ"}</div>
+                            <div className="text-blue-500 font-mono text-[11px] font-bold">@{l.userName || "user"}</div>
                           </td>
-                          <td className="py-4 px-6 font-bold text-gray-600">
-                            {e.departmentName || "ไม่ระบุแผนก"}
+                          <td className="py-4 px-6 text-center font-bold text-blue-600">{l.type}</td>
+                          <td className="py-4 px-6 text-center text-gray-500 text-[11px] font-bold leading-tight">
+                            {new Date(l.startDate).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "2-digit" })}
+                            <br /> - <br />
+                            {new Date(l.endDate).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "2-digit" })}
                           </td>
-                          <td className="py-4 px-6 font-bold text-gray-600">
-                            <div className="flex flex-col">
-                              {e.startTime && e.endTime ? (
-                                <span className="text-[15px] text-black-600">
-                                  {e.startTime.slice(0, 5)} -{" "}
-                                  {e.endTime.slice(0, 5)}
-                                </span>
+                          <td className="py-4 px-6 text-center">
+                            <span className="bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg font-black text-xs border border-orange-100">
+                              {isNaN(diffDays) ? "-" : `${diffDays} วัน`}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-gray-600 italic text-xs max-w-[200px] truncate">"{l.reason || "ไม่มีระบุเหตุผล"}"</td>
+                          <td className="py-4 px-6 text-center">
+                            <div className="flex justify-center">
+                              {l?.fileUrl?.trim() ? (
+                                <div className="relative w-10 h-10 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all" onClick={() => setPreviewImage(l.fileUrl)}>
+                                  <Image src={l.fileUrl} alt="doc" fill className="object-cover" unoptimized={true} />
+                                </div>
                               ) : (
-                                <span className="text-[13px] text-slate-400 font-medium italic">
-                                  ยังไม่ได้ระบุ
-                                </span>
+                                <span className="text-slate-400 text-sm font-bold">-</span>
                               )}
                             </div>
                           </td>
-                          <td className="py-4 px-6">
-                            {(() => {
-                              // เช็คว่าถ้า e.site ไม่มีค่า, เป็นค่าว่าง หรือเป็น "ไม่ระบุ" ให้เปลี่ยนเป็น "ทุกไซต์"
-                              const displaySite =
-                                e.site === "ไม่ระบุ" || !e.site
-                                  ? "ทุกไซต์"
-                                  : e.site;
-
-                              return (
-                                <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-full font-bold text-[11px] uppercase tracking-wider">
-                                  {displaySite}
-                                </span>
-                              );
-                            })()}
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full font-bold text-[11px] uppercase tracking-wider">
-                              {e.position || "พนักงาน"}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span
-                              className={`font-black text-[10px] uppercase px-3 py-1 rounded-lg ${
-                                e.role === "leader"
-                                  ? "bg-blue-600 text-white"
-                                  : "bg-slate-100 text-slate-400"
-                              }`}
-                            >
-                              {e.role === "leader" ? "หัวหน้า" : "พนักงาน"}
+                          <td className="py-4 px-6 text-center">
+                            <span className={`px-4 py-2 rounded-full text-[10px] font-black uppercase shadow-sm border ${
+                                l.status === "pending" ? "bg-orange-100 text-orange-600 border-orange-200" :
+                                l.status === "approved" ? "bg-emerald-100 text-emerald-600 border-emerald-200" :
+                                "bg-red-100 text-red-600 border-red-200"
+                            }`}>
+                              {l.status === "pending" ? "รออนุมัติ" : l.status === "approved" ? "อนุมัติแล้ว" : "ปฏิเสธ"}
                             </span>
                           </td>
                           <td className="py-4 px-6">
                             <div className="flex justify-center gap-2">
-                              <button
-                                onClick={() => handleEditEmployee(e)}
-                                disabled={isProcessing}
-                                className="w-10 h-10 flex items-center justify-center bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-all"
-                              >
-                                ✏️
-                              </button>
-                              <button
-                                disabled={isProcessing}
-                                className="w-10 h-10 flex items-center justify-center bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all"
-                                onClick={() => handleDeleteEmployee(e.id)}
-                              >
-                                {isProcessing ? "⏳" : "🗑️"}
-                              </button>
+                              {l.status === "pending" ? (
+                                <>
+                                  <button onClick={() => updateLeaveStatus(l.id, "approved")} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-md shadow-emerald-100">อนุมัติ</button>
+                                  <button onClick={() => updateLeaveStatus(l.id, "rejected")} className="bg-white border border-red-200 text-red-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-50 active:scale-95 transition-all">ปฏิเสธ</button>
+                                </>
+                              ) : (
+                                <button onClick={() => updateLeaveStatus(l.id, "pending")} className="flex items-center gap-1 bg-slate-50 text-slate-600 border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-100 active:scale-95 transition-all">✏️ แก้ไข</button>
+                              )}
                             </div>
                           </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td
-                          colSpan={7}
-                          className="py-24 text-center text-slate-400 italic font-black"
-                        >
-                          ไม่พบข้อมูลพนักงาน...
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </Section>
-        </div>
-
-        {/* --- 2. ATTENDANCE TABLE (ตารางเข้า-ออกงาน) --- */}
-        <div className="print:hidden mt-12">
-          <Section title="ตารางเข้า-ออกงานของพนักงาน">
-            <div className="mb-6 relative max-w-md">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <span className="text-gray-400">🔍</span>
-              </div>
-              <input
-                type="text"
-                placeholder="ค้นหาชื่อพนักงาน หรือ วันที่..."
-                className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-                value={searchAtt}
-                onChange={(e) => setSearchAtt(e.target.value)}
-              />
-            </div>
-            <div className="rounded-[2rem] border border-slate-100 overflow-hidden bg-white shadow-sm">
-              <div className="overflow-x-auto max-h-[580px] overflow-y-auto custom-scrollbar">
-                {/* ✅ ขยายความกว้างขั้นต่ำของตารางเป็น 1800px เพื่อการแสดงผลที่กว้างขึ้น */}
-                <table className="min-w-[1800px] w-full text-sm border-separate border-spacing-0">
-                  <thead className="sticky top-0 z-20 bg-white">
-                    <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
-                      <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">
-                        รูป
-                      </th>
-                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                        พนักงาน
-                      </th>
-                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                        วันที่
-                      </th>
-                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                        ไซต์ที่เข้าทำงาน
-                      </th>
-                      <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                        รอบเข้างาน
-                      </th>
-                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                        สถานะการเข้างาน
-                      </th>
-                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                        สถานะการออกงาน
-                      </th>
-                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                        เวลาเข้า
-                      </th>
-                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                        เวลาออก
-                      </th>
-                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                        รูปเข้างาน
-                      </th>
-                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                        รูปออกงาน
-                      </th>
-                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                        พิกัดเข้างาน
-                      </th>
-                      <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                        พิกัดออกงาน
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {filteredAttendance.length > 0 ? (
-                      filteredAttendance.map((a, index) => (
-                        <tr
-                          key={index}
-                          className="group hover:bg-blue-50/40 transition-colors"
-                        >
-                          {/* 1. รูปโปรไฟล์พนักงาน */}
                           <td className="py-4 px-6">
-                            <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100">
-                              <Image
-                                src={
-                                  a.avatarUrl ||
-                                  "https://utfs.io/f/default-avatar-placeholder.png"
-                                }
-                                alt="profile"
-                                fill
-                                className="object-cover"
+                            <div className="relative flex items-center gap-2 min-w-[200px]">
+                              <input
+                                type="text"
+                                placeholder="ระบุหมายเหตุ..."
+                                className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${l.status !== "pending" ? "bg-slate-50 text-slate-500 border-slate-100" : "bg-white border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-50"}`}
+                                value={l.status === "pending" ? leaveRemarks[l.id] ?? l.remark ?? "" : l.remark ?? "-"}
+                                onChange={(e) => handleRemarkChange(l.id, e.target.value)}
+                                readOnly={l.status !== "pending"}
                               />
-                            </div>
-                          </td>
-                          {/* 2. ชื่อ-นามสกุล และ Username */}
-                          <td className="py-4 px-6">
-                            <div className="font-black text-gray-800">
-                              {a.employeeName || "ไม่ระบุชื่อ"}
-                            </div>
-                            <div className="text-blue-500 font-mono text-[11px]">
-                              @{a.userName || "user"}
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 font-bold text-gray-600">
-                            {a.date
-                              ? new Date(a.date).toLocaleDateString("th-TH", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "2-digit",
-                                })
-                              : "-"}
-                          </td>
-                          <td className="py-4 px-6 text-center font-black text-green-600 text-base">
-                            <div className="font-black text-gray-600">
-                              {a.siteSnapName || "ไม่ระบุชื่อ"}
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 font-bold text-gray-600">
-                            <div className="flex flex-col">
-                              {a.startTime && a.endTime && (
-                                <span className="text-[15px] text-black-600">
-                                  {a.startTime.slice(0, 5)} -{" "}
-                                  {a.endTime.slice(0, 5)}
-                                </span>
+                              {l.status !== "pending" && l.remark && (
+                                <button onClick={() => setViewRemarkId(viewRemarkId === l.id ? null : l.id)} className={`p-2 rounded-lg border transition-all ${viewRemarkId === l.id ? "bg-blue-600 text-white border-blue-600" : "bg-blue-50 text-blue-600 border-blue-100"}`}>🔍</button>
                               )}
-                            </div>
-                          </td>
-                          {/* ส่วนสถานะการเข้างานตามเงื่อนไขที่สั่ง */}
-                          <td className="p-6 font-bold whitespace-nowrap">
-                            {a.isLate === 1 ? (
-                              <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
-                                ⚠️ สาย
-                              </span>
-                            ) : (
-                              <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
-                                ✅ ปกติ
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-6 font-bold whitespace-nowrap">
-                            {a.isEarlyExit === "1" ? (
-                              <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
-                                ⚠️ ออกก่อนเวลา
-                              </span>
-                            ) : a.isEarlyExit === "0" ? (
-                              <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
-                                ✅ ปกติ
-                              </span>
-                            ) : (
-                              <span className="text-gray-400 font-medium px-3">
-                                -
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-6 text-center font-black text-green-600 text-base">
-                            {a.checkIn
-                              ? a.checkIn.split(":").slice(0, 2).join(":")
-                              : "-"}
-                          </td>
-                          <td className="py-4 px-6 text-center font-black text-red-600 text-base">
-                            {a.checkOut
-                              ? a.checkOut.split(":").slice(0, 2).join(":")
-                              : "-"}
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            <div className="flex justify-center">
-                              {a.imageIn ? (
-                                <div
-                                  className="w-10 h-10 relative rounded-xl overflow-hidden border border-slate-100 cursor-zoom-in active:scale-90 transition-transform shadow-sm"
-                                  onClick={() =>
-                                    setViewImage(a.checkInPhoto || a.imageIn)
-                                  }
-                                >
-                                  <Image
-                                    src={a.imageIn}
-                                    alt="In"
-                                    fill
-                                    className="object-cover"
-                                  />
+                              {viewRemarkId === l.id && (
+                                <div className="absolute right-0 bottom-full mb-3 z-50 w-64 bg-white border border-slate-100 rounded-2xl shadow-2xl p-4 animate-in fade-in zoom-in duration-200">
+                                  <p className="text-xs text-slate-600 leading-relaxed font-bold">{l.remark}</p>
+                                  <div className="absolute -bottom-1.5 right-3 w-3 h-3 bg-white border-r border-b border-slate-100 rotate-45"></div>
                                 </div>
-                              ) : (
-                                <span className="text-slate-300 text-[10px] font-bold italic">
-                                  N/A
-                                </span>
                               )}
                             </div>
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            <div className="flex justify-center">
-                              {a.imageOut ? (
-                                <div
-                                  className="w-10 h-10 relative rounded-xl overflow-hidden border border-slate-100 cursor-zoom-in active:scale-90 transition-transform shadow-sm"
-                                  onClick={() => setViewImage(a.checkOutPhoto)}
-                                >
-                                  <Image
-                                    src={a.imageOut}
-                                    alt="Out"
-                                    fill
-                                    className="object-cover"
-                                  />
-                                </div>
-                              ) : (
-                                <span className="text-slate-300 text-[10px] font-bold italic">
-                                  N/A
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            {a.locationIn ? (
-                              <a
-                                href={`https://www.google.com/maps?q=${a.locationIn}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-black hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-1 mx-auto w-fit shadow-sm"
-                              >
-                                📍 ดูแผนที่
-                              </a>
-                            ) : (
-                              <span className="text-slate-300 text-[10px] font-bold italic">
-                                ไม่มีข้อมูล
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            {a.locationOut ? (
-                              <a
-                                href={`https://www.google.com/maps?q=${a.locationOut}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-black hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-1 mx-auto w-fit shadow-sm"
-                              >
-                                📍 ดูแผนที่
-                              </a>
-                            ) : (
-                              <span className="text-slate-300 text-[10px] font-bold italic">
-                                ไม่มีข้อมูล
-                              </span>
-                            )}
                           </td>
                         </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={13} className="py-24 text-center">
-                          <div className="flex flex-col items-center justify-center gap-2">
-                            <span className="text-4xl opacity-20">📅</span>
-                            <p className="text-slate-400 italic font-black tracking-wide">
-                              ไม่พบข้อมูลการลงเวลาในขณะนี้...
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </Section>
-        </div>
-
-        {/* --- 3. LEAVE REQUESTS TABLE --- */}
-        <div className="print:hidden mt-8">
-          <Section title="คำขอลางานของพนักงาน">
-            <div className="mb-4 relative max-w-xs">
-              <input
-                type="text"
-                placeholder="🔍 ค้นชื่อพนักงาน หรือ ประเภทลา..."
-                className="w-full pl-4 pr-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                value={searchLeave}
-                onChange={(e) => setSearchLeave(e.target.value)}
-              />
-            </div>
-            <div className="rounded-3xl border border-slate-100 overflow-hidden bg-white shadow-sm">
-              <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
-                <table className="min-w-[1200px] w-full text-sm border-separate border-spacing-0">
-                  <thead className="sticky top-0 z-20 bg-white shadow-sm">
-                    <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
-                      <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">
-                        รูป
-                      </th>
-                      <th className="py-4 px-4 text-left border-b border-gray-100 bg-white">
-                        พนักงาน
-                      </th>
-                      <th className="py-4 px-4 text-center border-b border-gray-100 bg-white">
-                        ประเภท
-                      </th>
-                      <th className="py-4 px-4 text-center border-b border-gray-100 bg-white">
-                        วันที่
-                      </th>
-                      <th className="py-4 px-4 text-center border-b border-gray-100 bg-white">
-                        จำนวนวัน
-                      </th>
-                      <th className="py-4 px-4 text-left border-b border-gray-100 bg-white">
-                        เหตุผล
-                      </th>
-                      <th className="py-4 px-4 text-center border-b border-gray-100 bg-white">
-                        เอกสาร
-                      </th>
-                      <th className="py-4 px-4 text-center border-b border-gray-100 bg-white">
-                        สถานะ
-                      </th>
-                      <th className="py-4 px-4 text-center border-b border-gray-100 bg-white">
-                        จัดการคำขอ
-                      </th>
-                      <th className="py-4 px-4 text-center border-b border-gray-100 bg-white">
-                        หมายเหตุ
-                      </th>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={10} className="py-24 text-center text-slate-400 italic font-black">ไม่พบคำขอลางานในขณะนี้...</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {filteredLeaves.length > 0 ? (
-                      filteredLeaves.map((l) => {
-                        const start = new Date(l.startDate);
-                        const end = new Date(l.endDate);
-                        const diffTime = Math.abs(
-                          end.getTime() - start.getTime()
-                        );
-                        const diffDays =
-                          Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-                        return (
-                          <tr
-                            key={l.id}
-                            className="hover:bg-gray-50/50 transition-colors"
-                          >
-                            <td className="py-4 px-6">
-                              <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100">
-                                <img
-                                  src={
-                                    l.avatarUrl ||
-                                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                                      l.employeeName || "User"
-                                    )}&background=random`
-                                  }
-                                  alt="profile"
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="font-black text-gray-800 text-base">
-                                {l.employeeName || "ไม่ระบุชื่อ"}
-                              </div>
-                              <div className="text-blue-500 font-mono text-[11px] font-bold">
-                                @{l.userName || "user"}
-                              </div>
-                            </td>
-                            <td className="py-4 px-4 text-center font-bold text-blue-600">
-                              {l.type}
-                            </td>
-                            <td className="py-4 px-4 text-center text-gray-500 text-[10px] font-bold leading-tight">
-                              {l.startDate} <br /> - <br /> {l.endDate}
-                            </td>
-                            <td className="py-4 px-4 text-center">
-                              <span className="bg-orange-50 text-orange-600 px-3 py-1 rounded-lg font-black text-xs">
-                                {isNaN(diffDays) ? "-" : `${diffDays} วัน`}
-                              </span>
-                            </td>
-                            <td className="py-4 px-4 text-gray-600 italic text-xs">
-                              "{l.reason || "ไม่มีระบุเหตุผล"}"
-                            </td>
-                            <td className="py-4 px-4 text-center">
-                              <div className="flex justify-center">
-                                {l.fileUrl ? ( // เปลี่ยนจาก attachmentUrl เป็น fileUrl ตาม Schema
-                                  <div
-                                    className="w-10 h-10 relative rounded-lg overflow-hidden border border-slate-200 cursor-zoom-in hover:scale-110 transition-transform bg-slate-50 shadow-sm"
-                                    onClick={() => setViewImage(l.fileUrl)}
-                                  >
-                                    <img
-                                      src={l.fileUrl}
-                                      alt="doc"
-                                      className="w-full h-full object-cover"
-                                    />
-                                  </div>
-                                ) : (
-                                  <span className="text-slate-300 text-[10px]">
-                                    ไม่มีแนบ
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-4 px-4 text-center">
-                              <span
-                                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase ${
-                                  l.status === "pending"
-                                    ? "bg-orange-100 text-orange-600"
-                                    : l.status === "approved"
-                                    ? "bg-green-100 text-green-600"
-                                    : "bg-red-100 text-red-600"
-                                }`}
-                              >
-                                {l.status === "pending"
-                                  ? "รออนุมัติ"
-                                  : l.status === "approved"
-                                  ? "อนุมัติแล้ว"
-                                  : "ปฏิเสธ"}
-                              </span>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="flex justify-center gap-2">
-                                {l.status === "pending" ? (
-                                  <>
-                                    <button
-                                      onClick={() =>
-                                        updateLeaveStatus(l.id, "approved")
-                                      }
-                                      className="bg-green-600 text-white px-4 py-1.5 rounded-xl text-xs font-bold hover:scale-105 transition-transform shadow-md shadow-green-100"
-                                    >
-                                      อนุมัติ
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        updateLeaveStatus(l.id, "rejected")
-                                      }
-                                      className="bg-white border border-red-200 text-red-500 px-4 py-1.5 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors"
-                                    >
-                                      ปฏิเสธ
-                                    </button>
-                                  </>
-                                ) : (
-                                  <button
-                                    onClick={() =>
-                                      updateLeaveStatus(l.id, "pending")
-                                    }
-                                    className="flex items-center gap-1 bg-amber-50 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-100 transition-colors"
-                                  >
-                                    ✏️ แก้ไข
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="relative flex items-center gap-2 min-w-[180px]">
-                                <input
-                                  type="text"
-                                  placeholder="ระบุหมายเหตุ..."
-                                  className={`border rounded-xl px-3 py-1.5 text-xs w-full transition-all outline-none ${
-                                    l.status !== "pending"
-                                      ? "bg-gray-50 text-gray-700 border-gray-200 shadow-sm"
-                                      : "bg-white border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                                  }`}
-                                  value={
-                                    l.status === "pending"
-                                      ? leaveRemarks[l.id] ?? l.remark ?? ""
-                                      : l.remark ?? "-"
-                                  }
-                                  onChange={(e) =>
-                                    handleRemarkChange(l.id, e.target.value)
-                                  }
-                                  readOnly={l.status !== "pending"}
-                                />
-
-                                {/* ปุ่มกดดูข้อความ และ Modal ขนาดเล็ก */}
-                                {l.status !== "pending" && l.remark && (
-                                  <div className="relative">
-                                    <button
-                                      onClick={() =>
-                                        setViewRemarkId(
-                                          viewRemarkId === l.id ? null : l.id
-                                        )
-                                      }
-                                      className={`flex-shrink-0 p-1.5 rounded-lg transition-colors border ${
-                                        viewRemarkId === l.id
-                                          ? "bg-blue-600 text-white border-blue-600"
-                                          : "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
-                                      }`}
-                                      title="คลิกเพื่อดูหมายเหตุเต็ม"
-                                    >
-                                      <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        width="14"
-                                        height="14"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2.5"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      >
-                                        <circle cx="11" cy="11" r="8"></circle>
-                                        <line
-                                          x1="21"
-                                          y1="21"
-                                          x2="16.65"
-                                          y2="16.65"
-                                        ></line>
-                                      </svg>
-                                    </button>
-
-                                    {/* Modal เล็ก (Popover) */}
-                                    {viewRemarkId === l.id && (
-                                      <>
-                                        {/* Backdrop ใสสำหรับกดปิดเมื่อคลิกที่อื่น */}
-                                        <div
-                                          className="fixed inset-0 z-40"
-                                          onClick={() => setViewRemarkId(null)}
-                                        ></div>
-
-                                        <div className="absolute right-0 bottom-full mb-2 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl p-3 animate-in fade-in zoom-in duration-200">
-                                          <div className="flex justify-between items-center mb-2 pb-1 border-b border-gray-100">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                              หมายเหตุจากผู้อนุมัติ
-                                            </span>
-                                            <button
-                                              onClick={() =>
-                                                setViewRemarkId(null)
-                                              }
-                                              className="text-gray-400 hover:text-gray-600"
-                                            >
-                                              <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                width="12"
-                                                height="12"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="3"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                              >
-                                                <line
-                                                  x1="18"
-                                                  y1="6"
-                                                  x2="6"
-                                                  y2="18"
-                                                ></line>
-                                                <line
-                                                  x1="6"
-                                                  y1="6"
-                                                  x2="18"
-                                                  y2="18"
-                                                ></line>
-                                              </svg>
-                                            </button>
-                                          </div>
-                                          <p className="text-xs text-gray-700 leading-relaxed break-words">
-                                            {l.remark}
-                                          </p>
-                                          {/* ลูกศรชี้ลง */}
-                                          <div className="absolute -bottom-1 right-3 w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45"></div>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td
-                          colSpan={9}
-                          className="py-20 text-center text-slate-400 italic font-bold"
-                        >
-                          ไม่พบคำขอลา...
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  )}
+                </tbody>
+              </table>
             </div>
-          </Section>
+          </div>
+
+          {/* --- Mobile Card View --- */}
+          <div className="lg:hidden grid grid-cols-1 gap-4 px-4 pb-20">
+            {currentItems.length > 0 ? (
+              currentItems.map((l) => {
+                const start = new Date(l.startDate);
+                const end = new Date(l.endDate);
+                const dDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+                return (
+                  <div key={l.id} className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden text-left">
+                    <div className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${l.status === "pending" ? "bg-orange-100 text-orange-600" : l.status === "approved" ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"}`}>
+                      {l.status === "pending" ? "รออนุมัติ" : l.status === "approved" ? "อนุมัติแล้ว" : "ปฏิเสธ"}
+                    </div>
+
+                    <div className="absolute top-4 right-4">
+                      <button onClick={() => setViewRemarkId(viewRemarkId === l.id ? null : l.id)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-50 transition-colors text-slate-400 text-xl">⋮</button>
+                      {viewRemarkId === l.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setViewRemarkId(null)} />
+                          <div className="absolute right-0 top-12 z-50 w-64 bg-white border border-slate-100 rounded-3xl shadow-2xl p-4 animate-in fade-in zoom-in duration-200">
+                            <p className="text-[10px] font-black text-slate-400 uppercase mb-3 px-1 text-left">จัดการคำขอ / หมายเหตุ</p>
+                            <textarea
+                              placeholder="ระบุหมายเหตุที่นี่..."
+                              className="w-full h-24 p-3 rounded-2xl border border-slate-100 bg-slate-50 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none text-left"
+                              value={leaveRemarks[l.id] ?? l.remark ?? ""}
+                              onChange={(e) => handleRemarkChange(l.id, e.target.value)}
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              <button onClick={() => { updateLeaveStatus(l.id, "approved"); setViewRemarkId(null); }} className="py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-black">อนุมัติ</button>
+                              <button onClick={() => { updateLeaveStatus(l.id, "rejected"); setViewRemarkId(null); }} className="py-2.5 bg-red-500 text-white rounded-xl text-xs font-black">ปฏิเสธ</button>
+                            </div>
+                            {l.status !== "pending" && (
+                              <button onClick={() => { updateLeaveStatus(l.id, "pending"); setViewRemarkId(null); }} className="w-full mt-2 py-2 text-slate-500 text-[10px] font-bold border border-dashed border-slate-200 rounded-xl text-center">ย้อนเป็นรออนุมัติ</button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="w-14 h-14 relative rounded-2xl overflow-hidden border-2 border-slate-50 bg-slate-50 shadow-sm flex-shrink-0">
+                        <Image src={l.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(l.employeeName || "User")}&background=random`} alt="profile" fill className="object-cover" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-black text-slate-800 text-lg leading-none truncate">{l.employeeName || "ไม่ระบุชื่อ"}</h3>
+                        <p className="text-blue-500 font-mono text-xs font-bold mt-1 truncate">@{l.userName || "user"}</p>
+                        <div className="mt-1 font-bold text-blue-600 text-xs uppercase">{l.type}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-slate-50 p-3 rounded-2xl">
+                        <p className="text-[10px] text-slate-400 font-black uppercase mb-1">ระยะเวลา</p>
+                        <p className="text-sm font-black text-slate-700">{isNaN(dDays) ? "-" : `${dDays} วัน`}</p>
+                      </div>
+                      <div className="bg-orange-50 p-3 rounded-2xl text-center">
+                        <p className="text-[10px] text-orange-400 font-black uppercase mb-1">วันที่ลา</p>
+                        <p className="text-[10px] font-bold text-orange-600 leading-tight">
+                          {new Date(l.startDate).toLocaleDateString("th-TH")} - {new Date(l.endDate).toLocaleDateString("th-TH")}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 text-left">
+                      <p className="text-[10px] text-slate-400 font-black uppercase mb-1 px-1">เหตุผลการลา</p>
+                      <p className="text-xs text-slate-600 italic font-medium bg-slate-50/50 p-3 rounded-2xl border border-slate-50">"{l.reason || "ไม่มีระบุเหตุผล"}"</p>
+                    </div>
+
+                    <div className="flex gap-2 mt-2">
+                      {l.fileUrl?.trim() ? (
+                        <button onClick={() => setViewImage(l.fileUrl)} className="flex-1 py-3 bg-slate-900 text-white rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all">📄 ดูเอกสาร</button>
+                      ) : (
+                        <div className="flex-1 py-3 bg-slate-100 text-slate-400 rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 border border-slate-200/50">🚫 ไม่มีเอกสารแนบมา</div>
+                      )}
+                      {l.remark && l.status !== "pending" && (
+                        <div className="flex-1 p-3 bg-blue-50 text-blue-700 rounded-2xl text-[10px] font-bold border border-blue-100 truncate flex items-center justify-center">📌 {l.remark}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-20 text-center bg-white rounded-[2.5rem] border border-slate-100 text-slate-400 italic font-black">ไม่พบคำขอลางาน...</div>
+            )}
+          </div>
+
+          {/* --- Pagination Controls --- */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-2 mt-8 mb-12">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => prev - 1)}
+                className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+              >
+                {"<"}
+              </button>
+              
+              <div className="flex gap-1">
+                {[...Array(totalPages)].map((_, i) => (
+                  <button
+                    key={i + 1}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
+                      currentPage === i + 1 
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110" 
+                        : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+                className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+              >
+                {">"}
+              </button>
+            </div>
+          )}
+        </>
+      );
+    })()}
+  </section>
+)}
         </div>
       </main>
 
@@ -2129,10 +2362,7 @@ export default function AdminClientPage({
               {editingSite ? "แก้ไขไซต์งาน" : "เพิ่มไซต์งานใหม่"}
             </h3>
 
-            <form
-              onSubmit={handleAddSite}
-              className="space-y-5"
-            >
+            <form onSubmit={handleAddSite} className="space-y-5">
               <div className="space-y-3">
                 <input
                   name="siteName"
@@ -2339,54 +2569,51 @@ export default function AdminClientPage({
 
       {/* --- 💼 MODAL: ADD POSITION --- */}
       {showAddPosition && (
-  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center p-4">
-    <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
-      <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic flex items-center gap-2">
-        <span className="bg-amber-100 text-amber-600 p-2 rounded-lg text-sm not-italic">
-          💼
-        </span>
-        จัดการตำแหน่งงาน
-      </h3>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic flex items-center gap-2">
+              <span className="bg-amber-100 text-amber-600 p-2 rounded-lg text-sm not-italic">
+                💼
+              </span>
+              จัดการตำแหน่งงาน
+            </h3>
 
-      <form
-        onSubmit={handleAddPosition}
-        className="space-y-5"
-      >
-        <div className="space-y-3">
-          <label className="text-[10px] font-black text-slate-400 uppercase ml-2 italic">
-            ชื่อตำแหน่งงาน (Position Name)
-          </label>
-          <input
-            name="posName"
-            type="text"
-            placeholder="เช่น Senior Developer, HR Manager..."
-            required
-            autoFocus
-            className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder:text-slate-300 text-slate-700"
-          />
-        </div>
+            <form onSubmit={handleAddPosition} className="space-y-5">
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 italic">
+                  ชื่อตำแหน่งงาน (Position Name)
+                </label>
+                <input
+                  name="posName"
+                  type="text"
+                  placeholder="เช่น Senior Developer, HR Manager..."
+                  required
+                  autoFocus
+                  className="w-full bg-slate-50 border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder:text-slate-300 text-slate-700"
+                />
+              </div>
 
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-          <button
-            type="button"
-            disabled={isProcessing}
-            onClick={() => setShowAddPosition(false)}
-            className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px] hover:text-slate-600 transition-colors disabled:opacity-30"
-          >
-            ยกเลิก
-          </button>
-          <button
-            type="submit"
-            disabled={isProcessing}
-            className="flex-[2] py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-amber-100 transition-all active:scale-95 disabled:bg-slate-300"
-          >
-            {isProcessing ? "กำลังบันทึก..." : "ยืนยันเพิ่มตำแหน่ง"}
-          </button>
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={() => setShowAddPosition(false)}
+                  className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px] hover:text-slate-600 transition-colors disabled:opacity-30"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isProcessing}
+                  className="flex-[2] py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-amber-100 transition-all active:scale-95 disabled:bg-slate-300"
+                >
+                  {isProcessing ? "กำลังบันทึก..." : "ยืนยันเพิ่มตำแหน่ง"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </form>
-    </div>
-  </div>
-)}
+      )}
 
       {/* --- 🛡️ MODAL: EDIT ADMIN PROFILE --- */}
       {showAdminEdit && (
