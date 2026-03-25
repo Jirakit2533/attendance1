@@ -605,14 +605,17 @@ export default function AdminClientPage({
      ฟังก์ชันจัดการ ไซต์งาน (Sites)
      ========================================================================== */
 
-  const handleUpdateSite = (site: any) => {
-    setEditingSite(site); // เก็บข้อมูลไซต์ที่เลือกลง State
-    const [latVal, lngVal] = (site.coordinates || ",").split(","); // แยกพิกัด
-    setLat(latVal || "");
-    setLng(lngVal || "");
-    setShowAddSite(true); // เปิด Modal อันเดิมที่มีอยู่แล้ว
-    setShowManageModal(false);
-  };
+     const handleUpdateSite = (site: any) => {
+      setEditingSite(site); 
+      const [latVal, lngVal] = (site.coordinates || ",").split(",");
+      setLat(latVal || "");
+      setLng(lngVal || "");
+  
+      setIsAllSite(site.name === "ทุกไซต์"); // ถ้าชื่อคือ 'ทุกไซต์' ให้ติ๊ก Checkbox isAllSite ไว้ด้วย
+      
+      setShowAddSite(true); 
+      setShowManageModal(false);
+    };
 
   const handleDeleteSite = async (id: string) => {
     // 1. ถามยืนยันก่อนลบ
@@ -778,6 +781,23 @@ export default function AdminClientPage({
       }
 
       if (res.success) {
+        // --- ส่วนที่เพิ่มเข้าไปเพื่อให้อัปเดต UI ทันที ---
+        if (editingSite) {
+          // กรณีแก้ไข: หาตัวเดิมใน list แล้วเปลี่ยนค่าใหม่ลงไป
+          setAllSites((prev: any[]) =>
+            prev.map((s) => (s.id === editingSite.id ? { ...s, ...siteData } : s))
+          );
+        } else {
+          // กรณีเพิ่มใหม่: เอาข้อมูลใหม่ที่ได้จาก Server (res.data หรือ res.id) มาต่อท้าย list
+          // หมายเหตุ: res.id คือ ID ที่ Server เจนให้ ถ้าไม่มีให้ใช้ crypto.randomUUID() ไปก่อน
+          const newSite = { 
+            id: res.id || (res.data?.id) || crypto.randomUUID(), 
+            ...siteData 
+          };
+          setAllSites((prev: any[]) => [...prev, newSite]);
+        }
+        // ------------------------------------------
+
         setShowAddSite(false);
         setEditingSite(null);
         setLat("");
@@ -802,16 +822,34 @@ export default function AdminClientPage({
     if (!name) return;
     setIsProcessing(true);
     try {
-      const result = await savePositionAction({ name });
+      // ตรวจสอบว่าเป็นการแก้ไข (editingPos มีค่า) หรือเพิ่มใหม่
+      const result = await savePositionAction({ 
+        name, 
+        id: editingPos?.id // ส่ง ID ไปถ้าเป็นการแก้ไข เพื่อให้ Server ทราบ
+      });
+
       if (result.success) {
         form.reset();
-        setAllPositions((prev) => [
-          ...prev,
-          { id: crypto.randomUUID(), name: name },
-        ]);
+        
+        if (editingPos) {
+          // กรณีแก้ไข: Map เพื่ออัปเดตตัวที่ ID ตรงกัน
+          setAllPositions((prev) =>
+            prev.map((pos) =>
+              pos.id === editingPos.id ? { ...pos, name: name } : pos
+            )
+          );
+        } else {
+          // กรณีเพิ่มใหม่: ใช้ Logic เดิมของคุณ
+          setAllPositions((prev) => [
+            ...prev,
+            { id: result.id || crypto.randomUUID(), name: name },
+          ]);
+        }
+
+        setEditingPos(null); // ล้างค่า editing state หลังจากทำงานเสร็จ
         setShowAddPosition(false);
         setShowManageModal(true);
-        alert(`✅ เพิ่มตำแหน่งงาน "${name}" เรียบร้อยแล้ว`);
+        alert(`✅ ${editingPos ? "แก้ไข" : "เพิ่ม"}ตำแหน่งงาน "${name}" เรียบร้อยแล้ว`);
       } else {
         alert(result.error || "ไม่สามารถบันทึกตำแหน่งได้");
       }
@@ -821,7 +859,6 @@ export default function AdminClientPage({
       setIsProcessing(false);
     }
   };
-
   const handleEditEmployee = (emp) => {
     setEditingEmployee(emp);
     setPreviewImage(emp.avatarUrl || null);
