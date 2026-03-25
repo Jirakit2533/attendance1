@@ -1317,7 +1317,7 @@ export default function AdminClientPage({
             /* --- การ์ดปกติ 1-3: ปรับเป็นแนวนอนในมือถือ (flex-row) และแนวตั้งในจอใหญ่ (md:flex-col) --- */
             <div
               key={i}
-              className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group flex flex-row md:flex-col items-center md:items-start gap-5 md:gap-0"
+              className="bg-white p-6 md:p-8 rounded-4xl md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group flex flex-row md:flex-col items-center md:items-start gap-5 md:gap-0"
             >
               <div className="flex justify-between items-start md:mb-4">
                 <div
@@ -1357,7 +1357,7 @@ export default function AdminClientPage({
           {/* ✅ การ์ดที่ 4: ปรับขนาด Padding และความสูงให้พอดีกับอุปกรณ์เคลื่อนที่ */}
           <div
             onClick={() => setShowManageModal(true)}
-            className="relative bg-white rounded-[2rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer overflow-hidden group flex flex-col h-full min-h-[160px] md:min-h-0"
+            className="relative bg-white rounded-4xl md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer overflow-hidden group flex flex-col h-full min-h-[160px] md:min-h-0"
           >
             {/* 🏷️ Badge มุมขวาบน */}
             <div className="absolute top-4 right-5 z-10 flex items-center gap-1.5">
@@ -1403,7 +1403,7 @@ export default function AdminClientPage({
         </div>
 
         {/* --- Tab Navigator --- */}
-        <div className="flex items-center gap-1 md:gap-2 bg-slate-100/50 p-1 md:p-1.5 rounded-full md:rounded-[2rem] w-full sm:w-fit mb-6 md:mb-8 border border-slate-200/60 backdrop-blur-sm print:hidden overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 md:gap-2 bg-slate-100/50 p-1 md:p-1.5 rounded-full md:rounded-4xl w-full sm:w-fit mb-6 md:mb-8 border border-slate-200/60 backdrop-blur-sm print:hidden overflow-x-auto no-scrollbar">
           {[
             { id: "employee", label: "จัดการข้อมูลพนักงาน", icon: "👤" },
             { id: "attendance", label: "ตารางเข้า-ออกงาน", icon: "🕒" },
@@ -1576,7 +1576,7 @@ export default function AdminClientPage({
                           </div>
                         ))
                     ) : (
-                      <div className="py-10 text-center text-slate-400 italic font-black bg-white rounded-[2rem] border border-slate-100">
+                      <div className="py-10 text-center text-slate-400 italic font-black bg-white rounded-4xl border border-slate-100">
                         ไม่พบข้อมูลพนักงาน...
                       </div>
                     )}
@@ -1624,7 +1624,7 @@ export default function AdminClientPage({
                 </div>
 
                 {/* --- Desktop Table View (แสดงทั้งหมดพร้อม Scroll) --- */}
-                <div className="hidden lg:block rounded-[2rem] border border-slate-100 overflow-hidden bg-white shadow-sm">
+                <div className="hidden lg:block rounded-4xl border border-slate-100 overflow-hidden bg-white shadow-sm">
                   <div className="overflow-x-auto max-h-[580px] overflow-y-auto custom-scrollbar">
                     <table className="min-w-[1000px] w-full text-sm border-separate border-spacing-0">
                       <thead className="sticky top-0 z-20 bg-white">
@@ -1785,7 +1785,7 @@ export default function AdminClientPage({
                 />
               </div>
 
-              <div className="rounded-[2rem] border border-slate-100 overflow-hidden bg-white shadow-sm">
+              <div className="rounded-4xl border border-slate-100 overflow-hidden bg-white shadow-sm">
                 <div className="overflow-x-auto max-h-[650px] overflow-y-auto custom-scrollbar">
                   <table className="min-w-[1800px] w-full text-sm border-separate border-spacing-0">
                     <thead className="sticky top-0 z-30 bg-white">
@@ -2099,7 +2099,7 @@ export default function AdminClientPage({
       return (
         <>
           {/* --- Desktop Table View --- */}
-          <div className="hidden lg:block rounded-[2rem] border border-slate-100 overflow-hidden bg-white shadow-sm">
+          <div className="hidden lg:block rounded-4xl border border-slate-100 overflow-hidden bg-white shadow-sm">
             <div className="overflow-x-auto max-h-[580px] overflow-y-auto custom-scrollbar">
               <table className="min-w-[1400px] w-full text-sm border-separate border-spacing-0">
                 <thead className="sticky top-0 z-20 bg-white">
@@ -2422,7 +2422,7 @@ export default function AdminClientPage({
                 {!editingSite &&
                   (hasMultiSiteActive ? (
                     // แสดงข้อความเมื่อมี "ทุกไซต์" อยู่ในระบบแล้ว
-                    <div className="p-4 rounded-[2rem] border-2 border-emerald-100 bg-emerald-50/30 flex flex-col items-center text-center space-y-1">
+                    <div className="p-4 rounded-4xl border-2 border-emerald-100 bg-emerald-50/30 flex flex-col items-center text-center space-y-1">
                       <span className="text-[14px]">✅</span>
                       <span className="text-[10px] font-black text-emerald-600 uppercase italic">
                         Multi-Site System Ready
@@ -2436,7 +2436,7 @@ export default function AdminClientPage({
                     // แสดงปุ่มเปิดโหมดถ้ายังไม่มีในฐานข้อมูล
                     <div
                       id="special-site-logic"
-                      className="p-4 rounded-[2rem] border-2 border-dashed border-slate-100 bg-slate-50/50 space-y-3 transition-all"
+                      className="p-4 rounded-4xl border-2 border-dashed border-slate-100 bg-slate-50/50 space-y-3 transition-all"
                     >
                       <label className="flex items-center justify-between cursor-pointer group">
                         <div className="flex flex-col">
@@ -2712,7 +2712,7 @@ export default function AdminClientPage({
 
             {/* ส่วนอัปโหลดรูป */}
             <div className="flex flex-col items-center gap-2 py-2">
-              <div className="w-28 h-28 rounded-[2rem] bg-slate-100 overflow-hidden border-4 border-white shadow-lg relative group">
+              <div className="w-28 h-28 rounded-4xl bg-slate-100 overflow-hidden border-4 border-white shadow-lg relative group">
                 <img
                   src={
                     previewImage ||
@@ -2796,7 +2796,7 @@ export default function AdminClientPage({
               </div>
 
               {/* ส่วนเปลี่ยนรหัสผ่าน */}
-              <div className="space-y-4 bg-slate-50/50 p-4 rounded-[2rem] border border-slate-100">
+              <div className="space-y-4 bg-slate-50/50 p-4 rounded-4xl border border-slate-100">
                 <div className="px-2">
                   <h3 className="text-[11px] font-black text-red-500 uppercase tracking-[0.2em]">
                     ตั้งค่าความปลอดภัย
