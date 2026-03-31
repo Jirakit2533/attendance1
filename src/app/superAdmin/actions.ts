@@ -63,8 +63,6 @@ export async function getAdmins() {
   }
 }
 
-/* ================== COMPANY ACTIONS ================== */
-
 export async function saveCompanyAction(data: any) {
   try {
     const admin = await getCurrentSuperAdmin();
@@ -72,35 +70,52 @@ export async function saveCompanyAction(data: any) {
 
     const isEdit = data.id && typeof data.id === "string";
 
+    // --- CASE: แก้ไขข้อมูลเดิม (UPDATE) ---
     if (isEdit) {
       await db.update(companyTable)
         .set({
           name: data.name,
           companyCode: data.companyCode, 
+          companyPrefix: data.companyPrefix || (data.companyCode ? data.companyCode.substring(0, 3).toUpperCase() : ""),
           address: data.address,
           phone: data.phone,
           email: data.email,
-          updateByName: admin.name, // 📍 แก้ให้ตรง Schema: updateBy -> updateByName
+          otRoundingOption: data.otRoundingOption,
+          updateByName: admin.name, 
           updatedAt: new Date(),
         })
         .where(eq(companyTable.id, data.id));
-    } else {
+
+      revalidatePath("/superAdmin");
+      return { success: true, message: "อัปเดตข้อมูลบริษัทสำเร็จ" };
+    } 
+
+    // --- CASE: สร้างข้อมูลใหม่ (INSERT) ---
+    else {
+      const rawCode = data.companyCode || ""; 
+      const autoPrefix = rawCode.length >= 3 ? rawCode.substring(0, 3).toUpperCase() : rawCode.toUpperCase();
+
       await db.insert(companyTable).values({
-        companyCode: data.companyCode,
-        name: data.name,
-        address: data.address,
-        phone: data.phone,
-        email: data.email,
-        creatorId: admin.id,      // 📍 แก้ให้ตรง Schema: user_id -> creatorId
-        createdByName: admin.name, // 📍 แก้ให้ตรง Schema: createdBy -> createdByName
+        superAdminCreatorId: admin.id,
+        companyCode: rawCode,
+        companyPrefix: data.companyPrefix || autoPrefix || "COM",
+        name: data.name || "",
+        address: data.address || null,
+        phone: data.phone || null,
+        email: data.email || null,
+        otRoundingOption: data.otRoundingOption || "ACTUAL",
+        createdByName: admin.name,
       });
+
+      revalidatePath("/superAdmin");
+      return { success: true, message: "สร้างบริษัทใหม่สำเร็จ" };
     }
 
-    revalidatePath("/superAdmin");
-    return { success: true };
   } catch (error: any) {
     console.error("Save Company Error:", error);
-    if (error.code === '23505') return { success: false, error: "รหัสบริษัทนี้ถูกใช้งานแล้ว" };
+    if (error.code === '23505') {
+        return { success: false, error: "รหัสบริษัทหรือชื่อบริษัทนี้มีอยู่ในระบบแล้ว" };
+    }
     return { success: false, error: error.message || "ล้มเหลวในการบันทึกข้อมูลบริษัท" };
   }
 }
@@ -110,13 +125,17 @@ export async function deleteCompanyAction(id: string) {
     const admin = await getCurrentSuperAdmin();
     if (!admin) return { success: false, error: "Unauthorized" };
 
-    // ใช้การอัปเดตชื่อผู้ลบก่อนจะลบจริง (ถ้าต้องการเก็บ Log ชื่อคนลบใน DB ก่อนหายไป)
-    // หรือถ้า Schema ลบแบบ Hard Delete (ลบถาวร) บรรทัดนี้อาจไม่จำเป็น แต่ใส่ไว้ให้ตามโครงสร้างคุณครับ
-    await db.update(companyTable).set({ deletedByName: admin.name }).where(eq(companyTable.id, id));
+    // 1. ทำ Soft Delete หรือบันทึกประวัติการลบก่อน (Optional ขึ้นอยู่กับ Business Logic)
+    await db.update(companyTable).set({ 
+      deletedByName: admin.name, 
+      deletedAt: new Date() 
+    }).where(eq(companyTable.id, id));
 
+    // 2. ลบข้อมูลที่ผูกกับบริษัท (Admins, Users) เพื่อป้องกัน Foreign Key Error
     await db.delete(adminsTable).where(eq(adminsTable.company, id));
     await db.delete(usersTable).where(eq(usersTable.companyId, id));
 
+    // 3. ลบตัวบริษัทจริงออกจาก Table
     const result = await db.delete(companyTable)
       .where(eq(companyTable.id, id))
       .returning({ deletedId: companyTable.id });
@@ -139,7 +158,6 @@ export async function deleteCompanyAction(id: string) {
     return { success: false, error: "ล้มเหลว: " + (error.message || "Unknown error") };
   }
 }
-
 /* ================== ADMIN ACTIONS ================== */
 
 export async function saveAdminAction(data: any) {
@@ -171,7 +189,7 @@ export async function saveAdminAction(data: any) {
         .set({
           company: data.companyId,
           email: email,
-          updateByName: admin.name, // 📍 แก้ให้ตรง Schema: updateBy -> updateByName
+          updateByName: admin.name,
           updatedAt: new Date(),
         })
         .where(eq(adminsTable.user_id, data.id));
@@ -195,10 +213,10 @@ export async function saveAdminAction(data: any) {
 
       await db.insert(adminsTable).values({
         user_id: newUser.id,
-        creatorId: admin.id,      // 📍 เพิ่มตาม Schema: เก็บ ID คนสร้าง
+        creatorId: admin.id, 
         company: data.companyId,
         email: email,
-        createdByName: admin.name, // 📍 แก้ให้ตรง Schema: createdBy -> createdByName
+        createdByName: admin.name,
       });
     }
 

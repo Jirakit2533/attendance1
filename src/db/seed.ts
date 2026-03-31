@@ -19,6 +19,7 @@ async function seed() {
       userName: username,
       passwordHash: hashedPassword,
       name: name,
+      role: "super_admin",
     });
 
     console.log("✅ สร้าง Super Admin สำเร็จ!");

@@ -17,6 +17,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
 
+
 export default async function Page() {
   // 1. ดึงข้อมูล User จาก Session/Cookie เบื้องต้น
   const userFromAuth = await getCurrentUser();
@@ -111,7 +112,7 @@ export default async function Page() {
     .limit(2); // 🔥 จำกัดจำนวนคำขอลางานให้เหลือเพียง 2 รายการล่าสุดตามที่สั่ง
 
   // 3. Mapping ข้อมูล (เพิ่มฟิลด์สถานะเพื่อให้ตรงกับ UI)
-  const initialRecords = dbRecords.map((r) => ({
+  const initialRecords = (dbRecords || []).map((r) => ({
     date: r.date,
     // ปรับการแสดงผลเวลา (ตัดวินาทีออกถ้าเป็น string format)
     checkIn: r.checkIn ? String(r.checkIn).slice(0, 5) : "-",
@@ -125,28 +126,26 @@ export default async function Page() {
     role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
     // ✅ เพิ่มสถานะเพื่อให้ Client Page ตรวจสอบการแสดงสี/ไอคอนได้เหมือน Admin
     isLate: r.isLate ?? 0,
-    isEarlyExit: r.isEarlyExit ?? "-",
+    isEarlyExit: r.isEarlyExit ?? "0",
     // ✅ เปลี่ยนไปใช้ข้อมูลเวลาจาก Snapshot ใน Record (r) แทน
     startTime: r.shiftStartTimeSnapshot,
     endTime: r.shiftEndTimeSnapshot,
   }));
 
-  const initialLeaves = dbLeaves.map((l) => {
+  const initialLeaves = (dbLeaves || []).map((l) => {
     // ✅ จัดการ Format createdAt เป็น วันที่/เดือน/ปี ชม.:นาที
-    // ✅ จัดการ Format createdAt เป็น วันที่/เดือน/ปี ชม.:นาที (แก้ปัญหา Timezone Offset)
-    // ✅ แก้ไข: บังคับ Timezone เป็น UTC เพื่อไม่ให้มันบวก 7 ชั่วโมงซ้ำซ้อนกับใน DB
     const formattedCreatedAt = (() => {
       if (!l.createdAt) return "-";
       
       const dateObj = new Date(l.createdAt);
       
-      // 🛡️ ตรวจสอบว่า Date ถูกต้องหรือไม่ (ป้องกัน Invalid Date error)
+      // 🛡️ ตรวจสอบว่า Date ถูกต้องหรือไม่
       if (isNaN(dateObj.getTime())) return "-";
     
       try {
         return dateObj
           .toLocaleString("en-GB", {
-            timeZone: "UTC", // แนะนำให้ระบุชัดเจนเพื่อความคงที่ของข้อมูล
+            timeZone: "UTC", // บังคับ Timezone เป็น UTC ตามมาตรฐานข้อมูลใน DB
             day: "2-digit",
             month: "2-digit",
             year: "numeric",
@@ -156,7 +155,7 @@ export default async function Page() {
           })
           .replace(",", "");
       } catch (e) {
-        return "-"; // ถ้ามีปัญหาเรื่อง Timezone หรือ Locale ให้คืนค่าพื้นฐาน
+        return "-";
       }
     })();
 
@@ -195,7 +194,7 @@ export default async function Page() {
     userName: user.userName, // ✅ เพิ่มเพื่อให้ Badge Username แสดงผล
     position: user.positionName, // ✅ ส่งชื่อตำแหน่งเข้าไป
     site: user.siteName, // ✅ ส่งชื่อไซต์เข้าไป
-    department: user.departmentName, // ✅ อย่าลืม Join แผนกใน Query ด้านบนด้วยถ้าต้องการโชว์
+    department: user.departmentName, 
     // ✅ ส่งเวลาเข้า-ออกงานไปที่หน้า Client
     startTime: user.startTime,
     endTime: user.endTime,

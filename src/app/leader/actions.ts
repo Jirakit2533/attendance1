@@ -1,215 +1,17 @@
 "use server";
 
 import { db } from "@/db/db";
-import { leaveTable, attendanceTable, usersTable, shiftsTable, overtimeTable, departmentsTable, sitesTable, temporaryShiftsTable } from "@/db/schema";
+import { leaveTable, attendanceTable, usersTable, shiftsTable, overtimeTable, departmentsTable, sitesTable, temporaryShiftsTable, companyTable } from "@/db/schema";
 import { eq, and, sql, isNull, desc } from "drizzle-orm"; // เพิ่ม isNull, desc
 import { revalidatePath } from "next/cache";
 import { isInsideBound, validateAndGetSite, validateCheckOutLocation } from "@/lib/location-service";
+import { calculateOvertime } from "@/lib/over-time/ot-calculate";
 import bcrypt from "bcryptjs";
 
 /**------------------------------------------------------------------
  * 1. บันทึกเวลาเข้า-ออก (Check-in / Check-out) พร้อมตรวจสอบสาย/ออกก่อน
  --------------------------------------------------------------------*/
-// export async function saveAttendanceAction(data: {
-//   userId: string;
-//   type: "IN" | "OUT";
-//   image: string;
-//   fileId?: string;
-//   location: string;
-//   departmentId: string;
-//   siteId: string | null;
-//   isConfirmed?: boolean; // เพิ่ม parameter เพื่อรับค่าการยืนยันจากหน้าบ้าน
-// }) {
-//   try {
-//     const now = new Date();
-//     const dateStr = new Intl.DateTimeFormat('en-CA', {
-//       timeZone: 'Asia/Bangkok'
-//     }).format(now);
-//     const currentTimeStr = now.toLocaleTimeString('en-GB', {
-//       timeZone: 'Asia/Bangkok',
-//       hour12: false
-//     });
-
-//     // 1. ดึงข้อมูลกะงานปกติ
-//     const shiftData = await db
-//       .select()
-//       .from(shiftsTable)
-//       .where(eq(shiftsTable.userId, data.userId))
-//       .limit(1);
-
-//     const shift = shiftData[0];
-//     let currentSiteName = "";
-//     let currentSiteCoords = "";
-//     let finalSiteId = data.siteId;
-
-//     if (data.type === "IN") {
-//       const [uLat, uLon] = data.location.split(',');
-//       const winnerSite = await validateAndGetSite(uLat, uLon, data.departmentId, data.siteId);
-//       currentSiteName = winnerSite.name;
-//       currentSiteCoords = winnerSite.coordinates || "";
-//       finalSiteId = winnerSite.id;
-//     } else if (data.siteId) {
-//       const [site] = await db.select().from(sitesTable).where(eq(sitesTable.id, data.siteId)).limit(1);
-//       currentSiteName = site?.name || "";
-//       currentSiteCoords = site?.coordinates || "";
-//     }
-
-//     let deptNameSnapshot = "";
-//     if (data.departmentId) {
-//       const [dept] = await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, data.departmentId)).limit(1);
-//       deptNameSnapshot = dept?.name || "";
-//     }
-
-//     if (data.type === "IN") {
-//       let isLate = 0;
-//       let lateMinutes = 0;
-
-//       if (shift) {
-//         if (currentTimeStr > shift.startTime) {
-//           const [nowH, nowM] = currentTimeStr.split(':').map(Number);
-//           const [shH, shM] = shift.startTime.split(':').map(Number);
-//           const diff = (nowH * 60 + nowM) - (shH * 60 + shM);
-//           if (diff > 0) {
-//             isLate = 1;
-//             lateMinutes = diff;
-//           }
-//         }
-//       }
-
-//       await db.insert(attendanceTable).values({
-//         user_id: data.userId,
-//         department_id: data.departmentId,
-//         site_id: finalSiteId,
-//         shift_id: shift?.id || null,
-//         siteInNameSnapshot: currentSiteName,
-//         siteCoordinatesSnapshot: currentSiteCoords,
-//         shiftStartTimeSnapshot: shift?.startTime || null,
-//         shiftEndTimeSnapshot: shift?.endTime || null,
-//         departmentNameSnapshot: deptNameSnapshot,
-//         date: dateStr,
-//         checkIn: currentTimeStr,
-//         imageIn: data.image,
-//         imageInId: data.fileId || null,
-//         locationIn: data.location,
-//         isLate: isLate,
-//         ...(Object.keys(attendanceTable).includes('lateMinutes') ? { lateMinutes } : {}),
-//       });
-
-//       revalidatePath("/", "layout");
-//       revalidatePath("/leader");
-//       revalidatePath("/employee");
-//       return { success: true, siteName: currentSiteName };
-
-//     } else {
-//       let isEarlyExit = 0;
-//       let earlyExitMinutes = 0;
-
-//       const lastCheckIn = await db
-//         .select()
-//         .from(attendanceTable)
-//         .where(
-//           and(
-//             eq(attendanceTable.user_id, data.userId),
-//             isNull(attendanceTable.checkOut)
-//           )
-//         )
-//         .orderBy(desc(attendanceTable.createdAt))
-//         .limit(1);
-
-//       if (lastCheckIn.length === 0) {
-//         return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ค้างอยู่" };
-//       }
-
-//       const currentRecord = lastCheckIn[0];
-//       const checkInDate = currentRecord.date;
-
-//       // --- ส่วนที่แก้ไข: เรียกใช้ Logic ตรวจสอบพิกัดและสิทธิ์พนักงาน ---
-//       const [uLat, uLon] = data.location.split(',');
-//       const locationValidation = await validateCheckOutLocation(data.userId, uLat, uLon, currentRecord);
-
-//       const isOffsiteOutValue = locationValidation.isOffsiteOut;
-//       const showPopUp = locationValidation.OffsiteCheckOutConfirm;
-
-//       // ✅ แก้ไข: ถ้าต้องโชว์ Pop-up และยังไม่ได้กดยืนยัน ให้ส่ง success: false เพื่อไม่ให้หน้าบ้าน Alert สำเร็จ
-//       if (showPopUp && !data.isConfirmed) {
-//         return {
-//           success: false, // เปลี่ยนเป็น false เพื่อป้องกัน Alert เด้งก่อนยืนยันจริง
-//           siteName: currentRecord.siteInNameSnapshot || locationValidation.siteName || "",
-//           offsite: true,
-//           OffsiteCheckOutConfirm: true // สั่งให้หน้าบ้านเปิด Pop-up
-//         };
-//       }
-
-//       // Logic ใหม่: หากเป็นการยืนยันออกแบบพิกัดไม่ตรง (isConfirmed = true และเป็น offsite)
-//       const finalSiteInNameSnapshot = (data.isConfirmed && isOffsiteOutValue === "1");
-
-//       const [tempShiftData] = await db
-//         .select({ id: temporaryShiftsTable.id, endTime: temporaryShiftsTable.endTime })
-//         .from(temporaryShiftsTable)
-//         .where(and(eq(temporaryShiftsTable.userId, data.userId), eq(temporaryShiftsTable.targetDate, checkInDate)))
-//         .limit(1);
-
-//       const activeEndTime = tempShiftData?.endTime || shift?.endTime;
-
-//       if (activeEndTime) {
-//         const [currH, currM] = currentTimeStr.split(':').map(Number);
-//         const [endH, endM] = activeEndTime.split(':').map(Number);
-//         const [inH, inM] = (currentRecord.checkIn || "00:00").split(':').map(Number);
-
-//         let currentTotalMinutes = currH * 60 + currM;
-//         let endTotalMinutes = endH * 60 + endM;
-//         const checkInTotalMinutes = inH * 60 + inM;
-
-//         if (endTotalMinutes < checkInTotalMinutes) {
-//           if (currentTotalMinutes < checkInTotalMinutes) {
-//             currentTotalMinutes += 1440;
-//           }
-//           endTotalMinutes += 1440;
-//         }
-
-//         if (currentTotalMinutes < endTotalMinutes) {
-//           isEarlyExit = 1;
-//           earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
-//         }
-//       }
-
-//       const result = await db.update(attendanceTable)
-//         .set({
-//           checkOut: currentTimeStr,
-//           imageOut: data.image,
-//           imageOutId: data.fileId || null,
-//           locationOut: data.location,
-//           isEarlyExit: isEarlyExit,
-//           isOffsiteOut: isOffsiteOutValue,
-//           isOffsiteOutCoordinates: isOffsiteOutValue === "1" ? data.location : null,
-//           siteInNameSnapshot: finalSiteInNameSnapshot,
-//           ...(Object.keys(attendanceTable).includes('earlyExitMinutes') ? { earlyExitMinutes } : {}),
-//         })
-//         .where(eq(attendanceTable.id, currentRecord.id));
-
-//       // @ts-ignore
-//       if (result.rowCount === 0 && !result.length) {
-//         return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ต้องการอัปเดต" };
-//       }
-
-//       revalidatePath("/", "layout");
-//       revalidatePath("/leader");
-//       revalidatePath("/employee");
-
-//       return {
-//         success: true,
-//         siteName: finalSiteInNameSnapshot,
-//         offsite: isOffsiteOutValue === "1",
-//         OffsiteCheckOutConfirm: false
-//       };
-//     }
-//   } catch (error: any) {
-//     console.error("Attendance error:", error);
-//     return { success: false, error: "บันทึกเวลาไม่สำเร็จ: " + (error.message || "Unknown Error") };
-//   }
-// }
-
-export async function saveAttendanceAction(data: {
+ export async function saveAttendanceAction(data: {
   userId: string;
   type: "IN" | "OUT";
   image: string;
@@ -217,26 +19,56 @@ export async function saveAttendanceAction(data: {
   location: string;
   departmentId: string;
   siteId: string | null;
-  isConfirmed?: boolean; // เพิ่ม parameter เพื่อรับค่าการยืนยันจากหน้าบ้าน
+  isConfirmed?: boolean;
 }) {
   try {
     const now = new Date();
-    const dateStr = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Bangkok'
-    }).format(now);
     const currentTimeStr = now.toLocaleTimeString('en-GB', {
       timeZone: 'Asia/Bangkok',
       hour12: false
     });
 
-    // 1. ดึงข้อมูลกะงานปกติ
-    const shiftData = await db
-      .select()
-      .from(shiftsTable)
-      .where(eq(shiftsTable.userId, data.userId))
-      .limit(1);
+    // --- Logic กะกลางคืน: ถ้าเช็คอินช่วง 00:00 - 05:00 ให้ลองหากะของ "เมื่อวาน" ---
+    const nowH = now.getHours();
+    let lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
+    if (data.type === "IN" && nowH >= 0 && nowH < 5) {
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(yesterday);
+    }
+    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
+
+    // 1. ดึงข้อมูลผู้ใช้, กะงาน, และบริษัท (เพื่อเอา Rounding Option)
+    const [userData, shiftData, tempShift] = await Promise.all([
+      db.select().from(usersTable).where(eq(usersTable.id, data.userId)).limit(1),
+      db.select().from(shiftsTable).where(eq(shiftsTable.userId, data.userId)).limit(1),
+      db.select().from(temporaryShiftsTable).where(and(
+        eq(temporaryShiftsTable.userId, data.userId),
+        eq(temporaryShiftsTable.targetDate, lookupDate), // ใช้ lookupDate รองรับกะดึก
+        eq(temporaryShiftsTable.status, "approved")
+      )).limit(1)
+    ]);
+
+    const user = userData[0];
+    if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
+
+    // ดึง Rounding Option ของบริษัท
+    const [companyData] = await db.select({ 
+      otRoundingOption: companyTable.otRoundingOption 
+    }).from(companyTable).where(eq(companyTable.id, user.companyId || "")).limit(1);
+    
+    const companyRounding = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
 
     const shift = shiftData[0];
+    const activeStartTime = tempShift[0]?.startTime || shift?.startTime || null;
+    const activeEndTime = tempShift[0]?.endTime || shift?.endTime || null;
+
+    const toMin = (t: string | null) => {
+      if (!t) return 0;
+      const [h, m] = t.split(':').map(Number);
+      return (h * 60) + (m || 0);
+    };
+
     let currentSiteName = "";
     let currentSiteCoords = "";
     let finalSiteId = data.siteId;
@@ -245,23 +77,31 @@ export async function saveAttendanceAction(data: {
     let userCoordinatesIn = "";
 
     if (data.type === "IN") {
-      const [uLat, uLon] = data.location.split(',');
-      const validated = await validateAndGetSite(uLat, uLon, data.departmentId, data.siteId);
+      const [uLat, uLon] = data.location.split(',').map(Number);
       
+      const validated = await validateAndGetSite(uLat.toString(), uLon.toString(), data.departmentId, data.siteId);
+      
+      let isInside = true;
+      if (data.siteId) {
+        // @ts-ignore
+        isInside = await isInsideBound(uLat, uLon, data.siteId);
+      }
+
       currentSiteName = validated.name;
       currentSiteCoords = validated.coordinates || "";
       finalSiteId = validated.id;
-      isOffsiteIn = validated.isOffsiteIn;
-      OffsiteCheckInConfirm = validated.OffsiteCheckInConfirm;
-      userCoordinatesIn = validated.userCoordinates;
+      
+      isOffsiteIn = (!isInside) ? "1" : validated.isOffsiteIn;
+      OffsiteCheckInConfirm = validated.OffsiteCheckInConfirm || (!isInside);
+      userCoordinatesIn = data.location;
 
-      // ✅ ถ้าต้องโชว์ Pop-up และยังไม่ได้กดยืนยัน ให้ส่งกลับไปให้หน้าบ้านยืนยันก่อน
       if (OffsiteCheckInConfirm && !data.isConfirmed) {
         return {
           success: false,
           siteName: currentSiteName,
           offsite: true,
-          OffsiteCheckInConfirm: true 
+          OffsiteCheckInConfirm: true,
+          OffsiteCheckOutConfirm: true 
         };
       }
     } else if (data.siteId) {
@@ -277,42 +117,83 @@ export async function saveAttendanceAction(data: {
     }
 
     if (data.type === "IN") {
-      let isLate = 0;
-      let lateMinutes = 0;
+      // --- LOGIC กำแพงเวลา (รองรับกะกลางคืน) ---
+      let currentWorkingStatus: "normal" | "extra" = "normal";
+      if (activeEndTime && activeStartTime) {
+        let nowM = toMin(currentTimeStr);
+        let endM = toMin(activeEndTime);
+        let startM = toMin(activeStartTime);
 
-      if (shift) {
-        if (currentTimeStr > shift.startTime) {
-          const [nowH, nowM] = currentTimeStr.split(':').map(Number);
-          const [shH, shM] = shift.startTime.split(':').map(Number);
-          const diff = (nowH * 60 + nowM) - (shH * 60 + shM);
-          if (diff > 0) {
-            isLate = 1;
-            lateMinutes = diff;
-          }
+        if (endM < startM) endM += 1440; // กะกลางคืน
+        const adjNowM = (nowM < startM && endM > 1440) ? nowM + 1440 : nowM;
+
+        if (adjNowM > endM) {
+          currentWorkingStatus = "extra";
         }
       }
 
-      await db.insert(attendanceTable).values({
+      let isLate = 0;
+      let lateMinutes = 0;
+
+      // ตรวจสอบสายเฉพาะกะปกติ
+      if (currentWorkingStatus === "normal" && activeStartTime) {
+        let nowM = toMin(currentTimeStr);
+        let startM = toMin(activeStartTime);
+        
+        // กรณีสายหลังเที่ยงคืนสำหรับกะดึก
+        if (nowM < 300 && startM > 1000) nowM += 1440;
+
+        const diff = nowM - startM;
+        if (diff > 0) {
+          isLate = 1;
+          lateMinutes = diff;
+        }
+      }
+
+      const [insertedAttendance] = await db.insert(attendanceTable).values({
         user_id: data.userId,
         department_id: data.departmentId,
         site_id: finalSiteId,
-        shift_id: shift?.id || null,
+        shift_id: tempShift[0] ? null : shift?.id,
+        temp_shift_id: tempShift[0]?.id || null,
         siteInNameSnapshot: currentSiteName,
         siteCoordinatesSnapshot: currentSiteCoords,
-        shiftStartTimeSnapshot: shift?.startTime || null,
-        shiftEndTimeSnapshot: shift?.endTime || null,
+        shiftStartTimeSnapshot: activeStartTime,
+        shiftEndTimeSnapshot: activeEndTime,
         departmentNameSnapshot: deptNameSnapshot,
         date: dateStr,
         checkIn: currentTimeStr,
         imageIn: data.image,
         imageInId: data.fileId || null,
         locationIn: data.location,
+        workingStatusEnum: currentWorkingStatus,
         isLate: isLate,
-        // เพิ่มข้อมูล Offsite ขาเข้า
         isOffsiteIn: isOffsiteIn,
         isOffsiteInCoordinates: isOffsiteIn === "1" ? userCoordinatesIn : null,
-        ...(Object.keys(attendanceTable).includes('lateMinutes') ? { lateMinutes } : {}),
-      });
+        lateMinutes: lateMinutes,
+      }).returning({ id: attendanceTable.id });
+
+      if (insertedAttendance) {
+        const otResult = calculateOvertime({
+          checkIn: currentTimeStr,
+          checkOut: currentTimeStr,
+          shiftStart: activeStartTime,
+          shiftEnd: activeEndTime,
+          roundingMode: companyRounding,
+        });
+
+        await db.insert(overtimeTable).values({
+          userId: data.userId,
+          userName: user?.firstName || "Unknown",
+          companyId: user?.companyId || "",
+          shiftId: tempShift[0] ? null : shift?.id,
+          attendanceId: insertedAttendance.id,
+          date: dateStr,
+          overtimeBefore: otResult?.beforeMinutes || 0,
+          otRoundingOption: companyRounding,
+          status: "pending"
+        });
+      }
 
       revalidatePath("/", "layout");
       revalidatePath("/leader");
@@ -320,18 +201,14 @@ export async function saveAttendanceAction(data: {
       return { success: true, siteName: currentSiteName, offsite: isOffsiteIn === "1" };
 
     } else {
+      // --- ขาออก (Check-out) ---
       let isEarlyExit = 0;
       let earlyExitMinutes = 0;
 
       const lastCheckIn = await db
         .select()
         .from(attendanceTable)
-        .where(
-          and(
-            eq(attendanceTable.user_id, data.userId),
-            isNull(attendanceTable.checkOut)
-          )
-        )
+        .where(and(eq(attendanceTable.user_id, data.userId), isNull(attendanceTable.checkOut)))
         .orderBy(desc(attendanceTable.createdAt))
         .limit(1);
 
@@ -340,10 +217,10 @@ export async function saveAttendanceAction(data: {
       }
 
       const currentRecord = lastCheckIn[0];
-      const checkInDate = currentRecord.date;
-
-      const [uLat, uLon] = data.location.split(',');
-      const locationValidation = await validateCheckOutLocation(data.userId, uLat, uLon, currentRecord);
+      const [uLatOut, uLonOut] = data.location.split(',').map(Number);
+      
+      // @ts-ignore
+      const locationValidation = await validateCheckOutLocation(data.userId, uLatOut, uLonOut, currentRecord);
 
       const isOffsiteOutValue = locationValidation.isOffsiteOut;
       const showPopUp = locationValidation.OffsiteCheckOutConfirm;
@@ -353,57 +230,83 @@ export async function saveAttendanceAction(data: {
           success: false,
           siteName: currentRecord.siteInNameSnapshot || locationValidation.siteName || "",
           offsite: true,
+          OffsiteCheckInConfirm: false,
           OffsiteCheckOutConfirm: true 
         };
       }
 
-      const [tempShiftData] = await db
-        .select({ id: temporaryShiftsTable.id, endTime: temporaryShiftsTable.endTime })
-        .from(temporaryShiftsTable)
-        .where(and(eq(temporaryShiftsTable.userId, data.userId), eq(temporaryShiftsTable.targetDate, checkInDate)))
-        .limit(1);
+      const finalEndTime = currentRecord.shiftEndTimeSnapshot;
 
-      const activeEndTime = tempShiftData?.endTime || shift?.endTime;
+      let otResult;
+      if (currentRecord.workingStatusEnum === "extra") {
+        otResult = calculateOvertime({
+          checkIn: currentRecord.checkIn || "00:00",
+          checkOut: currentTimeStr,
+          shiftStart: currentRecord.checkIn,
+          shiftEnd: currentRecord.checkIn,
+          roundingMode: companyRounding,
+        });
+      } else {
+        otResult = calculateOvertime({
+          checkIn: currentRecord.checkIn || "00:00",
+          checkOut: currentTimeStr,
+          shiftStart: currentRecord.shiftStartTimeSnapshot,
+          shiftEnd: currentRecord.shiftEndTimeSnapshot,
+          roundingMode: companyRounding,
+        });
 
-      if (activeEndTime) {
-        const [currH, currM] = currentTimeStr.split(':').map(Number);
-        const [endH, endM] = activeEndTime.split(':').map(Number);
-        const [inH, inM] = (currentRecord.checkIn || "00:00").split(':').map(Number);
+        if (finalEndTime) {
+          let currentTotalMinutes = toMin(currentTimeStr);
+          let endTotalMinutes = toMin(finalEndTime);
+          const checkInTotalMinutes = toMin(currentRecord.checkIn);
 
-        let currentTotalMinutes = currH * 60 + currM;
-        let endTotalMinutes = endH * 60 + endM;
-        const checkInTotalMinutes = inH * 60 + inM;
-
-        if (endTotalMinutes < checkInTotalMinutes) {
-          if (currentTotalMinutes < checkInTotalMinutes) {
-            currentTotalMinutes += 1440;
+          // Logic ข้ามวันสำหรับกะดึก
+          if (endTotalMinutes < checkInTotalMinutes) {
+            if (currentTotalMinutes < checkInTotalMinutes) currentTotalMinutes += 1440;
+            endTotalMinutes += 1440;
           }
-          endTotalMinutes += 1440;
-        }
 
-        if (currentTotalMinutes < endTotalMinutes) {
-          isEarlyExit = 1;
-          earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
+          if (currentTotalMinutes < endTotalMinutes) {
+            isEarlyExit = 1;
+            earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
+          }
         }
       }
 
-      const result = await db.update(attendanceTable)
+      await db.update(attendanceTable)
         .set({
           checkOut: currentTimeStr,
           imageOut: data.image,
           imageOutId: data.fileId || null,
           locationOut: data.location,
-          isEarlyExit: isEarlyExit,
+          isEarlyExit: isEarlyExit.toString(),
+          earlyExitMinutes: earlyExitMinutes,
           isOffsiteOut: isOffsiteOutValue,
           isOffsiteOutCoordinates: isOffsiteOutValue === "1" ? data.location : null,
-          ...(Object.keys(attendanceTable).includes('earlyExitMinutes') ? { earlyExitMinutes } : {}),
         })
         .where(eq(attendanceTable.id, currentRecord.id));
 
-      // @ts-ignore
-      if (result.rowCount === 0 && !result.length) {
-        return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ต้องการอัปเดต" };
-      }
+      await db.insert(overtimeTable).values({
+        userId: data.userId,
+        userName: user?.firstName || "Unknown",
+        companyId: user?.companyId || "",
+        shiftId: currentRecord.shift_id,
+        attendanceId: currentRecord.id,
+        date: currentRecord.date || dateStr,
+        overtimeBefore: otResult?.beforeMinutes || 0,
+        overtimeAfter: otResult?.afterMinutes || 0,
+        overtimeCollected: otResult?.totalMinutes || 0,
+        otRoundingOption: companyRounding,
+        status: "pending"
+      }).onConflictDoUpdate({
+        target: [overtimeTable.attendanceId],
+        set: { 
+          overtimeBefore: otResult?.beforeMinutes || 0,
+          overtimeAfter: otResult?.afterMinutes || 0,
+          overtimeCollected: otResult?.totalMinutes || 0,
+          otRoundingOption: companyRounding
+        }
+      });
 
       revalidatePath("/", "layout");
       revalidatePath("/leader");
@@ -413,15 +316,18 @@ export async function saveAttendanceAction(data: {
         success: true,
         siteName: currentRecord.siteInNameSnapshot || "",
         offsite: isOffsiteOutValue === "1",
-        OffsiteCheckOutConfirm: false
+        OffsiteCheckOutConfirm: false,
+        otTotal: otResult?.totalMinutes || 0
       };
     }
   } catch (error: any) {
     console.error("Attendance error:", error);
-    return { success: false, error: "บันทึกเวลาไม่สำเร็จ: " + (error.message || "Unknown Error") };
+    return { 
+      success: false, 
+      error: error.message || "เกิดข้อผิดพลาดภายในระบบ" 
+    };
   }
 }
-
 /**------------------------------------------------------------------------------------------
  * 2. ส่งคำขอลางาน
 --------------------------------------------------------------------------------------------- */

@@ -24,26 +24,24 @@ import { uploadToDrive, deleteFromDrive } from "@/lib/uploadthing-server";
    HELPERS
    ========================================================================== */
 
-/**
- * ดึงข้อมูล Admin/User ที่ Login อยู่จาก Session Cookie
- */
-/**
- * ปรับปรุง getAdminContext ให้ปลอดภัยขึ้น
- */
-async function getAdminContext() {
+export async function getAdminContext() {
   try {
     const cookieStore = await cookies();
     const adminId = cookieStore.get("session_user_id")?.value;
+    const userRole = cookieStore.get("user_role")?.value; // ดึง Role มาเช็คด้วย
 
-    // 🛡️ ดักจับ: ถ้าไม่มี ID ให้คืน null ทันที ไม่ต้องไป Query ต่อให้พัง
-    if (!adminId) return null;
+    // 🛡️ ถ้าไม่มี ID หรือไม่ใช่กลุ่ม Admin/SuperAdmin ให้ตัดจบ
+    if (!adminId || (userRole !== "admin" && userRole !== "superadmin")) {
+      return null;
+    }
 
-    const adminData = await db
+    const [adminData] = await db
       .select({
         id: usersTable.id,
         firstName: usersTable.firstName,
         lastName: usersTable.lastName,
         companyId: adminsTable.company,
+        role: usersTable.role, // คืนค่า role กลับไปด้วยเพื่อใช้เช็คใน UI
       })
       .from(usersTable)
       .innerJoin(adminsTable, eq(usersTable.id, adminsTable.user_id))
@@ -53,26 +51,13 @@ async function getAdminContext() {
       ))
       .limit(1);
 
-    // 🛡️ ดักจับ: ถ้า Query แล้วไม่เจอ (เช่น Admin ถูกลบ หรือเปลี่ยน Role)
-    if (!adminData || adminData.length === 0) return null;
-
-    return adminData[0];
+    return adminData || null;
   } catch (error) {
+    // ห้ามใช้ redirect ในนี้ ถ้าจะใช้ต้องเช็ค isRedirectError
     console.error("Context Error:", error);
     return null;
   }
 }
-
-/**
- * ออกจากระบบ
- */
-export async function logoutAction() {
-  const cookieStore = await cookies();
-  cookieStore.delete("session_user_id");
-  cookieStore.delete("user_role");
-  return { success: true };
-}
-
 /* ==========================================================================
    SITE ACTIONS
    ========================================================================== */
@@ -193,7 +178,7 @@ export async function saveStaffAction(data: any) {
     // --- 1. จัดการ Username ---
     let inputUsername = data.userName || data.username;
 
-    if (!data.id && (!inputUsername || inputUsername.trim() === "")) {
+    if (!data.id && (!inputUsername || inputUsername.trim().toLowerCase() === "")) {
       return { success: false, error: "กรุณาระบุชื่อผู้ใช้งาน (Username)" };
     }
 
@@ -550,20 +535,39 @@ export async function updateSiteAction(id: string, data: { name: string; address
   }
 }
 
-/** * แก้ไขตำแหน่ง 
+/** * แก้ไขตำแหน่ง (Update Only)
  */
-export async function updatePositionAction(id: string, name: string) {
+export async function updatePositionAction(data: { id: string; name: string }) {
   try {
+    const { id, name } = data;
+
+    // 1. ตรวจสอบสิทธิ์ Admin
     const admin = await getAdminContext();
     if (!admin) return { success: false, error: "Unauthorized" };
 
-    await db.update(positionsTable)
-      .set({ name, updatedAt: new Date() })
-      .where(eq(positionsTable.id, id));
+    // 2. ตรวจสอบว่ามี ID ส่งมาจริงไหม
+    if (!id) return { success: false, error: "ไม่พบ ID ที่ต้องการแก้ไข" };
 
+    // 3. สั่ง Update ลง Database (เช็ค ID และ Company เพื่อความปลอดภัย)
+    await db
+      .update(positionsTable)
+      .set({ 
+        name: name, 
+        updatedAt: new Date() 
+      })
+      .where(
+        and(
+          eq(positionsTable.id, id),
+          eq(positionsTable.company_id, admin.companyId) // แก้เฉพาะของบริษัทตัวเอง
+        )
+      );
+
+    // 4. Revalidate เพื่อให้หน้าจอเห็นข้อมูลล่าสุด
     revalidatePath("/administrator");
-    return { success: true, message: "อัปเดตตำแหน่งสำเร็จ" };
+    
+    return { success: true, message: "อัปเดตตำแหน่งสำเร็จ", id: id };
   } catch (error) {
+    console.error("Update Position Error:", error);
     return { success: false, error: "ไม่สามารถอัปเดตข้อมูลได้" };
   }
 }
@@ -766,4 +770,18 @@ export async function updateCompanyAction(data: any) {
     console.error("Update Company Error:", error);
     return { success: false, error: "Database Connection Error" };
   }
+}
+
+export async function logoutAction() {
+  const cookieStore = await cookies();
+  
+  // ลบแบบปกติ
+  cookieStore.delete("session_user_id");
+  cookieStore.delete("user_role");
+
+  // บังคับเคลียร์ด้วยการตั้งค่าว่างและ maxAge: 0 เพื่อความชัวร์
+  cookieStore.set("session_user_id", "", { path: "/", maxAge: 0 });
+  cookieStore.set("user_role", "", { path: "/", maxAge: 0 });
+
+  return { success: true };
 }

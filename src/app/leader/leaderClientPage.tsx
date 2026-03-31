@@ -48,6 +48,62 @@ const LoadingOverlay = () => (
   </div>
 );
 
+const OffsiteConfirmPopup = ({
+  onConfirm,
+  onCancel,
+  siteName,
+}: {
+  onConfirm: () => void;
+  onCancel: () => void;
+  siteName: string;
+}) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl border border-amber-100">
+      <div className="text-center">
+        <div className="flex justify-center mb-4 text-amber-500">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-12 h-12"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 mb-2">
+          อยู่นอกพื้นที่งาน
+        </h3>
+        <p className="text-gray-600 mb-6 text-sm">
+          คุณไม่ได้อยู่ในรัศมีของ{" "}
+          <span className="font-semibold text-blue-600">"{siteName}"</span>{" "}
+          <br />
+          ต้องการยืนยันการบันทึกข้อมูลหรือไม่?
+        </p>
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={onCancel}
+          className="flex-1 px-4 py-2.5 font-semibold text-gray-700 bg-gray-100 rounded-xl active:scale-95 transition-transform"
+        >
+          ยกเลิก
+        </button>
+        <button
+          onClick={onConfirm}
+          className="flex-1 px-4 py-2.5 font-semibold text-white bg-amber-500 rounded-xl hover:bg-amber-600 shadow-md active:scale-95 transition-transform"
+        >
+          ยืนยัน
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 /* ---------------- MAIN COMPONENT ---------------- */
 
 export default function LeaderClientPage({
@@ -488,7 +544,7 @@ export default function LeaderClientPage({
     }
   };
 
-  const executeAttendanceAction = async (isConfirmed = false) => {
+  const handleConfirmOffsite = async (isConfirmed = false) => {
     if (!pendingData) return;
     setIsProcessing(true);
     try {
@@ -2318,7 +2374,7 @@ export default function LeaderClientPage({
         <OffsiteConfirmPopup
           siteName={pendingData?.siteName || "ไซต์งาน"}
           onCancel={() => setShowOffsitePopup(false)}
-          onConfirm={() => executeAttendanceAction(true)}
+          onConfirm={() => handleConfirmOffsite(true)}
         />
       )}
     </div>

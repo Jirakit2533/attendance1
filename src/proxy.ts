@@ -29,8 +29,10 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
     }
 
+    // แก้ไข: เพิ่ม key ตัวพิมพ์เล็กเพื่อให้ตรงกับค่าจาก loginAction
     const roleRedirects: Record<string, string> = {
       superAdmin: '/superAdmin',
+      superadmin: '/superAdmin', // เพิ่ม
       admin: '/administrator',
       administrator: '/administrator',
       leader: '/leader',
@@ -57,18 +59,21 @@ export function middleware(request: NextRequest) {
     }
 
     if (pathname.startsWith('/administrator')) {
+      // แก้ไข: ให้เช็คได้ทั้ง 'admin' (จาก loginAction) และ 'administrator'
       if (!(userRole === 'admin' || userRole === 'administrator')) {
         return NextResponse.redirect(new URL('/login', request.url));
       }
     }
 
-    if (pathname.startsWith('/superAdmin') && userRole !== 'superAdmin') {
-      return NextResponse.redirect(new URL('/login', request.url));
+    if (pathname.startsWith('/superAdmin')) {
+      // แก้ไข: ให้เช็คได้ทั้ง 'superAdmin' และ 'superadmin'
+      if (!(userRole === 'superAdmin' || userRole === 'superadmin' || userRole === 'super_Admin' || userRole === 'super_admin')) {
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
     }
   }
 
-  // --- LOGIC 4: ป้องกัน Browser Cache (แก้ปัญหาหน้าเก่าค้างตอนกด Back) ---
-  // บังคับให้หน้าที่มีข้อมูลสำคัญไม่ถูกเก็บไว้ใน Cache ของ Browser
+  // --- LOGIC 4: ป้องกัน Browser Cache ---
   if (isProtected || pathname === '/login') {
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     response.headers.set('Pragma', 'no-cache');
@@ -78,11 +83,8 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-// เพิ่มเพื่อให้รองรับทั้งระบบ middleware มาตรฐานและระบบ proxy (Next.js config บางประเภท)
-export const proxy = middleware;
 export default middleware;
 
-// กำหนดขอบเขตของ Middleware
 export const config = {
   matcher: [
     '/employee/:path*',

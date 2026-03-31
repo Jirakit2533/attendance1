@@ -11,7 +11,7 @@ import {
   shiftsTable,
   companyTable,
 } from "@/db/schema";
-import { eq, desc, and, ne, isNull, isNotNull, or, sql } from "drizzle-orm";
+import { eq, desc, and, ne, isNull, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import LeaderClientPage from "./leaderClientPage";
 
@@ -88,13 +88,13 @@ export default async function LeaderPage() {
   const isAllSitesLeader = !currentSite;
 
   try {
-    // แก้ไข teamFilter: ยกเว้นตัวเอง (ne) และกรณีไม่มีไซต์ให้ดึงทุกคนในแผนก
+    // teamFilter: ยกเว้นตัวเอง และจัดการกรณี All Sites
     const teamFilter = and(
       eq(usersTable.departmentId, currentDept!),
-      ne(usersTable.id, user.id), // ยกเว้นข้อมูลของตัวเอง
+      ne(usersTable.id, user.id),
       isNull(usersTable.deletedAt),
       isAllSitesLeader
-        ? undefined // ถ้าไม่มีไซต์งานประจำ ให้ดึงพนักงานทุกคนในแผนก
+        ? undefined 
         : eq(usersTable.site_id, currentSite!)
     );
 
@@ -120,8 +120,7 @@ export default async function LeaderPage() {
           isEarlyExit: attendanceTable.isEarlyExit,
           isOffsiteIn: attendanceTable.isOffsiteIn,
           isOffsiteOut: attendanceTable.isOffsiteOut,
-          createdAt: attendanceTable.createdAt, // ✅ Map ข้อมูลจาก DB
-          // Snapshot
+          createdAt: attendanceTable.createdAt,
           site: attendanceTable.siteInNameSnapshot,
           department: attendanceTable.departmentNameSnapshot,
           startTime: attendanceTable.shiftStartTimeSnapshot,
@@ -147,7 +146,7 @@ export default async function LeaderPage() {
               status: leaveTable.status,
               fileUrl: leaveTable.fileUrl,
               remark: leaveTable.remark,
-              createdAt: leaveTable.createdAt, // ✅ Map ข้อมูลจาก DB
+              createdAt: leaveTable.createdAt,
               approverFirst: approverUser.firstName,
               approverLast: approverUser.lastName,
               approverPosition: approverPosition.name,
@@ -200,7 +199,7 @@ export default async function LeaderPage() {
               isEarlyExit: attendanceTable.isEarlyExit,
               isOffsiteIn: attendanceTable.isOffsiteIn,
               isOffsiteOut: attendanceTable.isOffsiteOut,
-              createdAt: attendanceTable.createdAt, // ✅ Map ข้อมูลจาก DB
+              createdAt: attendanceTable.createdAt,
               site: attendanceTable.siteInNameSnapshot,
               startTime: attendanceTable.shiftStartTimeSnapshot,
               endTime: attendanceTable.shiftEndTimeSnapshot,
@@ -228,7 +227,7 @@ export default async function LeaderPage() {
           status: leaveTable.status,
           fileUrl: leaveTable.fileUrl,
           remark: leaveTable.remark,
-          createdAt: leaveTable.createdAt, // ✅ Map ข้อมูลจาก DB
+          createdAt: leaveTable.createdAt,
           approverFirst: approverUser.firstName,
           approverLast: approverUser.lastName,
           approverPosition: approverPosition.name,
@@ -250,78 +249,75 @@ export default async function LeaderPage() {
         .limit(30),
     ]);
 
-  // 6. จัดเตรียมข้อมูล (Mapping)
-  const finalProps = {
-    companyData: {
-      name: user.companyName || "บริษัทไม่ระบุชื่อ",
-      logoUrl: user.companyLogo,
-      description: user.companyDescription,
-    },
-    userProfile: {
-      ...user,
-      name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
-      isAllSites: isAllSitesLeader,
-      workShift:
-        user.startTime && user.endTime
-          ? `${user.startTime.substring(0, 5)} - ${user.endTime.substring(
-              0,
-              5
-            )}`
-          : "ไม่ระบุกะงาน",
-    },
-    myRecords: (myRecordsRaw || []).map((r) => ({
-      ...r,
-      location: r.locationIn || r.locationOut || "ไม่ได้ระบุพิกัด",
-      position: user.position || "ไม่ระบุ",
-      site: r.site || "ไม่ระบุไซต์",
-      role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
-      checkIn: r.checkIn ? r.checkIn.substring(0, 5) : null,
-      checkOut: r.checkOut ? r.checkOut.substring(0, 5) : null,
-      isOffsiteIn: r.isOffsiteIn,
-      isOffsiteOut: r.isOffsiteOut,
-      createdAt: formatThaiDate(r.createdAt), // ✅ แปลงเป็น UTC
-    })),
-    initialAttendance: (teamAttendanceRaw || []).map((t) => ({
-      ...t,
-      employeeName:
-        `${t.firstName || ""} ${t.lastName || ""}`.trim() ||
-        t.userName ||
-        "ไม่ระบุชื่อ",
-      location: t.locationIn || t.locationOut || "ไม่ได้ระบุพิกัด",
-      role: t.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
-      positionName: t.position || "พนักงาน",
-      startTime: t.startTime || null,
-      endTime: t.endTime || null,
-      siteName: t.site || "ไม่ระบุไซต์",
-      checkIn: t.checkIn ? t.checkIn.substring(0, 5) : null,
-      checkOut: t.checkOut ? t.checkOut.substring(0, 5) : null,
-      isOffsiteIn: t.isOffsiteIn,
-      isOffsiteOut: t.isOffsiteOut,
-      createdAt: formatThaiDate(t.createdAt), // ✅ แปลงเป็น UTC
-    })),
-    initialLeaves: (allLeaveRequests || []).map((l: any) => ({
-      ...l,
-      employeeName:
-        `${l.firstName || ""} ${l.lastName || ""}`.trim() || "ไม่ระบุชื่อ",
-      positionName: l.positionName || "พนักงาน",
-      siteName: l.siteName || "ทุกไซต์งาน",
-      remark: l.remark,
-      createdAt: formatThaiDate(l.createdAt), // ✅ แปลงเป็น UTC
-      approverFirst: l.approverFirst,
-      approverLast: l.approverLast,
-      approverPosition: l.approverPosition || "แอดมิน/HR",
-    })),
-    myLeaves: (myLeaveRequestsRaw || []).map((l: any) => ({
-      ...l,
-      start_date: l.startDate,
-      end_date: l.endDate,
-      remark: l.remark,
-      createdAt: formatThaiDate(l.createdAt), // ✅ แปลงเป็น UTC
-      approverFirst: l.approverFirst,
-      approverLast: l.approverLast,
-      approverPosition: l.approverPosition || "admin/HR",
-    })),
-  };
+    // 6. จัดเตรียมข้อมูล (Mapping)
+    const finalProps = {
+      companyData: {
+        name: user.companyName || "บริษัทไม่ระบุชื่อ",
+        logoUrl: user.companyLogo,
+        description: user.companyDescription,
+      },
+      userProfile: {
+        ...user,
+        name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+        isAllSites: isAllSitesLeader,
+        workShift:
+          user.startTime && user.endTime
+            ? `${user.startTime.substring(0, 5)} - ${user.endTime.substring(0, 5)}`
+            : "ไม่ระบุกะงาน",
+      },
+      myRecords: (myRecordsRaw || []).map((r) => ({
+        ...r,
+        location: r.locationIn || r.locationOut || "ไม่ได้ระบุพิกัด",
+        position: user.position || "ไม่ระบุ",
+        site: r.site || "ไม่ระบุไซต์",
+        role: user.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
+        checkIn: r.checkIn ? r.checkIn.substring(0, 5) : null,
+        checkOut: r.checkOut ? r.checkOut.substring(0, 5) : null,
+        isOffsiteIn: r.isOffsiteIn,
+        isOffsiteOut: r.isOffsiteOut,
+        createdAt: formatThaiDate(r.createdAt),
+      })),
+      initialAttendance: (teamAttendanceRaw || []).map((t) => ({
+        ...t,
+        employeeName:
+          `${t.firstName || ""} ${t.lastName || ""}`.trim() ||
+          t.userName ||
+          "ไม่ระบุชื่อ",
+        location: t.locationIn || t.locationOut || "ไม่ได้ระบุพิกัด",
+        role: t.role === "leader" ? "หัวหน้างาน" : "พนักงาน",
+        positionName: t.position || "พนักงาน",
+        startTime: t.startTime || null,
+        endTime: t.endTime || null,
+        siteName: t.site || "ไม่ระบุไซต์",
+        checkIn: t.checkIn ? t.checkIn.substring(0, 5) : null,
+        checkOut: t.checkOut ? t.checkOut.substring(0, 5) : null,
+        isOffsiteIn: t.isOffsiteIn,
+        isOffsiteOut: t.isOffsiteOut,
+        createdAt: formatThaiDate(t.createdAt),
+      })),
+      initialLeaves: (allLeaveRequests || []).map((l: any) => ({
+        ...l,
+        employeeName:
+          `${l.firstName || ""} ${l.lastName || ""}`.trim() || "ไม่ระบุชื่อ",
+        positionName: l.positionName || "พนักงาน",
+        siteName: l.siteName || "ทุกไซต์งาน",
+        remark: l.remark,
+        createdAt: formatThaiDate(l.createdAt),
+        approverFirst: l.approverFirst,
+        approverLast: l.approverLast,
+        approverPosition: l.approverPosition || "แอดมิน/HR",
+      })),
+      myLeaves: (myLeaveRequestsRaw || []).map((l: any) => ({
+        ...l,
+        start_date: l.startDate,
+        end_date: l.endDate,
+        remark: l.remark,
+        createdAt: formatThaiDate(l.createdAt),
+        approverFirst: l.approverFirst,
+        approverLast: l.approverLast,
+        approverPosition: l.approverPosition || "admin/HR",
+      })),
+    };
 
     const safeData = JSON.parse(
       JSON.stringify(finalProps, (key, value) =>

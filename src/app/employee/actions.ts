@@ -1,28 +1,46 @@
 "use server";
 
 import { db } from "@/db/db";
-import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable, departmentsTable, sitesTable } from "@/db/schema";
+import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable, departmentsTable, companyTable} from "@/db/schema";
 import { eq, and, sql, isNull, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { uploadToDrive } from "@/lib/uploadthing-server";
-import * as bcrypt from "bcryptjs";
 import { validateAndGetSite, isInsideBound, validateCheckOutLocation } from "@/lib/location-service";
+import { calculateOvertime } from "@/lib/over-time/ot-calculate";
+import * as bcrypt from "bcryptjs";
 
-
-
+/* -------------------------------------------------------------------------- */
+/* CHECKIN ACTION (การเข้างาน)                                                 */
+/* -------------------------------------------------------------------------- */
 export async function checkInAction(userId: string, base64Image: string, location: string) {
   try {
     const now = new Date();
-    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
     const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false });
+    
+    // --- Logic กะกลางคืน: ถ้าเช็คอินช่วง 00:00 - 05:00 ให้ลองหากะของ "เมื่อวาน" ---
+    const nowH = now.getHours();
+    let lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
+    if (nowH >= 0 && nowH < 5) {
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(yesterday);
+    }
+    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
 
-    // แปลง String location "lat, lon" เป็นตัวเลข
+    if (!location || typeof location !== 'string' || !location.includes(',')) {
+      throw new Error("พิกัดตำแหน่งไม่ถูกต้องหรือไม่ได้เปิด GPS");
+    }
+
     const [lat, lon] = location.split(',').map(Number);
+    if (isNaN(lat) || isNaN(lon)) {
+      throw new Error("ข้อมูลพิกัดไม่ใช่ตัวเลขที่ถูกต้อง");
+    }
 
-    // ดึงข้อมูล User และตรวจสอบกะงาน
     const [userData, tempShift] = await Promise.all([
       db.select({
         id: usersTable.id,
+        name: usersTable.firstName, 
+        companyId: usersTable.companyId,
         departmentId: usersTable.departmentId,
         siteId: usersTable.site_id,
         shiftId: shiftsTable.id,
@@ -37,7 +55,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
         .from(temporaryShiftsTable)
         .where(and(
           eq(temporaryShiftsTable.userId, userId),
-          eq(temporaryShiftsTable.targetDate, dateStr),
+          eq(temporaryShiftsTable.targetDate, lookupDate), // ใช้ lookupDate เพื่อรองรับการมาสายในกะดึก
           eq(temporaryShiftsTable.status, "approved")
         ))
         .limit(1)
@@ -46,36 +64,73 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-    // ตรวจสอบพิกัดเข้างาน (รองรับ Logic ใหม่ที่คืนค่า isOffsiteIn และ OffsiteCheckInConfirm)
-    const validatedSite = await validateAndGetSite(lat, lon, user.departmentId, user.siteId);
+    const [companyData] = await db.select({ 
+      otRoundingOption: companyTable.otRoundingOption 
+    }).from(companyTable).where(eq(companyTable.id, user.companyId || "")).limit(1);
+    
+    const companyRounding = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
 
-    // ดึงข้อมูลชื่อแผนกสำหรับ Snapshot
+    const validatedSite = await validateAndGetSite(
+      lat.toString(), 
+      lon.toString(), 
+      user.departmentId || "", 
+      user.siteId || ""
+    );
+
+    let isInside = true;
+    if (user.siteId) {
+      // @ts-ignore
+      isInside = await isInsideBound(lat, lon, user.siteId);
+    }
+
+    const finalIsOffsiteIn = !isInside ? "1" : (validatedSite.isOffsiteIn || "0");
+
     let deptNameSnapshot = "";
     if (user.departmentId) {
       const [dept] = await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, user.departmentId)).limit(1);
       deptNameSnapshot = dept?.name || "";
     }
 
-    const activeStartTime = tempShift[0]?.startTime || user.startTime;
-    const activeEndTime = tempShift[0]?.endTime || user.endTime;
+    const activeStartTime = tempShift[0]?.startTime || user.startTime || null;
+    const activeEndTime = tempShift[0]?.endTime || user.endTime || null;
     const activeShiftId = tempShift[0] ? null : user.shiftId;
     const activeTempShiftId = tempShift[0]?.id || null;
 
-    // จัดการรูปภาพ
+    const toMin = (t: string | null) => {
+      if (!t) return 0;
+      const [h, m] = t.split(':').map(Number);
+      return (h * 60) + (m || 0);
+    };
+
+    let currentWorkingStatus: "normal" | "extra" = "normal";
+    if (activeEndTime && activeStartTime) {
+      const nowMin = toMin(currentTimeStr);
+      let endMin = toMin(activeEndTime);
+      let startMin = toMin(activeStartTime);
+
+      // ถ้าเป็นกะกลางคืน (เลิกงานน้อยกว่าเริ่มงาน) ให้บวก 1 วันที่เวลาเลิก
+      if (endMin < startMin) endMin += 1440;
+
+      // ถ้าเวลาปัจจุบันน้อยกว่าเวลาเริ่มมาก (เช่น เช็คอิน 00:30 ของกะ 22:00) ให้ถือว่าเป็นวันเดียวกัน
+      const adjustedNowMin = (nowMin < startMin && endMin > 1440) ? nowMin + 1440 : nowMin;
+
+      if (adjustedNowMin > endMin) {
+        currentWorkingStatus = "extra";
+      }
+    }
+
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
     const uploadRes = await uploadToDrive(buffer, `checkin_${userId}_${Date.now()}.png`, "image/png");
 
-    // บันทึกลง Database พร้อม Snapshot และ Flag การอยู่นอกเขต
-    await db.insert(attendanceTable).values({
+    const [insertedAttendance] = await db.insert(attendanceTable).values({
       user_id: userId,
       department_id: user.departmentId,
       site_id: validatedSite.id,
-      siteInNameSnapshot: validatedSite.name, 
-      siteCoordinatesSnapshot: validatedSite.coordinates, // บันทึกพิกัดไซต์อ้างอิง
+      siteInNameSnapshot: validatedSite.name || "", 
+      siteCoordinatesSnapshot: validatedSite.coordinates || "", 
       shift_id: activeShiftId,
       temp_shift_id: activeTempShiftId,
-
       shiftStartTimeSnapshot: activeStartTime,
       shiftEndTimeSnapshot: activeEndTime,
       departmentNameSnapshot: deptNameSnapshot,
@@ -84,33 +139,53 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       imageIn: uploadRes.url,
       imageInId: uploadRes.fileId,
       locationIn: location,
-      
-      // บันทึกสถานะการอยู่นอกเขตขาเข้า
-      isOffsiteIn: validatedSite.isOffsiteIn,
-      isOffsiteInCoordinates: validatedSite.userCoordinates,
-
-      isLate: activeStartTime ? (currentTimeStr > activeStartTime ? 1 : 0) : 0,
-      lateMinutes: activeStartTime ? (() => {
-        const [currH, currM] = currentTimeStr.split(':').map(Number);
-        const [startH, startM] = activeStartTime.split(':').map(Number);
-        const diff = (currH * 60 + currM) - (startH * 60 + startM);
+      isOffsiteIn: finalIsOffsiteIn,
+      isOffsiteInCoordinates: location,
+      workingStatusEnum: currentWorkingStatus,
+      isLate: currentWorkingStatus === "normal" && activeStartTime ? (toMin(currentTimeStr) > toMin(activeStartTime) ? 1 : 0) : 0,
+      lateMinutes: currentWorkingStatus === "normal" && activeStartTime ? (() => {
+        let nowM = toMin(currentTimeStr);
+        let startM = toMin(activeStartTime);
+        // กรณีเช็คอินสายหลังเที่ยงคืน
+        if (nowM < 300 && startM > 1000) nowM += 1440; 
+        const diff = nowM - startM;
         return diff > 0 ? diff : 0;
       })() : 0,
-    });
+    }).returning({ id: attendanceTable.id });
+
+    if (insertedAttendance) {
+      const otResult = calculateOvertime({
+        checkIn: currentTimeStr,
+        checkOut: currentTimeStr, 
+        shiftStart: activeStartTime,
+        shiftEnd: activeEndTime,
+        roundingMode: companyRounding,
+      });
+
+      await db.insert(overtimeTable).values({
+        userId: userId,
+        userName: user.name || "Unknown",
+        companyId: user.companyId || "",
+        shiftId: activeShiftId,
+        attendanceId: insertedAttendance.id,
+        date: dateStr,
+        overtimeBefore: otResult.beforeMinutes,
+        otRoundingOption: companyRounding,
+        status: "pending"
+      });
+    }
 
     revalidatePath("/employee");
     revalidatePath("/leader");
     
-    // คืนค่าเพื่อให้หน้าบ้านรู้ว่าต้องแสดง Modal ยืนยันหรือไม่ (ถ้าจำเป็น) หรือแจ้งว่าสำเร็จ
     return { 
       success: true, 
       siteName: validatedSite.name,
-      isOffsiteIn: validatedSite.isOffsiteIn,
-      OffsiteCheckInConfirm: validatedSite.OffsiteCheckInConfirm
+      isOffsiteIn: finalIsOffsiteIn,
+      OffsiteCheckInConfirm: validatedSite.OffsiteCheckInConfirm || (!isInside)
     };
   } catch (error: any) {
     console.error("Check-in error:", error);
-    // ไม่ดักคำว่า "รัศมี" แล้วเพราะเราอนุญาตให้เข้างานได้ทุกกรณี แต่ยังคงรักษา Error อื่นๆ ไว้
     return { success: false, error: "บันทึกเข้างานล้มเหลว: " + error.message };
   }
 }
@@ -118,68 +193,93 @@ export async function checkInAction(userId: string, base64Image: string, locatio
 /* -------------------------------------------------------------------------- */
 /* CHECKOUT ACTION (การออกงาน)                                                 */
 /* -------------------------------------------------------------------------- */
-
 export async function checkOutAction(userId: string, base64Image: string, location: string, isConfirmed?: boolean) {
   try {
     const now = new Date();
     const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false });
+
+    if (!location || typeof location !== 'string' || !location.includes(',')) {
+      throw new Error("พิกัดตำแหน่งไม่ถูกต้องหรือไม่ได้เปิด GPS");
+    }
+
     const [lat, lon] = location.split(',').map(Number);
 
     const lastCheckIn = await db
-      .select()
+      .select({
+        attendance: attendanceTable,
+        userName: usersTable.firstName, 
+        companyId: usersTable.companyId,
+      })
       .from(attendanceTable)
+      .leftJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
       .where(and(eq(attendanceTable.user_id, userId), isNull(attendanceTable.checkOut)))
       .orderBy(desc(attendanceTable.createdAt))
       .limit(1);
 
-    if (lastCheckIn.length === 0) {
+    if (!lastCheckIn || lastCheckIn.length === 0) {
       return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ค้างอยู่" };
     }
 
-    const currentRecord = lastCheckIn[0];
+    const row = lastCheckIn[0];
+    const currentRecord = row.attendance;
+    if (!currentRecord) throw new Error("ข้อมูลการลงเวลาไม่ถูกต้อง");
 
-    // ดึงข้อมูลไซต์ต้นทางมาเพื่อหาชื่อไซต์ (สำหรับแสดงใน Pop-up หรือ Error)
-    const [originalSite] = await db.select().from(sitesTable).where(eq(sitesTable.id, currentRecord.site_id)).limit(1);
-    if (!originalSite) throw new Error("ไม่พบข้อมูลไซต์งานที่ระบุไว้ตอนเข้างาน");
+    const [companyData] = await db.select({ 
+      otRoundingOption: companyTable.otRoundingOption 
+    }).from(companyTable).where(eq(companyTable.id, row.companyId || "")).limit(1);
+    
+    const roundingMode = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
+    const userName = row.userName || "Unknown";
+    const companyId = row.companyId || "";
 
-    // --- ส่วนตรวจสอบพิกัดและสิทธิ์ผ่าน validateCheckOutLocation ---
     const locationValidation = await validateCheckOutLocation(userId, lat, lon, currentRecord);
-
     const isOffsiteOutValue = locationValidation.isOffsiteOut === "1" ? "1" : "0";
-    const showPopUp = locationValidation.OffsiteCheckOutConfirm;
 
-    // ✅ แก้ไขจุดนี้: ถ้าต้องยืนยัน เปลี่ยน success เป็น false เพื่อไม่ให้หน้าบ้าน Alert "สำเร็จ"
-    if (showPopUp && !isConfirmed) {
+    if (locationValidation.OffsiteCheckOutConfirm && !isConfirmed) {
       return {
-        success: false, // เปลี่ยนเป็น false เพื่อป้องกัน Alert สำเร็จเด้งก่อนกดยืนยันจริง
+        success: false,
         offsite: true,
         siteName: locationValidation.siteName,
-        OffsiteCheckOutConfirm: true // แจ้ง UI ให้เด้ง Pop-up
+        OffsiteCheckOutConfirm: true 
       };
     }
 
-    // ✅ แก้ไข: ดึงชื่อจาก Snapshot เดิมมาใช้โดยตรง เพื่อไม่ให้เป็นค่า true/false
-    const finalSiteInNameSnapshot = currentRecord.In;
-
     const checkInDate = currentRecord.date;
+    const activeStartTime = currentRecord.shiftStartTimeSnapshot;
+    const activeEndTime = currentRecord.shiftEndTimeSnapshot;
 
-    const [shiftData, tempShift] = await Promise.all([
-      db.select({ id: shiftsTable.id, endTime: shiftsTable.endTime }).from(shiftsTable).where(eq(shiftsTable.userId, userId)).limit(1),
-      db.select({ id: temporaryShiftsTable.id, endTime: temporaryShiftsTable.endTime }).from(temporaryShiftsTable).where(and(eq(temporaryShiftsTable.userId, userId), eq(temporaryShiftsTable.targetDate, checkInDate))).limit(1)
-    ]);
+    let otResult;
+    if (currentRecord.workingStatusEnum === "extra") {
+      otResult = calculateOvertime({
+        checkIn: currentRecord.checkIn || "00:00",
+        checkOut: currentTimeStr,
+        shiftStart: currentRecord.checkIn, 
+        shiftEnd: currentRecord.checkIn,
+        roundingMode: roundingMode,
+      });
+    } else {
+      otResult = calculateOvertime({
+        checkIn: currentRecord.checkIn || "00:00",
+        checkOut: currentTimeStr,
+        shiftStart: activeStartTime,
+        shiftEnd: activeEndTime,
+        roundingMode: roundingMode,
+      });
+    }
 
-    const activeEndTime = tempShift[0]?.endTime || shiftData[0]?.endTime;
     let isEarlyExit = 0;
     let earlyExitMinutes = 0;
 
-    if (activeEndTime) {
+    if (activeEndTime && currentRecord.workingStatusEnum !== "extra") {
       const [currH, currM] = currentTimeStr.split(':').map(Number);
-      const [endH, endM] = activeEndTime.split(':').map(Number);
+      const [endH, endM] = (activeEndTime || "00:00").split(':').map(Number);
+      const [inH, inM] = (currentRecord.checkIn || "00:00").split(':').map(Number);
+      
       let currentTotalMinutes = currH * 60 + currM;
       let endTotalMinutes = endH * 60 + endM;
-      const [inH, inM] = (currentRecord.checkIn || "00:00").split(':').map(Number);
       const checkInTotalMinutes = inH * 60 + inM;
 
+      // Logic ข้ามวันสำหรับกะดึก
       if (endTotalMinutes < checkInTotalMinutes) {
         if (currentTotalMinutes < checkInTotalMinutes) currentTotalMinutes += 1440;
         endTotalMinutes += 1440;
@@ -194,18 +294,40 @@ export async function checkOutAction(userId: string, base64Image: string, locati
     const buffer = Buffer.from(base64Data, "base64");
     const uploadRes = await uploadToDrive(buffer, `checkout_${userId}_${Date.now()}.png`, "image/png");
 
-    // บันทึกข้อมูลลง Database
     await db.update(attendanceTable).set({
       checkOut: currentTimeStr,
-      imageOut: uploadRes.url,
+      imageOut: uploadRes.ufsUrl || uploadRes.url,
       imageOutId: uploadRes.fileId,
       locationOut: location,
-      isEarlyExit: isEarlyExit,
+      isEarlyExit: isEarlyExit.toString(),
       earlyExitMinutes: earlyExitMinutes,
       isOffsiteOut: isOffsiteOutValue,
       isOffsiteOutCoordinates: isOffsiteOutValue === "1" ? location : null,
-      In: finalSiteInNameSnapshot, // ✅ บันทึกค่า String ชื่อไซต์งานเดิมกลับลงไป
     }).where(eq(attendanceTable.id, currentRecord.id));
+
+    if (checkInDate) {
+      await db.insert(overtimeTable).values({
+        userId: userId,
+        userName: userName,
+        companyId: companyId,
+        shiftId: currentRecord.shift_id || null,
+        attendanceId: currentRecord.id,
+        date: checkInDate,
+        overtimeBefore: otResult.beforeMinutes,
+        overtimeAfter: otResult.afterMinutes,
+        overtimeCollected: otResult.totalMinutes,
+        otRoundingOption: roundingMode,
+        status: "pending"
+      }).onConflictDoUpdate({
+        target: [overtimeTable.attendanceId],
+        set: { 
+          overtimeBefore: otResult.beforeMinutes,
+          overtimeAfter: otResult.afterMinutes,
+          overtimeCollected: otResult.totalMinutes,
+          otRoundingOption: roundingMode
+        }
+      });
+    }
 
     revalidatePath("/employee");
     revalidatePath("/leader");
@@ -213,8 +335,8 @@ export async function checkOutAction(userId: string, base64Image: string, locati
     return {
       success: true,
       offsite: isOffsiteOutValue === "1",
-      siteName: finalSiteInNameSnapshot,
-      OffsiteCheckOutConfirm: false
+      siteName: currentRecord.siteInNameSnapshot || "",
+      otTotal: otResult.totalMinutes 
     };
   } catch (error: any) {
     console.error("Check-out error:", error);
@@ -277,7 +399,7 @@ export async function createLeaveRequest(data: {
 }
 
 /* -------------------------------------------------------------------------- */
-/* CHANGE PASSWORD (เปลี่ยนรหัสผ่าน)                                                   */
+/* CHANGE PASSWORD (เปลี่ยนรหัสผ่าน)                                            */
 /* -------------------------------------------------------------------------- */
 
 export async function changePasswordAction(data: {

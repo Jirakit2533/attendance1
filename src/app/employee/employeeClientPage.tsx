@@ -148,10 +148,35 @@ export default function EmployeeClientPage({
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
 
+  const [showOTModal, setShowOTModal] = useState(false);
+  const [otError, setOtError] = useState("");
+  const [otSuccess, setOtSuccess] = useState(false);
+  const [isProcessingOT, setIsProcessingOT] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // ฟังก์ชันคำนวณจำนวนวันลา
+  const [otData, setOtData] = useState({
+    date: "",
+    startTime: "17:00", // ตั้ง Default ไว้เวลาเลิกงานปกติ
+    endTime: "19:00",
+    siteId: "",
+    reason: "",
+  });
+
+  const calculateOTHours = (startStr: string, endStr: string) => {
+    const [startH, startM] = startStr.split(":").map(Number);
+    const [endH, endM] = endStr.split(":").map(Number);
+    
+    const startDate = new Date(0, 0, 0, startH, startM);
+    const endDate = new Date(0, 0, 0, endH, endM);
+    
+    let diff = endDate.getTime() - startDate.getTime();
+    if (diff < 0) diff += 24 * 60 * 60 * 1000; // รองรับเคสข้ามคืน
+    
+    return (diff / (1000 * 60 * 60)).toFixed(1);
+  };
+
   /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
 
   const calculateLeaveDays = (start: string, end: string): number => {
@@ -509,6 +534,71 @@ export default function EmployeeClientPage({
       setIsProcessing(false);
     }
   };
+  
+  const leaveDays = useMemo(() => {
+    if (!leaveStart || !leaveEnd) return 0;
+    const start = new Date(leaveStart);
+    const end = new Date(leaveEnd);
+    if (end < start) return 0;
+    return (
+      Math.ceil(
+        Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+      ) + 1
+    );
+  }, [leaveStart, leaveEnd]);
+
+  const handleOTSubmit = async () => {
+    // 1. Validation เบื้องต้น
+    if (!otData.date) return setOtError("กรุณาระบุวันที่ทำ OT");
+    if (!otData.siteId) return setOtError("กรุณาเลือกไซต์งาน");
+    if (!otData.reason.trim()) return setOtError("กรุณาระบุเหตุผลหรือลักษณะงาน");
+  
+    // 2. คำนวณชั่วโมงสุทธิ
+    const totalHours = calculateOTHours(otData.startTime, otData.endTime);
+    if (parseFloat(totalHours) === 0) return setOtError("เวลาเริ่มและสิ้นสุดต้องไม่เท่ากัน");
+  
+    try {
+      setIsProcessingOT(true);
+      setOtError("");
+  
+      // 3. เตรียม Data ส่งไป API (ปรับตามความต้องการของ Server)
+      const payload = {
+        userId: userProfile.id, // สมมติว่ามี userProfile อยู่ใน context
+        date: otData.date,
+        startTime: otData.startTime,
+        endTime: otData.endTime,
+        totalHours: parseFloat(totalHours),
+        siteId: otData.siteId,
+        reason: otData.reason
+      };
+  
+      // 4. เรียก Server Action หรือ API
+      const res = await createOTAction(payload); // ฟังก์ชันเชื่อมหลังบ้านของคุณ
+  
+      if (res.success) {
+        setOtSuccess(true);
+        // หน่วงเวลา 2 วินาทีก่อนปิด Modal เพื่อโชว์เครื่องหมายถูก
+        setTimeout(() => {
+          setShowOTModal(false);
+          setOtSuccess(false);
+          // Reset ข้อมูล
+          setOtData({
+            date: "",
+            startTime: "17:30",
+            endTime: "19:30",
+            siteId: "",
+            reason: "",
+          });
+        }, 2000);
+      } else {
+        setOtError(res.message || "เกิดข้อผิดพลาดในการส่งข้อมูล");
+      }
+    } catch (error) {
+      setOtError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+    } finally {
+      setIsProcessingOT(false);
+    }
+  };
 
   /* ---------------- OTHER ACTIONS ---------------- */
   const handleLogout = async () => {
@@ -522,17 +612,6 @@ export default function EmployeeClientPage({
     }
   };
 
-  const leaveDays = useMemo(() => {
-    if (!leaveStart || !leaveEnd) return 0;
-    const start = new Date(leaveStart);
-    const end = new Date(leaveEnd);
-    if (end < start) return 0;
-    return (
-      Math.ceil(
-        Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-      ) + 1
-    );
-  }, [leaveStart, leaveEnd]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
@@ -744,6 +823,12 @@ export default function EmployeeClientPage({
               className="w-full bg-white border-2 border-gray-100 hover:border-blue-600 hover:text-blue-600 text-gray-500 font-black px-6 py-4 sm:px-8 sm:py-5 rounded-[1.2rem] sm:rounded-[1.5rem] transition-all active:scale-95 flex items-center justify-center gap-3 text-sm sm:text-base"
             >
               ขอลางาน
+            </button>
+            <button
+              onClick={() => setShowOTModal(true)}
+              className="w-full bg-white border-2 border-gray-100 hover:border-blue-600 hover:text-blue-600 text-gray-500 font-black px-6 py-4 sm:px-8 sm:py-5 rounded-[1.2rem] sm:rounded-[1.5rem] transition-all active:scale-95 flex items-center justify-center gap-3 text-sm sm:text-base"
+            >
+              ขอทำOT
             </button>
 
             {/* 3. ปุ่มเปลี่ยนรหัสผ่าน */}
@@ -1402,6 +1487,216 @@ export default function EmployeeClientPage({
                       }}
                       disabled={isProcessing}
                       className="flex-1 bg-gray-100 text-gray-400 font-black py-4 rounded-2xl uppercase text-xs tracking-widest disabled:opacity-30"
+                    >
+                      ปิด
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* {MODAL OT REQUEST} */}
+      {showOTModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div
+            className="absolute inset-0"
+            onClick={() => !isProcessingOT && setShowOTModal(false)}
+          ></div>
+
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-300 relative z-10">
+            <div className="p-8 sm:p-10">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl">
+                  ⏰
+                </div>
+                <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">
+                  ขออนุมัติทำงานล่วงเวลา
+                </h3>
+                <p className="text-orange-500 text-[10px] font-black uppercase tracking-widest mt-1">
+                  Overtime Request
+                </p>
+              </div>
+
+              {otError && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[10px] font-black uppercase animate-shake">
+                  ⚠️ {otError}
+                </div>
+              )}
+
+              {otSuccess ? (
+                <div className="py-6 text-center space-y-4 animate-in zoom-in">
+                  <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-3xl shadow-lg">
+                    ✓
+                  </div>
+                  <p className="font-black text-green-600 uppercase tracking-tighter">
+                    ส่งคำขอ OT สำเร็จแล้ว!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* 📍 เลือกไซต์งาน (เพิ่มใหม่) */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                      ไซต์งาน / สถานที่ปฏิบัติงาน
+                    </label>
+                    <select
+                      className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all cursor-pointer appearance-none"
+                      value={otData.siteId}
+                      onChange={(e) => {
+                        setOtData({ ...otData, siteId: e.target.value });
+                        setOtError("");
+                      }}
+                    >
+                      <option value="" disabled>
+                        เลือกไซต์งาน
+                      </option>
+                      {/* ตัวอย่างการ Map ข้อมูล (ค่อยมาเชื่อม uuid จริงตรงนี้) */}
+                      <option value="site-uuid-1">สำนักงานใหญ่ (HQ)</option>
+                      <option value="site-uuid-2">ไซต์งาน A (พระราม 9)</option>
+                      <option value="site-uuid-3">ไซต์งาน B (บางนา)</option>
+                    </select>
+                  </div>
+
+                  {/* วันที่ต้องการทำ OT */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                      วันที่ต้องการทำ OT
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all"
+                      value={otData.date}
+                      onChange={(e) => {
+                        setOtData({ ...otData, date: e.target.value });
+                        setOtError("");
+                      }}
+                    />
+                  </div>
+
+                  {/* 🕒 ส่วนเลือกเวลา เริ่ม - สิ้นสุด */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                        ตั้งแต่กี่โมง
+                      </label>
+                      <input
+                        type="time"
+                        className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all cursor-pointer"
+                        value={otData.startTime}
+                        onChange={(e) =>
+                          setOtData({ ...otData, startTime: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                        ถึงกี่โมง
+                      </label>
+                      <input
+                        type="time"
+                        className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all cursor-pointer"
+                        value={otData.endTime}
+                        onChange={(e) =>
+                          setOtData({ ...otData, endTime: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {/* 📊 แสดงจำนวนชั่วโมงที่คำนวณได้ */}
+                  {otData.startTime && otData.endTime && (
+                    <div className="p-4 bg-orange-50/50 border border-dashed border-orange-200 rounded-2xl flex items-center justify-between">
+                      <span className="text-[10px] font-black text-orange-600 uppercase ml-2 italic">
+                        Total Hours
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-black text-orange-600 italic">
+                          {(() => {
+                            const start = otData.startTime.split(":");
+                            const end = otData.endTime.split(":");
+                            const startDate = new Date(
+                              0,
+                              0,
+                              0,
+                              parseInt(start[0]),
+                              parseInt(start[1]),
+                              0
+                            );
+                            const endDate = new Date(
+                              0,
+                              0,
+                              0,
+                              parseInt(end[0]),
+                              parseInt(end[1]),
+                              0
+                            );
+                            let diff = endDate.getTime() - startDate.getTime();
+                            if (diff < 0) diff += 24 * 60 * 60 * 1000;
+                            return (diff / (1000 * 60 * 60)).toFixed(1);
+                          })()}
+                        </span>
+                        <span className="text-[10px] font-black text-orange-400 uppercase">
+                          ชั่วโมง
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* เหตุผล */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                      เหตุผล/งานที่ทำ
+                    </label>
+                    <textarea
+                      className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all min-h-[80px]"
+                      placeholder="ระบุรายละเอียดสั้นๆ..."
+                      value={otData.reason}
+                      onChange={(e) =>
+                        setOtData({ ...otData, reason: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  {/* ปุ่มกด */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={async () => {
+                        if (!otData.date || !otData.siteId)
+                          return setOtError("กรุณากรอกข้อมูลและเลือกไซต์งาน");
+
+                        setIsProcessingOT(true);
+                        // จำลองการส่งข้อมูล
+                        setTimeout(() => {
+                          setIsProcessingOT(false);
+                          setOtSuccess(true);
+                          setTimeout(() => {
+                            setShowOTModal(false);
+                            setOtSuccess(false);
+                            setOtData({
+                              date: "",
+                              startTime: "17:30",
+                              endTime: "19:30",
+                              siteId: "",
+                              reason: "",
+                            });
+                          }, 2000);
+                        }, 1500);
+                      }}
+                      disabled={isProcessingOT}
+                      className="flex-[2] bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all uppercase text-xs tracking-widest disabled:opacity-50"
+                    >
+                      {isProcessingOT ? "กำลังส่ง..." : "ยืนยันส่งคำขอ"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowOTModal(false);
+                        setOtError("");
+                      }}
+                      disabled={isProcessingOT}
+                      className="flex-1 bg-gray-100 text-gray-400 font-black py-4 rounded-2xl uppercase text-xs tracking-widest"
                     >
                       ปิด
                     </button>

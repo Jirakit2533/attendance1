@@ -2,8 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
-
-import { handleLoginServer, clearSessionAction } from "./login-action";
+import { handleLoginServer, clearSessionAction } from "./api/login-action";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -12,22 +11,23 @@ export default function LoginPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    // 🛡️ ป้องกัน ReferenceError ด้วยการเช็คว่าฟังก์ชันถูกโหลดมาหรือยัง
+    // 🛡️ ล้าง Session เก่าเมื่อเข้าหน้า Login เพื่อความปลอดภัย
     const initializePage = async () => {
       try {
-        if (typeof clearSessionAction === "function") {
-          await clearSessionAction();
-        }
+        await clearSessionAction();
       } catch (err) {
         console.error("Session clear failed:", err);
       }
     };
-
     initializePage();
 
+    // เช็ค Error จาก URL (เช่นโดนดีดมาจาก Middleware)
     const params = new URLSearchParams(window.location.search);
-    if (params.get("invalid") || params.get("expired")) {
-      setError("เซสชันหมดอายุหรือข้อมูลไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่");
+    const errorType = params.get("error");
+    if (errorType === "session_expired") {
+      setError("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่");
+    } else if (params.get("invalid")) {
+      setError("ข้อมูลไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่");
     }
   }, []);
 
@@ -42,9 +42,10 @@ export default function LoginPage() {
         
         if (result.success) {
           setIsProcessing(true);
-          window.location.href = result.redirect || "/";
+          // ใช้ window.location.replace เพื่อไม่ให้ User กด Back กลับมาหน้า Login ได้หลังเข้าสู่ระบบ
+          window.location.replace(result.redirect || "/");
         } else {
-          setError(result.message);
+          setError(result.message || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
           setIsProcessing(false);
         }
       } catch (err) {
@@ -58,6 +59,7 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#f0f2f5] px-4 relative overflow-hidden">
+      {/* Background Decor */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100 rounded-full blur-3xl opacity-50" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-200 rounded-full blur-3xl opacity-50" />
 
@@ -75,6 +77,7 @@ export default function LoginPage() {
           </header>
 
           <form onSubmit={handleLogin} className="space-y-5">
+            {/* Username Field */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-gray-600 ml-1 uppercase">ชื่อผู้ใช้</label>
               <div className="relative">
@@ -96,6 +99,7 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Password Field */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-gray-600 ml-1 uppercase">รหัสผ่าน</label>
               <div className="relative">
@@ -120,16 +124,18 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Error Message */}
             {error && (
-              <div className="bg-red-50 text-red-600 text-[11px] py-2.5 px-4 rounded-lg text-center font-bold animate-pulse">
+              <div key={error} className="bg-red-50 text-red-600 text-[11px] py-2.5 px-4 rounded-lg text-center font-bold animate-pulse">
                 {error}
               </div>
             )}
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:shadow-blue-300 hover:scale-[1.02] active:scale-[0.98] transition-all mt-2 flex items-center justify-center gap-2"
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:shadow-blue-300 hover:scale-[1.02] active:scale-[0.98] transition-all mt-2 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <>

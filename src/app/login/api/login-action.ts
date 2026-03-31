@@ -12,15 +12,11 @@ export async function clearSessionAction() {
     const cookieStore = await cookies();
     const cookiesToClear = ["session_user_id", "user_role", "role", "session"];
     
-    cookiesToClear.forEach(name => {
-      cookieStore.set(name, "", { 
-        expires: new Date(0), 
-        path: "/",
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax"
-      });
-    });
+    // 🛡️ ลบคุกกี้ทีละตัวตามมาตรฐาน Next.js Server Action
+    for (const name of cookiesToClear) {
+      cookieStore.delete(name);
+    }
+    
     return { success: true };
   } catch (error) {
     console.error("Failed to clear sessions:", error);
@@ -34,38 +30,23 @@ export async function clearSessionAction() {
  */
 export async function handleLoginServer(formData: FormData) {
   try {
-    // เรียกใช้ logic การเช็ค username/password จากไฟล์ auth หลักของคุณ
+    // 🚀 เรียกใช้ logic การเช็ค username/password 
+    // หมายเหตุ: loginAction จะทำการ set คุกกี้ที่จำเป็นไว้ให้เรียบร้อยแล้ว (Single Source of Truth)
     const result = await loginAction(formData);
     
-    if (result.success) {
-      const cookieStore = await cookies();
-
-      // เพิ่มการตั้งค่าคุกกี้เพื่อให้ Middleware ตรวจสอบสิทธิ์ได้
-      cookieStore.set("session_user_id", result.userId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 // 1 วัน
-      });
-
-      cookieStore.set("user_role", result.role, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 // 1 วัน
-      });
-
+    if (result && result.success) {
+      // ตรวจสอบว่าคุกกี้ถูกตั้งค่าเรียบร้อยจาก loginAction แล้ว
+      // ไม่ต้องสั่ง cookieStore.set ซ้ำซ้อนที่นี่ เพื่อป้องกัน Header Conflict
+      
       return { 
         success: true, 
-        redirect: result.redirect 
+        redirect: result.redirect || "/" 
       };
     }
     
     return { 
       success: false, 
-      message: result.message || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" 
+      message: result?.message || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" 
     };
   } catch (error) {
     console.error("Login server error:", error);

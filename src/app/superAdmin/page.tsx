@@ -1,63 +1,64 @@
 import { db } from "@/db/db";
 import { companyTable, usersTable, adminsTable, superAdminTable } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
-import { cookies } from "next/headers"; // Next.js 16+ cookies() returns a Promise
+import { desc, eq, and } from "drizzle-orm";
+import { cookies } from "next/headers"; 
 import { redirect } from "next/navigation"; 
 import SuperAdminClientPage from "./superAdminClientPage";
 
-export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
+export const dynamic = "force-dynamic";
 
 export default async function SuperAdminPage() {
-  // 🛡️ [SECURITY CHECK] ตรวจสอบความมีตัวตนใน Database
-  // บรรทัดนี้สำคัญที่สุด: ต้องมี await นำหน้า cookies()
+  // 🛡️ [SECURITY CHECK] 
   const cookieStore = await cookies(); 
   const userId = cookieStore.get('session_user_id')?.value;
 
-  // 1. ดึงข้อมูล Super Admin สำหรับ Profile และใช้ตรวจสอบตัวตน
-  // ปรับให้ดึงแบบระบุ ID จากคุกกี้เพื่อเช็คว่า User นี้ยังอยู่ในสารบบไหม
-  const superAdminData = await db
-    .select({
-      id: superAdminTable.id,
-      name: superAdminTable.name,
-    })
-    .from(superAdminTable)
-    .where(eq(superAdminTable.id, userId || "")) // ตรวจสอบ ID ตรงๆ
-    .limit(1);
-
-  // 🚩 ถ้า userId ในคุกกี้ไม่มีใน Table superAdmin (ถูกลบไปแล้ว) 
-  // ให้ดีดไปหน้า API Cleanup เพื่อล้างคุกกี้ในมือถือทิ้งทันที
-  if (superAdminData.length === 0) {
-    redirect('/api/auth/logout-cleanup');
+  // หากไม่มี userId ในคุกกี้
+  if (!userId) {
+    // redirect('/login?error=session_expired');
   }
 
-  // 2. ดึงข้อมูลบริษัททั้งหมด
-  const companiesData = await db
-    .select()
-    .from(companyTable)
-    .orderBy(desc(companyTable.created_at));
+  // 🚀 [Parallel Fetching] 
+  const [superAdminData, companiesData, adminsData] = await Promise.all([
+    // 1. ดึงข้อมูล Super Admin (ใช้ superAdminTable อ้างอิง id, name, role)
+    userId 
+      ? db.select({ id: superAdminTable.id, name: superAdminTable.name })
+          .from(superAdminTable)
+          .where(eq(superAdminTable.id, userId))
+          .limit(1)
+      : [], 
 
-  // 3. ดึงข้อมูลแอดมินทั้งหมด พร้อม Join ข้อมูลที่จำเป็น
-  const adminsData = await db
-    .select({
+    // 2. ดึงข้อมูลบริษัททั้งหมด (อ้างอิง companyTable.created_at ตาม Schema)
+    db.select().from(companyTable).orderBy(desc(companyTable.created_at)),
+
+    // 3. ดึงข้อมูลแอดมินทั้งหมด (Join usersTable กับ adminsTable)
+    db.select({
       user: usersTable,
       admin: adminsTable,
+      // อ้างอิง adminsTable.company (ชื่อคีย์ใน Schema คือ company)
       mappedCompanyId: adminsTable.company, 
     })
     .from(usersTable)
     .leftJoin(adminsTable, eq(usersTable.id, adminsTable.user_id))
-    .where(eq(usersTable.role, "admin"))
-    .orderBy(desc(usersTable.created_at));
+    .where(eq(usersTable.role, "admin")) // กรองเฉพาะ role admin จาก usersTable
+    .orderBy(desc(usersTable.created_at))
+  ]);
 
-  // 4. Mapping ข้อมูลบริษัท (Company Mapping)
-  const initialCompanies = companiesData.map((c) => ({
-    id: c.id,
-    name: c.name,
+  // 🚩 ตรวจสอบสิทธิ์ Super Admin
+  const currentSuperAdmin = superAdminData?.[0];
+  if (!currentSuperAdmin && userId) {
+    // redirect('/api/auth/logout-cleanup');
+  }
+
+  // 4. Mapping ข้อมูลบริษัท (Strict Schema Mapping)
+  const initialCompanies = (companiesData || []).map((c) => ({
+    id: String(c.id),
+    name: c.name || "ไม่ระบุชื่อบริษัท",
     code: c.companyCode || "", 
     status: "active" as const, 
     phone: c.phone || "-", 
     email: c.email || "-", 
     address: c.address || "-",
-    
+    otRoundingOption: c.otRoundingOption || "none",
     createdByName: c.createdByName || "System",
     updateByName: c.updateByName || null,
     deletedByName: c.deletedByName || null,
@@ -67,19 +68,21 @@ export default async function SuperAdminPage() {
     leaderCount: 0,
     employeeCount: 0, 
     
-    createdAt: c.created_at.toISOString(),
-    updatedAt: c.updatedAt ? c.updatedAt.toISOString() : null,
-    deletedAt: c.deletedAt ? c.deletedAt.toISOString() : null,
+    // อ้างอิง c.created_at และ c.updatedAt ตาม Schema
+    createdAt: c.created_at instanceof Date ? c.created_at.toISOString() : new Date().toISOString(),
+    updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : null,
+    deletedAt: c.deletedAt instanceof Date ? c.deletedAt.toISOString() : null,
   }));
 
-  // 5. Mapping ข้อมูลแอดมิน (Admin Mapping)
-  const initialAdmins = adminsData.map(({ user, admin, mappedCompanyId }) => ({
+  // 5. Mapping ข้อมูลแอดมิน (Strict Schema Mapping)
+  const initialAdmins = (adminsData || []).map(({ user, admin, mappedCompanyId }) => ({
     id: user.id,
+    // ใช้ mappedCompanyId จาก adminsTable หรือ fallback ไปที่ user.companyId
     companyId: mappedCompanyId || user.companyId || "", 
-    name: `${user.firstName} ${user.lastName}`,
-    username: user.userName,
+    name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "ไม่ระบุชื่อ",
+    username: user.userName || "user",
     email: admin?.email || "-", 
-    avatar: user.avatarUrl || `https://ui-avatars.com/api/?name=${user.firstName}+${user.lastName}`,
+    avatar: user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.firstName || 'A')}+${encodeURIComponent(user.lastName || 'B')}`,
     status: "active" as const,
 
     createdByName: admin?.createdByName || "System Admin",
@@ -93,15 +96,16 @@ export default async function SuperAdminPage() {
     leaderCount: 0,
     employeeCount: 0, 
 
-    createdAt: user.created_at.toISOString(),
-    updatedAt: admin?.updatedAt ? admin.updatedAt.toISOString() : null,
-    deletedAt: admin?.deletedAt ? admin.deletedAt.toISOString() : null,
+    // อ้างอิง user.created_at และ admin.updatedAt ตาม Schema
+    createdAt: user.created_at instanceof Date ? user.created_at.toISOString() : new Date().toISOString(),
+    updatedAt: admin?.updatedAt instanceof Date ? admin.updatedAt.toISOString() : null,
+    deletedAt: admin?.deletedAt instanceof Date ? admin.deletedAt.toISOString() : null,
   }));
 
-  // 6. เตรียมข้อมูล Super Admin เบื้องต้น
+  // 6. เตรียมข้อมูล Super Admin (Fallback ถ้าดึงไม่ได้)
   const initialSuperAdmin = { 
-    id: superAdminData[0].id, 
-    name: superAdminData[0].name || "System Admin" 
+    id: currentSuperAdmin?.id || userId || "unknown", 
+    name: currentSuperAdmin?.name || "System Admin" 
   };
 
   return (

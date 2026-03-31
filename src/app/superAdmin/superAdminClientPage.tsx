@@ -1,15 +1,20 @@
 "use client";
 
-import Image from "next/image";
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+
+// --- Actions (รวมจากแหล่งที่ถูกต้อง) ---
 import { 
   saveCompanyAction, 
   deleteCompanyAction, 
   saveAdminAction,
   deleteAdminAction,
-} from "./actions";
+} from "./actions"; 
 
+import { clearSessionAction } from "../login/api/login-action";
+
+// --- Icons ---
 import { 
   Building2, 
   Users, 
@@ -20,12 +25,10 @@ import {
   Trash2, 
   X, 
   Edit3,   
-  Phone,
-  Mail,
-  MapPin   
+  Phone, 
 } from "lucide-react";
 
-/* ================== TYPES ================== */
+/* ---------- TYPES ---------- */
 type Company = { 
   id: string; name: string; code: string; status: "active" | "suspended"; 
   phone: string; address: string; email: string;
@@ -102,29 +105,32 @@ export default function SuperAdminClientPage({
       a.username.toLowerCase().includes(searchAdmin.toLowerCase())
     );
   }, [admins, searchAdmin]);
-
-  /* ---------- ACTIONS ---------- */
   
   const handleSaveCompany = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsPending(true);
     const formData = new FormData(e.currentTarget);
+    
+    // แก้ไขตรงนี้: เปลี่ยนจาก "code" เป็น "companyCode" ให้ตรงกับ name ใน input
     const data = {
       id: editingComp?.id,
       name: formData.get("name") as string,
-      companyCode: formData.get("code") as string, 
+      companyCode: formData.get("companyCode") as string, 
+      companyPrefix: formData.get("companyPrefix") as string,
+      otRoundingOption: formData.get("otRoundingOption") as string,
       phone: formData.get("phone") as string,
       address: formData.get("address") as string,
       email: formData.get("email") as string, 
     };
+
     try {
       const result = await saveCompanyAction(data); 
       if (result?.success) {
         setShowCompModal(false);
         setEditingComp(null);
-        router.refresh(); // บังคับให้ Server ส่งข้อมูลใหม่มา
+        router.refresh();
       } else {
-        alert("❌ บันทึกไม่สำเร็จ: " + (result?.error || "Unknown Error"));
+        alert("❌ บันทึกไม่สำเร็จ: " + (result?.error || "รหัสบริษัทนี้อาจถูกใช้ไปแล้ว"));
       }
     } catch (error) {
       console.error("Client Save Error:", error);
@@ -180,12 +186,25 @@ export default function SuperAdminClientPage({
   };
 
   const handleLogout = async () => {
-    if(!confirm("ยืนยันการออกจากระบบ?")) return;
-    document.cookie = "session_user_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie = "user_role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    window.location.href = "/login";
-  };
+    if (!confirm("ยืนยันการออกจากระบบ?")) return;
   
+    try {
+      const result = await clearSessionAction();
+  
+      if (result.success) {
+        const clientCookies = ["session_user_id", "user_role", "role", "session"];
+        clientCookies.forEach((name) => {
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        });
+  
+        window.location.replace("/login");
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.location.replace("/login");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F1F5F9] text-slate-900 font-sans pb-10">
       {/* 🧭 NAV/HEADER */}
@@ -200,9 +219,15 @@ export default function SuperAdminClientPage({
               <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-[0.3em]">Siam Royal Systems</p>
             </div>
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-2 bg-slate-100 hover:bg-red-50 hover:text-red-600 px-4 py-2 rounded-xl transition-all font-bold text-sm">
-            <LogOut size={18} /> ออกจากระบบ
-          </button>
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden md:block">
+              <p className="text-xs font-black text-slate-800">{initialSuperAdmin?.name || "Super Admin"}</p>
+              <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Master Root</p>
+            </div>
+            <button onClick={handleLogout} className="flex items-center gap-2 bg-slate-100 hover:bg-red-50 hover:text-red-600 px-4 py-2 rounded-xl transition-all font-bold text-sm">
+              <LogOut size={18} /> ออกจากระบบ
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -243,9 +268,10 @@ export default function SuperAdminClientPage({
               <tr>
                 <th className="px-8 py-5">ข้อมูลบริษัท</th>
                 <th className="px-8 py-5">การติดต่อ & ที่อยู่</th>
-                <th className="px-8 py-5 text-center">จำนวนบุคลากร Admin / Leader / Employee</th>
+                <th className="px-8 py-5 text-center">จำนวน Admin / Leader / Employee</th>
                 <th className="px-8 py-5">SuperAdmin จัดการล่าสุด</th>
                 <th className="px-8 py-5 text-center">สถานะ</th>
+                <th className="px-8 py-5 text-center">การทำ OT</th>
                 <th className="px-8 py-5 text-right">จัดการ</th>
               </tr>
             </thead>
@@ -289,7 +315,6 @@ export default function SuperAdminClientPage({
                         <ShieldCheck size={16} className="text-slate-400" />
                       </div>
                       <div>
-                        {/* ดึงชื่อคนแก้ไขล่าสุด หรือถ้าไม่มีให้ใช้คนสร้าง */}
                         <p className="text-sm text-slate-700">{c.updateByName || c.createdByName || "System"}</p>
                         <p className="text-[10px] text-slate-400 font-normal italic">
                           {c.updateByName ? "Updated" : "Created"}
@@ -299,6 +324,15 @@ export default function SuperAdminClientPage({
                   </td>
                   <td className="px-8 py-6 text-center">
                     <StatusBadge status={c.status} />
+                  </td>
+                  <td className="px-8 py-6 text-center">
+                    <span className="text-xs font-bold px-3 py-1 bg-slate-100 text-slate-600 rounded-lg">
+                      {{
+                        ACTUAL: "นับทุกนาที",
+                        EVERY_30_MINS: "นับทุก 30 นาที",
+                        EVERY_1_HOUR: "นับทุกชั่วโมง",
+                      }[c.otRoundingOption as keyof typeof c] || "ไม่ระบุ"}
+                    </span>
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex justify-end gap-2 opacity-30 group-hover:opacity-100 transition-opacity">
@@ -331,7 +365,6 @@ export default function SuperAdminClientPage({
 
       {/* 🔑 ADMIN TABLE SECTION */}
         <section className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-white overflow-hidden">
-        {/* --- ส่วนที่หายไปและเพิ่มกลับเข้ามาให้ครับ --- */}
           <div className="p-8 border-b border-slate-50 bg-gray-200/30 flex flex-col md:flex-row justify-between items-center gap-4">
             <h3 className="text-xl font-black flex items-center gap-3 shrink-0">
               <Users className="text-purple-600"/> รายชื่อ HR Admin
@@ -364,8 +397,8 @@ export default function SuperAdminClientPage({
                   <th className="px-8 py-5">สังกัดบริษัท</th>
                   <th className="px-8 py-5">การติดต่อ</th>
                   <th className="px-8 py-5 text-center">แผนก / ไซต์ / ตำแหน่ง</th>
-                  <th className="px-8 py-5 text-center">จำนวน Leader / Employee</th>
-                  <th className="px-8 py-5 text-center">SUPERADMIN จัดการล่าสุด</th>
+                  <th className="px-8 py-5 text-center">Leader / Employee</th>
+                  <th className="px-8 py-5 text-center">จัดการล่าสุดโดย</th>
                   <th className="px-8 py-5 text-center">สถานะ</th>
                   <th className="px-8 py-5 text-right">จัดการ</th>
                 </tr>
@@ -375,7 +408,9 @@ export default function SuperAdminClientPage({
                   <tr key={a.id} className="group hover:bg-purple-50/30 transition-all">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <img src={a.avatar} className="w-12 h-12 rounded-2xl border-2 border-white shadow-md object-cover" alt="" />
+                        <div className="w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center text-purple-600 font-black">
+                           {a.name.charAt(0)}
+                        </div>
                         <div>
                           <p className="text-slate-800">{a.name}</p>
                           <p className="text-xs text-purple-500 font-mono">@{a.username}</p>
@@ -450,104 +485,129 @@ export default function SuperAdminClientPage({
 
     {/* 🏙️ COMPANY MODAL */}
     {showCompModal && (
-      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-        <div className="bg-white rounded-[2rem] w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
-          {/* Header */}
-          <div className="bg-slate-50 px-8 py-6 border-b border-slate-100 flex justify-between items-center">
-            <h4 className="text-xl font-black flex items-center gap-2">
-              {editingComp ? <Edit3 className="text-indigo-600"/> : <Plus className="text-indigo-600"/>}
-              {editingComp ? "แก้ไขข้อมูลบริษัท" : "ลงทะเบียนบริษัทใหม่"}
-            </h4>
-            <button 
-              onClick={() => { setShowCompModal(false); setEditingComp(null); }} 
-              className="p-2 hover:bg-white rounded-full transition-colors text-slate-400 hover:text-slate-600"
-            >
-              <X size={20}/>
-            </button>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSaveCompany} className="p-8 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">รหัสบริษัท (Company Code)</label>
-                <input 
-                  name="code" 
-                  defaultValue={editingComp?.code} 
-                  placeholder="เช่น TSF" 
-                  className={`w-full px-4 py-3 rounded-xl border border-slate-200 outline-none font-bold transition-all ${
-                    editingComp 
-                    ? "bg-slate-50 text-slate-400 cursor-not-allowed" 
-                    : "focus:ring-2 focus:ring-indigo-500 bg-white"
-                  }`}
-                  required 
-                  readOnly={!!editingComp} // ห้ามแก้รหัสบริษัทถ้าเป็นการแก้ไขข้อมูล
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">ชื่อบริษัท</label>
-                <input 
-                  name="name" 
-                  defaultValue={editingComp?.name} 
-                  placeholder="บริษัท..." 
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold bg-white" 
-                  required 
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400">อีเมลติดต่อ (สำหรับการประสานงาน)</label>
-              <input 
-                name="email" 
-                type="email" 
-                defaultValue={editingComp?.email} 
-                placeholder="hr@company.com" 
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold bg-white" 
-                required 
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400">เบอร์โทรศัพท์สำนักงาน</label>
-              <input 
-                name="phone" 
-                defaultValue={editingComp?.phone} 
-                placeholder="02-xxx-xxxx" 
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold bg-white" 
-                required 
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400">ที่อยู่สำนักงาน/ข้อมูลที่ตั้ง</label>
-              <textarea 
-                name="address" 
-                defaultValue={editingComp?.address} 
-                rows={2} 
-                placeholder="เลขที่อาคาร ถนน แขวง/ตำบล..."
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-sm bg-white" 
-              />
-            </div>
-
-            <button 
-              disabled={isPending} 
-              type="submit" 
-              className="w-full bg-indigo-600 text-white py-4 rounded-xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all mt-4 disabled:bg-slate-300 disabled:shadow-none flex items-center justify-center gap-2"
-            >
-              {isPending && <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-              {isPending ? "กำลังดำเนินการ..." : editingComp ? "อัปเดตข้อมูลบริษัท" : "ยืนยันการลงทะเบียน"}
-            </button>
-          </form>
-        </div>
+  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+    <div className="bg-white rounded-[2rem] w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+      <div className="bg-slate-50 px-8 py-6 border-b border-slate-100 flex justify-between items-center">
+        <h4 className="text-xl font-black flex items-center gap-2">
+          {editingComp ? <Edit3 className="text-indigo-600"/> : <Plus className="text-indigo-600"/>}
+          {editingComp ? "แก้ไขข้อมูลบริษัท" : "ลงทะเบียนบริษัทใหม่"}
+        </h4>
+        <button 
+          onClick={() => { setShowCompModal(false); setEditingComp(null); }} 
+          className="p-2 hover:bg-white rounded-full transition-colors text-slate-400 hover:text-slate-600"
+        >
+          <X size={20}/>
+        </button>
       </div>
-    )}
 
+      <form onSubmit={handleSaveCompany} className="p-8 space-y-4">
+        {/* --- ส่วนที่ส่งข้อมูล ID และ Code ป้องกันค่าหลุด --- */}
+        {editingComp && <input type="hidden" name="id" value={editingComp.id} />}
+        {editingComp && <input type="hidden" name="companyCode" value={editingComp.companyCode || editingComp.code} />}
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-400">รหัสบริษัท (Code)</label>
+            <input 
+              name="companyCode" 
+              defaultValue={editingComp?.companyCode || editingComp?.code} 
+              placeholder="เช่น TSF" 
+              className={`w-full px-4 py-3 rounded-xl border border-slate-200 outline-none font-bold transition-all ${
+                editingComp ? "bg-slate-50 text-slate-400 cursor-not-allowed" : "focus:ring-2 focus:ring-indigo-500 bg-white"
+              }`}
+              required 
+              readOnly={!!editingComp}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-400">คำนำหน้าบริษัท (Prefix)</label>
+            <input 
+              name="companyPrefix" 
+              defaultValue={editingComp?.companyPrefix} 
+              placeholder="เช่น TSF" 
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold bg-white" 
+              required 
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-400">ชื่อบริษัท</label>
+            <input 
+              name="name" 
+              defaultValue={editingComp?.name} 
+              placeholder="บริษัท..." 
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold bg-white" 
+              required 
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-400">การปัดเศษ OT</label>
+            <select 
+              name="otRoundingOption"
+              defaultValue={editingComp?.otRoundingOption || "ACTUAL"}
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold bg-white appearance-none cursor-pointer"
+              required
+            >
+              <option value="ACTUAL">ตามจริง (Actual)</option>
+              <option value="EVERY_30_MINS">ทุกๆ 30 นาที</option>
+              <option value="EVERY_1_HOUR">ทุกๆ 1 ชั่วโมง</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-400">อีเมลติดต่อ</label>
+            <input 
+              name="email" 
+              type="email" 
+              defaultValue={editingComp?.email} 
+              placeholder="hr@company.com" 
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold bg-white" 
+              required 
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-400">เบอร์โทรศัพท์</label>
+            <input 
+              name="phone" 
+              defaultValue={editingComp?.phone} 
+              placeholder="02-xxx-xxxx" 
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold bg-white" 
+              required 
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase text-slate-400">ที่อยู่สำนักงาน</label>
+          <textarea 
+            name="address" 
+            defaultValue={editingComp?.address} 
+            rows={2} 
+            placeholder="เลขที่อาคาร ถนน แขวง/ตำบล..."
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-sm bg-white" 
+          />
+        </div>
+
+        <button 
+          disabled={isPending} 
+          type="submit" 
+          className="w-full bg-indigo-600 text-white py-4 rounded-xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all mt-4 disabled:bg-slate-300 flex items-center justify-center gap-2"
+        >
+          {isPending && <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+          {isPending ? "กำลังดำเนินการ..." : editingComp ? "อัปเดตข้อมูลบริษัท" : "ยืนยันการลงทะเบียน"}
+        </button>
+      </form>
+    </div>
+  </div>
+)}
       {/* 👤 ADMIN MODAL */}
       {showAdminModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
-            {/* Modal Header */}
             <div className="bg-slate-50 px-8 py-6 border-b border-slate-100 flex justify-between items-center">
               <h4 className="text-xl font-black flex items-center gap-2">
                 {editingAdmin ? <Edit3 className="text-purple-600"/> : <Plus className="text-purple-600"/>}
@@ -561,7 +621,6 @@ export default function SuperAdminClientPage({
               </button>
             </div>
 
-            {/* Modal Form */}
             <form onSubmit={handleSaveAdmin} className="p-8 space-y-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400">สังกัดบริษัท</label>
@@ -574,7 +633,6 @@ export default function SuperAdminClientPage({
                   {companies.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
                 </select>
               </div>
-
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400">ชื่อ-นามสกุล</label>
                 <input 
@@ -585,56 +643,45 @@ export default function SuperAdminClientPage({
                   required 
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
-                {/* 🛡️ ส่วนของ Username ที่มีการแก้ Logic */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400">
-                    Username {editingAdmin && "(แก้ไขไม่ได้)"}
-                  </label>
+                  <label className="text-[10px] font-black uppercase text-slate-400">Username</label>
                   <input 
                     name="username" 
-                    placeholder="กรอกชื่อผู้ใช้..."
-                    // 💡 แก้ไข Logic: ถ้าแก้ไขดึงค่ามาโชว์ ถ้าเพิ่มใหม่ใส่ "กรอกชื่อผู้ใช้"
-                    defaultValue={editingAdmin ? editingAdmin.username : ""} 
-                    // 💡 แก้ไข Logic: ถ้าแก้ไขให้ readOnly ถ้าเพิ่มใหม่ให้พิมพ์ได้
+                    defaultValue={editingAdmin?.username} 
+                    placeholder="Username..."
                     readOnly={!!editingAdmin} 
                     className={`w-full px-4 py-3 rounded-xl border border-slate-200 outline-none font-bold font-mono transition-all ${
-                      editingAdmin 
-                        ? "bg-slate-50 text-slate-400 cursor-not-allowed" 
-                        : "focus:ring-2 focus:ring-purple-500 bg-white text-slate-800"
+                      editingAdmin ? "bg-slate-50 text-slate-400 cursor-not-allowed" : "focus:ring-2 focus:ring-purple-500 bg-white"
                     }`} 
                     required 
                   />
                 </div>
-
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Password(หากไม่ต้อ)</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400">Password</label>
                   <input 
                     name="password" 
                     type="password" 
-                    placeholder={editingAdmin ? "เปลี่ยนรหัสผ่าน" : "กำหนดรหัสผ่าน . . ."} 
+                    placeholder={editingAdmin ? "เปลี่ยนรหัสผ่าน" : "รหัสผ่าน..."} 
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 outline-none font-bold bg-white" 
                     required={!editingAdmin} 
                   />
                 </div>
               </div>
-
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">อีเมลแอดมิน (ใส่อีเมลใหม่)</label>
+                <label className="text-[10px] font-black uppercase text-slate-400">อีเมลแอดมิน</label>
                 <input 
                   name="email" 
                   type="email" 
                   defaultValue={editingAdmin?.email} 
-                  placeholder="กรอกอีเมลสำหรับแอดมิน..." 
+                  placeholder="admin@company.com" 
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 outline-none font-bold bg-white" 
                 />
               </div>
-
               <button 
                 disabled={isPending} 
                 type="submit" 
-                className="w-full bg-purple-600 text-white py-4 rounded-xl font-black shadow-lg shadow-purple-100 hover:bg-purple-700 transition-all mt-4 disabled:bg-slate-300 disabled:shadow-none flex items-center justify-center gap-2"
+                className="w-full bg-purple-600 text-white py-4 rounded-xl font-black shadow-lg shadow-purple-100 hover:bg-purple-700 transition-all mt-4 disabled:bg-slate-300 flex items-center justify-center gap-2"
               >
                 {isPending && <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 {isPending ? "กำลังบันทึก..." : "ยืนยันข้อมูลแอดมิน"}

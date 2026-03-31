@@ -1016,7 +1016,7 @@ export default function AdminClientPage({
         "session",
       ];
       cookiesToClear.forEach((name) => {
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 Asia/Bangkok; path=/;`;
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
       });
       await logoutAction();
       window.location.replace("/login");
@@ -2404,10 +2404,7 @@ export default function AdminClientPage({
                 <input
                   name="siteName"
                   id="siteNameInput"
-                  value={
-                    isAllSite ? "ทุกไซต์" : editingSite ? undefined : undefined
-                  }
-                  defaultValue={editingSite?.name || ""}
+                  defaultValue={allSite ? "ทุกไซต์" : editingSite?.name || ""}
                   readOnly={isAllSite}
                   placeholder="ชื่อไซต์งาน..."
                   required
@@ -2462,15 +2459,9 @@ export default function AdminClientPage({
                   ))}
 
                 <input
+                  key={isAllSite  ? "ทุกไซต์" : editingSite?.address || ""}
                   name="address"
-                  value={
-                    isAllSite
-                      ? "ไม่ประจำไซต์"
-                      : editingSite
-                      ? undefined
-                      : undefined
-                  }
-                  defaultValue={editingSite?.address || ""}
+                  defaultValue={isAllSite ? "ทุกไซต์" : (editingSite?.address ?? "")}
                   readOnly={isAllSite}
                   placeholder="ที่อยู่ไซต์งาน..."
                   className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${
@@ -3959,7 +3950,7 @@ export default function AdminClientPage({
               {/* --- ตารางที่ 2: ตำแหน่ง --- --- */}
               <section>
                 <h4 className="text-sm font-black text-pink-600 mb-4 uppercase tracking-widest flex items-center gap-2">
-                  💼 รายการตำแหน่ง ({positions.length})
+                  💼 รายการตำแหน่งพนักงาน ({positions.length})
                 </h4>
                 <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-100">
                   <table className="w-full text-left text-sm font-bold">

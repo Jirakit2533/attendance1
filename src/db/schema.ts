@@ -1,28 +1,32 @@
-import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer } from "drizzle-orm/pg-core";
-import { desc, relations, sql } from "drizzle-orm"; 
+import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer, jsonb } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+
 
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
 export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected"]);
+export const workingStatusEnum = pgEnum("working_status", ["normal", "extra"]);
 
 export const superAdminTable = pgTable("super_admins", {
   id: uuid("id").primaryKey().defaultRandom(),
   userName: varchar("user_name", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  role: text("role").default("superAdmin").notNull(),
+  role: roleEnum("role").default("super_admin").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`), 
 });
 
 export const companyTable = pgTable("company", {
   id: uuid("id").primaryKey().defaultRandom(),
-  superAdminCreatorId: uuid("user_id").references(() => superAdminTable.id),
+  superAdminCreatorId: uuid("superAdminCreator_id").references(() => superAdminTable.id),
   companyCode: varchar("company_code", { length: 255 }).notNull().unique(),
+  companyPrefix: varchar("company_prefix", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   address: text("address"),
   phone: varchar("phone", { length: 255 }),
   email: varchar("email", { length: 255 }),
   logoUrl: text("logo_url"),
+  otRoundingOption: varchar("ot_rounding_option", { length: 30 }).notNull(),
   createdByName: varchar("created_by_name", { length: 255 }),
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
   updateByName: varchar("update_by_name", { length: 255 }), 
@@ -93,14 +97,39 @@ export const overtimeTable = pgTable("overtime", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => usersTable.id),
   userName: varchar("user_name", { length: 255 }).notNull(),
+  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
   shiftId: uuid("shift_id").references(() => shiftsTable.id),
-  attendanceId: uuid("attendance_id").references(() => attendanceTable.id), // เชื่อมกับบันทึกเวลาวันนั้น
+  attendanceId: uuid("attendance_id").references(() => attendanceTable.id).unique(), // เชื่อมกับบันทึกเวลาวันนั้น
   status: varchar("status", { length: 20 }).default("pending"), // 'pending', 'approved', 'rejected'
   date: date("date").notNull(),
-  hours: integer("hours").notNull().default(0), 
-  approvedBy: uuid("approved_by").references(() => usersTable.id),
-  createdAt: timestamp("created_at").defaultNow(),
+  overtimeBefore: integer("overtime_before").notNull().default(0),
+  overtimeAfter: integer("overtime_after").notNull().default(0),
+  overtimeApproved: integer("overtime_approved").notNull().default(0),
+  overtimeRejected: integer("overtime_rejected").notNull().default(0),
+  otRoundingOption: varchar("ot_rounding_option", { length: 30 }).notNull(),
 });
+
+export const overtimeRequestsTable = pgTable("overtime_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => usersTable.id),
+  userName: varchar("user_name", { length: 255 }).notNull(),
+  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
+  departmentId: uuid("department_id").references(() => departmentsTable.id),
+  siteId: uuid("site_id").references(() => sitesTable.id),
+  shiftId: uuid("shift_id").references(() => shiftsTable.id),
+  overtimeByRequest: integer("overtime_by_request").notNull(),
+  requestedWorkers: jsonb("requested_workers").$type<string[]>().default([]),
+  remarks: text("remarks"),
+  status: leaveStatusEnum("status").default("pending").notNull(),
+  approvedBy: uuid("approved_by").references(() => usersTable.id),
+  approvedAt: timestamp("approved_at"),
+  rejectedBy: uuid("rejected_by").references(() => usersTable.id),
+  rejectedAt: timestamp("rejected_at"),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
+  createdBy: uuid("created_by").references(() => usersTable.id),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: uuid("deleted_by").references(() => usersTable.id),
+})
 
 export const temporaryShiftsTable = pgTable("temporary_shifts", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -119,9 +148,10 @@ export const temporaryShiftsTable = pgTable("temporary_shifts", {
 
 export const usersTable = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
+  empCode: varchar("emp_code", { length: 255 }),
   userName: varchar("user_name", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: varchar("role", { length: 255 }).notNull(), 
+  role: roleEnum("role").default("employee").notNull(),  
   firstName: varchar("first_name", { length: 255 }).notNull(),
   lastName: varchar("last_name", { length: 255 }).notNull(),
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
@@ -166,6 +196,7 @@ export const attendanceTable = pgTable("attendance", {
   isOffsiteInCoordinates: text("is_offsite_in_coordinates", { length: 255 }), 
   isOffsiteOut: text("is_offsite_out", { length: 255 }), // 0 = ปกติ, 1 = ออกไซต์
   isOffsiteOutCoordinates: text("is_offsite_out_coordinates", { length: 255 }), 
+  workingStatusEnum: workingStatusEnum("working_status").default("normal"),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
 });
 
@@ -190,15 +221,69 @@ export const leaveTable = pgTable("leave", {
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
 });
 
+// 1. Users Relations (รวมทุกอย่างไว้ที่เดียว ห้ามประกาศซ้ำ)
 export const usersRelations = relations(usersTable, ({ one, many }) => ({
+  company: one(companyTable, {
+    fields: [usersTable.companyId],
+    references: [companyTable.id],
+  }),
+  department: one(departmentsTable, {
+    fields: [usersTable.departmentId],
+    references: [departmentsTable.id],
+  }),
+  position: one(positionsTable, {
+    fields: [usersTable.positionId],
+    references: [positionsTable.id],
+  }),
   site: one(sitesTable, {
     fields: [usersTable.site_id],
     references: [sitesTable.id],
   }),
   leaves: many(leaveTable),
   attendances: many(attendanceTable),
+  overtimeRequests: many(overtimeRequestsTable),
+  shifts: many(shiftsTable),
+  adminProfile: one(adminsTable, {
+    fields: [usersTable.id],
+    references: [adminsTable.user_id],
+  }),
 }));
 
+// 2. Company Relations
+export const companyRelations = relations(companyTable, ({ many }) => ({
+  admins: many(adminsTable),
+  departments: many(departmentsTable),
+  sites: many(sitesTable),
+  users: many(usersTable),
+  positions: many(positionsTable),
+  overtimeRequests: many(overtimeRequestsTable),
+}));
+
+// 3. Attendance Relations
+export const attendanceRelations = relations(attendanceTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [attendanceTable.user_id],
+    references: [usersTable.id],
+  }),
+  department: one(departmentsTable, {
+    fields: [attendanceTable.department_id],
+    references: [departmentsTable.id],
+  }),
+  site: one(sitesTable, {
+    fields: [attendanceTable.site_id],
+    references: [sitesTable.id],
+  }),
+  shift: one(shiftsTable, {
+    fields: [attendanceTable.shift_id],
+    references: [shiftsTable.id],
+  }),
+  temporaryShift: one(temporaryShiftsTable, {
+    fields: [attendanceTable.temp_shift_id],
+    references: [temporaryShiftsTable.id],
+  }),
+}));
+
+// 4. Leave Relations
 export const leaveRelations = relations(leaveTable, ({ one }) => ({
   user: one(usersTable, {
     fields: [leaveTable.user_id],
@@ -208,4 +293,66 @@ export const leaveRelations = relations(leaveTable, ({ one }) => ({
     fields: [leaveTable.approvedBy],
     references: [usersTable.id],
   }),
+}));
+
+// 5. Admin Relations
+export const adminsRelations = relations(adminsTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [adminsTable.user_id],
+    references: [usersTable.id],
+  }),
+  company: one(companyTable, {
+    fields: [adminsTable.company],
+    references: [companyTable.id],
+  }),
+}));
+
+// 6. Department Relations
+export const departmentsRelations = relations(departmentsTable, ({ one, many }) => ({
+  company: one(companyTable, {
+    fields: [departmentsTable.companyId],
+    references: [companyTable.id],
+  }),
+  users: many(usersTable),
+  sites: many(sitesTable),
+}));
+
+// 7. Site Relations
+export const sitesRelations = relations(sitesTable, ({ one, many }) => ({
+  company: one(companyTable, {
+    fields: [sitesTable.companyId],
+    references: [companyTable.id],
+  }),
+  department: one(departmentsTable, {
+    fields: [sitesTable.departmentId],
+    references: [departmentsTable.id],
+  }),
+  users: many(usersTable),
+  attendances: many(attendanceTable),
+}));
+
+// 8. Position Relations
+export const positionsRelations = relations(positionsTable, ({ one, many }) => ({
+  company: one(companyTable, {
+    fields: [positionsTable.company_id],
+    references: [companyTable.id],
+  }),
+  users: many(usersTable),
+}));
+
+// 9. Overtime & Temporary Shift Relations
+export const overtimeRequestsRelations = relations(overtimeRequestsTable, ({ one }) => ({
+  user: one(usersTable, { fields: [overtimeRequestsTable.userId], references: [usersTable.id] }),
+  company: one(companyTable, { fields: [overtimeRequestsTable.companyId], references: [companyTable.id] }),
+  approver: one(usersTable, { fields: [overtimeRequestsTable.approvedBy], references: [usersTable.id] }),
+}));
+
+export const temporaryShiftsRelations = relations(temporaryShiftsTable, ({ one }) => ({
+  user: one(usersTable, { fields: [temporaryShiftsTable.userId], references: [usersTable.id] }),
+  site: one(sitesTable, { fields: [temporaryShiftsTable.siteId], references: [sitesTable.id] }),
+}));
+
+export const shiftsRelations = relations(shiftsTable, ({ one }) => ({
+  user: one(usersTable, { fields: [shiftsTable.userId], references: [usersTable.id] }),
+  site: one(sitesTable, { fields: [shiftsTable.siteId], references: [sitesTable.id] }),
 }));
