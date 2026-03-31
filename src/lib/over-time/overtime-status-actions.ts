@@ -1,4 +1,4 @@
-import { db } from "@/db"; // 1. ดึงตัวเชื่อมต่อ Database มาใช้
+import { db } from "@/db/db"; // 1. ดึงตัวเชื่อมต่อ Database มาใช้
 import { overtimeTable, overtimeRequestsTable } from "@/db/schema"; // 2. ดึงโครงสร้างตารางมาใช้
 import { and, eq, lte } from "drizzle-orm"; // 3. ดึงเครื่องมือสร้างเงื่อนไข SQL มาใช้
 
