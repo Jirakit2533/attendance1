@@ -31,7 +31,7 @@ export const isInsideBound = (
 
 /**
  * 2. ฟังก์ชันหลักสำหรับหา "ไซต์งานผู้ชนะ" (Check-in)
- * ปรับปรุง: รองรับ siteInNameSnapshot และบันทึก "ไม่ตรงไซต์" หากอยู่นอกเขต
+ * ปรับปรุง: พนักงานทุกไซต์หากอยู่นอกเขตจะส่ง Flag เพื่อให้หน้าต่างยืนยันเด้ง
  */
 export const validateAndGetSite = async (
   userLat: number | string,
@@ -42,7 +42,7 @@ export const validateAndGetSite = async (
   let winnerSite: any = null;
   let isEverySiteUser = false;
   let isOffsiteIn = "0";
-  let OffsiteCheckInConfirm = false; // ตั้งค่าเริ่มต้นเป็น false
+  let OffsiteCheckInConfirm = false; 
 
   // --- ขั้นตอนที่ 1: ตรวจสอบสถานะ User ว่าผูกกับ "ทุกไซต์" หรือไม่ ---
   if (fixedSiteId && fixedSiteId !== "") {
@@ -71,23 +71,29 @@ export const validateAndGetSite = async (
     if (actualLocationSite) {
       winnerSite = { ...actualLocationSite };
       isOffsiteIn = "0";
+      OffsiteCheckInConfirm = false;
     } else {
-      // กลุ่มทุกไซต์ แต่อยู่นอกเขต: ใช้ไซต์แรกเป็น Reference แต่เปลี่ยนชื่อเป็น "ไม่ตรงไซต์"
+      // กลุ่มทุกไซต์ แต่อยู่นอกเขต: ส่ง Flag true เพื่อให้หน้าต่างยืนยันเด้ง
       winnerSite = { ...allActualSites[0], name: "ไม่ตรงไซต์" }; 
       isOffsiteIn = "1";
+      OffsiteCheckInConfirm = true; 
     }
-    OffsiteCheckInConfirm = false;
   } else {
+    // กรณีมีไซต์ประจำ (Fixed Site)
     if (fixedSiteId) {
       const site = await db.query.sitesTable.findFirst({ where: eq(sitesTable.id, fixedSiteId) });
       if (site && site.coordinates) {
         const [sLat, sLon] = site.coordinates.split(',').map(s => s.trim());
         const isInside = isInsideBound(userLat, userLon, sLat, sLon);
         
-        isOffsiteIn = isInside ? "0" : "1";
+        if (!isInside) {
+          throw new Error(`คุณไม่อยู่ในรัศมีไซต์งานที่กำหนด (${site.name}) ไม่สามารถลงชื่อเข้างานได้`);
+        }
+
+        isOffsiteIn = "0";
         winnerSite = { 
           ...site, 
-          name: isInside ? site.name : "ไม่ตรงไซต์" // บันทึกลง siteInNameSnapshot
+          name: site.name 
         };
         OffsiteCheckInConfirm = false;
       }
@@ -96,7 +102,6 @@ export const validateAndGetSite = async (
 
   if (!winnerSite) throw new Error("ไม่พบข้อมูลไซต์งานที่ถูกต้อง");
 
-  // คืนค่า winnerSite พร้อมข้อมูลการอยู่นอกเขต
   return {
     ...winnerSite,
     isOffsiteIn,
@@ -107,7 +112,7 @@ export const validateAndGetSite = async (
 
 /**
  * 3. ฟังก์ชันสำหรับ Validate พิกัดตอนเช็คเอาท์ (Check-out)
- * ปรับปรุง: รองรับ siteOutNameSnapshot และส่งชื่อ "ไม่ตรงไซต์" หากอยู่นอกเขต
+ * ปรับปรุง: พนักงานทุกไซต์หากอยู่นอกเขตจะส่ง Flag เพื่อให้หน้าต่างยืนยันเด้งตอนออก
  */
 export const validateCheckOutLocation = async (
   userId: string,
@@ -140,8 +145,7 @@ export const validateCheckOutLocation = async (
     return { 
       isOffsiteOut, 
       isOffsiteOutCoordinates: `${userLat}, ${userLon}`, 
-      OffsiteCheckOutConfirm: false,
-      // บันทึกลง siteOutNameSnapshot
+      OffsiteCheckOutConfirm: isOffsiteOut === "1", // ถ้าอยู่นอกเขตให้เด้งยืนยัน
       siteOutName: isOffsiteOut === "1" ? "ไม่ตรงไซต์" : (currentRecord?.siteInNameSnapshot || "ทุกไซต์")
     };
   }
@@ -150,7 +154,7 @@ export const validateCheckOutLocation = async (
     return { 
       isOffsiteOut: "1", 
       isOffsiteOutCoordinates: `${userLat}, ${userLon}`, 
-      OffsiteCheckOutConfirm: false,
+      OffsiteCheckOutConfirm: true, // บังคับยืนยันกรณีไม่มีข้อมูลไซต์
       siteOutName: "ไม่ตรงไซต์"
     };
   }
@@ -162,17 +166,18 @@ export const validateCheckOutLocation = async (
   if (siteInDb && siteInDb.coordinates) {
     const [sLat, sLon] = siteInDb.coordinates.split(',').map(s => s.trim());
     const isInside = isInsideBound(userLat, userLon, sLat, sLon);
-    const isOffsiteOut = isInside ? "0" : "1";
+    
+    if (!isInside) {
+       throw new Error(`คุณไม่อยู่ในรัศมีไซต์งาน (${siteInDb.name}) ไม่สามารถลงชื่อออกงานได้`);
+    }
 
     return { 
-      isOffsiteOut, 
+      isOffsiteOut: "0", 
       isOffsiteOutCoordinates: `${userLat}, ${userLon}`, 
       OffsiteCheckOutConfirm: false,
-      // บันทึกลง siteOutNameSnapshot
-      siteOutName: isOffsiteOut === "1" ? "ไม่ตรงไซต์" : (currentRecord?.siteInNameSnapshot || siteInDb.name)
+      siteOutName: currentRecord?.siteInNameSnapshot || siteInDb.name
     };
   }
 
   throw new Error("ไม่พบข้อมูลพิกัดไซต์งานสำหรับการตรวจสอบ");
 };
-

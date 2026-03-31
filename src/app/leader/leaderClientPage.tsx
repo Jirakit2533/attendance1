@@ -121,9 +121,10 @@ export default function LeaderClientPage({
   // --- States ---
   const [records, setRecords] = useState<any[]>(myRecords);
   const [leaves, setLeaves] = useState<any[]>(initialLeaves);
-  const [teamAttendance, setTeamAttendance] = useState<any[]>(initialAttendance);
+  const [teamAttendance, setTeamAttendance] =
+    useState<any[]>(initialAttendance);
   const [overtimeRequests, setOvertimeRequests] = useState<any[]>(initialOT);
-  
+
   // Sync states when props change
   useEffect(() => {
     setRecords(myRecords);
@@ -137,8 +138,9 @@ export default function LeaderClientPage({
 
   useEffect(() => {
     // ตรวจสอบว่าข้อมูลข้างในเปลี่ยนจริงหรือไม่ ก่อนจะสั่ง Set State
-    const isChanged = JSON.stringify(overtimeRequests) !== JSON.stringify(initialOT);
-    
+    const isChanged =
+      JSON.stringify(overtimeRequests) !== JSON.stringify(initialOT);
+
     if (isChanged) {
       setOvertimeRequests(initialOT);
     }
@@ -182,12 +184,12 @@ export default function LeaderClientPage({
   const streamRef = useRef<MediaStream | null>(null);
   const [viewImage, setViewImage] = useState<string | null>(null);
 
-
   const [showOTModal, setShowOTModal] = useState(false);
   const [otError, setOtError] = useState("");
   const [otSuccess, setOtSuccess] = useState(false);
   const [isProcessingOT, setIsProcessingOT] = useState(false);
 
+  const [searchOT, setSearchOT] = useState("");
 
   const [otData, setOtData] = useState({
     date: "",
@@ -279,6 +281,26 @@ export default function LeaderClientPage({
         };
       };
     });
+  };
+
+  // กรองข้อมูล OT ตามชื่อพนักงาน หรือ โปรเจกต์
+  const filteredOT = (initialAttendance || []).filter((ot: any) => {
+    const searchTerm = searchOT.toLowerCase();
+    return (
+      ot.employeeName?.toLowerCase().includes(searchTerm) ||
+      ot.projectTag?.toLowerCase().includes(searchTerm) ||
+      ot.reason?.toLowerCase().includes(searchTerm)
+    );
+  });
+
+  const handleApproveOT = (id: string) => {
+    console.log("Approve OT:", id);
+  };
+  const handleRejectOT = (id: string) => {
+    console.log("Reject OT:", id);
+  };
+  const resetOTStatus = (id: string) => {
+    console.log("Reset OT status:", id);
   };
 
   /* ---------------- LEAVE LOGIC ---------------- */
@@ -511,6 +533,8 @@ export default function LeaderClientPage({
         return null;
       });
 
+      if (!pos) throw new Error("ไม่สามารถระบุตำแหน่งพิกัดได้ กรุณาเปิด GPS");
+
       const blob = await (await fetch(capturedImage)).blob();
       const file = new File(
         [blob],
@@ -520,26 +544,23 @@ export default function LeaderClientPage({
         }
       );
 
-      // 3. อัปโหลดรูปภาพ (ใช้ UploadThing หรือ Library ของคุณ)
+      // 3. อัปโหลดรูปภาพ
       const uploadRes = await uploadAttendance([file]);
       if (!uploadRes || uploadRes.length === 0)
         throw new Error("อัปโหลดรูปภาพไม่สำเร็จ");
 
       const uploadedFile = uploadRes[0];
+      const locationStr = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
 
-      // เตรียมข้อมูลสำหรับการส่ง Action
+      // เตรียมข้อมูลสำหรับการส่ง Action (โครงสร้างตาม saveAttendanceAction)
       const attendancePayload = {
         userId: userProfile.id,
         type: (isCheckingOut ? "OUT" : "IN") as "IN" | "OUT",
         image: uploadedFile.ufsUrl || uploadedFile.url,
         fileId: uploadedFile.key,
-        location: pos
-          ? `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(
-              6
-            )}`
-          : "ไม่ทราบพิกัด (GPS ปิด)",
-        departmentId: userProfile.departmentId,
-        siteId: userProfile.site_id,
+        location: locationStr,
+        departmentId: userProfile.departmentId || "",
+        siteId: userProfile.site_id || null,
         isConfirmed: false, // ส่งครั้งแรกเป็น false เสมอ
       };
 
@@ -550,7 +571,7 @@ export default function LeaderClientPage({
         alert(isCheckingOut ? "บันทึกออกงานสำเร็จ" : "บันทึกเข้างานสำเร็จ");
         router.refresh();
       } else {
-        // ✅ เพิ่ม Logic ตรวจสอบการยืนยันนอกพื้นที่ (Offsite)
+        // ✅ ตรวจสอบการยืนยันนอกพื้นที่ (Offsite) ผ่านตัวแปร OffsiteCheckOutConfirm
         if (result.OffsiteCheckOutConfirm) {
           setPendingData({
             ...attendancePayload,
@@ -573,15 +594,21 @@ export default function LeaderClientPage({
     if (!pendingData) return;
     setIsProcessing(true);
     try {
-      // ส่งข้อมูลเดิมที่เก็บไว้ใน pendingData แต่เปลี่ยน isConfirmed เป็น true
+      // 🚩 ส่งข้อมูลเดิมที่เก็บไว้ใน pendingData แต่เปลี่ยน isConfirmed เป็น true ตามที่ User กดยืนยัน
       const result = await saveAttendanceAction({
-        ...pendingData,
+        userId: pendingData.userId,
+        type: pendingData.type,
+        image: pendingData.image,
+        fileId: pendingData.fileId,
+        location: pendingData.location,
+        departmentId: pendingData.departmentId,
+        siteId: pendingData.siteId,
         isConfirmed: isConfirmed,
       });
 
       if (result.success) {
         alert(
-          isCheckingOut
+          pendingData.type === "OUT"
             ? "บันทึกออกงานนอกพื้นที่สำเร็จ"
             : "บันทึกเข้างานนอกพื้นที่สำเร็จ"
         );
@@ -592,6 +619,7 @@ export default function LeaderClientPage({
         alert("ข้อผิดพลาด: " + result.error);
       }
     } catch (err) {
+      console.error("Confirm Error:", err);
       alert("ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง");
     } finally {
       setIsProcessing(false);
@@ -617,52 +645,50 @@ export default function LeaderClientPage({
   };
 
   const handleOTSubmit = async () => {
-      if (!userProfile?.id) {
-        return setOtError("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่");
+    if (!userProfile?.id) {
+      return setOtError("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่");
+    }
+
+    if (!otData.date) return setOtError("กรุณาระบุวันที่ทำ OT");
+    if (!otData.reason.trim())
+      return setOtError("กรุณาระบุเหตุผลหรือลักษณะงาน");
+
+    try {
+      setIsProcessingOT(true);
+      setOtError("");
+
+      const res = await createPersonalOTAction({
+        userId: userProfile.id,
+        userName: userProfile.name,
+        date: otData.date,
+        startTime: otData.startTime,
+        endTime: otData.endTime,
+        reason: otData.reason,
+      });
+
+      if (res.success) {
+        setOtSuccess(true);
+        router.refresh();
+
+        setTimeout(() => {
+          setShowOTModal(false);
+          setOtSuccess(false);
+          setOtData({
+            date: "",
+            startTime: "17:00",
+            endTime: "19:00",
+            reason: "",
+          });
+        }, 2500);
+      } else {
+        setOtError(res.error || res.message || "เกิดข้อผิดพลาด");
       }
-  
-      if (!otData.date) return setOtError("กรุณาระบุวันที่ทำ OT");
-      if (!otData.reason.trim())
-        return setOtError("กรุณาระบุเหตุผลหรือลักษณะงาน");
-  
-      try {
-        setIsProcessingOT(true);
-        setOtError("");
-  
-        const res = await createPersonalOTAction({
-          userId: userProfile.id,
-          userName: userProfile.name,
-          date: otData.date,
-          startTime: otData.startTime,
-          endTime: otData.endTime,
-          reason: otData.reason,
-        });
-  
-        if (res.success) {
-          setOtSuccess(true);
-          router.refresh();
-  
-          setTimeout(() => {
-            setShowOTModal(false);
-            setOtSuccess(false);
-            setOtData({
-              date: "",
-              startTime: "17:00",
-              endTime: "19:00",
-              reason: "",
-            });
-          }, 2500);
-  
-        } else {
-          setOtError(res.error || res.message || "เกิดข้อผิดพลาด");
-        }
-      } catch (error) {
-        setOtError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
-      } finally {
-        setIsProcessingOT(false);
-      }
-    };
-  
+    } catch (error) {
+      setOtError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+    } finally {
+      setIsProcessingOT(false);
+    }
+  };
 
   const handleLogout = async () => {
     if (!confirm("ยืนยันการออกจากระบบ?")) return;
@@ -1362,6 +1388,136 @@ export default function LeaderClientPage({
                 </div>
               </div>
 
+              {/* ตารางที่ 3: คำขออนุมัติ OT ของฉัน */}
+              <div className="bg-white p-4 sm:p-8 rounded-[1.5rem] sm:rounded-[2.5rem] shadow-sm border border-gray-50">
+                <div className="flex items-center gap-3 mb-6 sm:mb-8">
+                  <div className="w-1.5 h-6 sm:w-2 sm:h-8 bg-amber-400 rounded-full"></div>
+                  <h2 className="font-black text-gray-900 text-lg sm:text-xl tracking-tighter uppercase">
+                    ประวัติคำขอ OT ของฉัน
+                  </h2>
+                </div>
+                <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                  <table className="w-full text-sm min-w-[500px] sm:min-w-[600px]">
+                    <thead className="bg-gray-50/50 text-gray-600 uppercase text-[10px] sm:text-[12px] font-black tracking-widest">
+                      <tr>
+                        <th className="p-4 sm:p-6 text-center">ขอเมื่อ</th>
+                        <th className="p-4 sm:p-6 text-left">
+                          วันที่ / ช่วงเวลา OT
+                        </th>
+                        <th className="p-4 sm:p-6 text-center">จำนวนชั่วโมง</th>
+                        <th className="p-4 sm:p-6 text-left hidden md:table-cell">
+                          เหตุผล / หมายเหตุ
+                        </th>
+                        <th className="p-4 sm:p-6 text-center">สถานะ</th>
+                        <th className="p-4 sm:p-6 text-center">
+                          ผู้จัดการคำขอ
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {overtimeRequests.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="p-12 sm:p-16 text-center text-gray-300 font-bold italic"
+                          >
+                            ไม่มีประวัติคำขอ OT
+                          </td>
+                        </tr>
+                      ) : (
+                        overtimeRequests.map((ot: any) => {
+                          return (
+                            <tr
+                              key={ot.id}
+                              className="hover:bg-amber-50/10 transition-colors"
+                            >
+                              {/* 1. วันที่สร้างคำขอ (createdAt) */}
+                              <td className="px-4 py-2 text-sm text-gray-600 text-center">
+                                {ot.createdAt
+                                  ? new Date(ot.createdAt).toLocaleDateString(
+                                      "th-TH"
+                                    )
+                                  : "-"}
+                              </td>
+
+                              {/* 2. วันที่ทำ OT และ ช่วงเวลา (date, timeStart, timeEnd) */}
+                              <td className="p-4 sm:p-6">
+                                <div className="flex flex-col gap-1">
+                                  <div className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-black text-[10px] w-fit uppercase">
+                                    {ot.date}
+                                  </div>
+                                  <div className="text-[10px] sm:text-[11px] text-gray-500 font-bold">
+                                    {ot.timeStart?.slice(0, 5)} น.
+                                    <span className="text-gray-300 mx-1">
+                                      →
+                                    </span>
+                                    {ot.timeEnd?.slice(0, 5)} น.
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* 3. จำนวนชั่วโมง (overtimeByRequest) */}
+                              <td className="p-4 sm:p-6 text-center">
+                                <span className="bg-orange-500 text-white px-2.5 py-1 rounded-full font-black text-[10px] sm:text-xs shadow-sm shadow-orange-200 whitespace-nowrap">
+                                  {ot.overtimeByRequest} ชม.
+                                </span>
+                              </td>
+
+                              {/* 4. เหตุผล (remarks) */}
+                              <td className="p-4 sm:p-6 hidden md:table-cell">
+                                <span className="text-xs text-gray-400 italic line-clamp-2">
+                                  {ot.remarks || "ไม่ได้ระบุเหตุผล"}
+                                </span>
+                              </td>
+
+                              {/* 5. สถานะ (status) */}
+                              <td className="p-4 sm:p-6 text-center">
+                                <span
+                                  className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-tighter shadow-sm border whitespace-nowrap
+                    ${
+                      ot.status === "approved"
+                        ? "bg-green-50 text-green-600 border-green-100"
+                        : ot.status === "rejected"
+                        ? "bg-red-50 text-red-600 border-red-100"
+                        : "bg-amber-50 text-amber-600 border-amber-100"
+                    }`}
+                                >
+                                  {ot.status === "pending"
+                                    ? "รออนุมัติ"
+                                    : ot.status === "approved"
+                                    ? "อนุมัติแล้ว"
+                                    : "ปฏิเสธ"}
+                                </span>
+                              </td>
+
+                              {/* 6. ผู้จัดการคำขอ (อ้างอิงจากข้อมูลที่ Join มา) */}
+                              <td className="p-4 sm:p-6 text-center">
+                                {ot.status !== "pending" && ot.approverName ? (
+                                  <div className="inline-flex flex-col items-center">
+                                    <span className="text-[11px] sm:text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
+                                      {ot.approverName}
+                                    </span>
+                                    <span className="text-[8px] sm:text-[9px] text-indigo-500 font-black uppercase tracking-widest mt-0.5">
+                                      {ot.status === "approved"
+                                        ? "ผู้อนุมัติ"
+                                        : "ผู้ปฏิเสธ"}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-300 font-medium">
+                                    —
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               {/* ตารางที่ 3: การเข้างานของพนักงานในทีม */}
               <div className="print:hidden mt-12">
                 <Section title="ตารางเข้า-ออกงาน ของพนักงาน">
@@ -1930,14 +2086,211 @@ export default function LeaderClientPage({
                                 </tr>
                               );
                             })
-                          )
-: (
+                          ) : (
                             <tr>
                               <td
                                 colSpan={8}
                                 className="py-24 text-center text-slate-300 italic font-black tracking-widest"
                               >
                                 NO LEAVE REQUESTS FOUND
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </Section>
+              </div>
+              {/* {ตารางคำขอ OT พนักงาน} */}
+              <div className="print:hidden mt-12">
+                <Section title="คำขอทำ OT พนักงาน">
+                  {/* Search Box */}
+                  <div className="mb-6 relative max-w-sm">
+                    <input
+                      type="text"
+                      placeholder="🔍 ค้นชื่อพนักงาน หรือ โปรเจกต์..."
+                      className="w-full pl-6 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm"
+                      value={searchOT}
+                      onChange={(e) => setSearchOT(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="rounded-[2.5rem] border border-slate-100 overflow-hidden bg-white shadow-xl shadow-slate-200/50">
+                    <div className="overflow-x-auto max-h-137.5 overflow-y-auto custom-scrollbar">
+                      <table className="min-w-325 w-full text-sm border-separate border-spacing-0 table-fixed">
+                        <thead className="sticky top-0 z-20 bg-slate-50/90 backdrop-blur-sm">
+                          <tr className="text-slate-600 font-black uppercase text-[12px] tracking-[0.2em]">
+                            <th className="py-6 px-6 text-left border-b border-slate-100 w-[250px]">
+                              พนักงาน
+                            </th>
+                            <th className="py-6 px-4 text-center border-b border-slate-100 w-[180px]">
+                              วันที่ทำ OT
+                            </th>
+                            <th className="py-6 px-4 text-center border-b border-slate-100 w-[200px]">
+                              ช่วงเวลา
+                            </th>
+                            <th className="py-6 px-4 text-center border-b border-slate-100 w-[120px]">
+                              รวมชั่วโมง
+                            </th>
+                            <th className="py-6 px-4 text-left border-b border-slate-100 w-[250px]">
+                              งานที่ทำ & เหตุผล
+                            </th>
+                            <th className="py-6 px-4 text-center border-b border-slate-100 w-[130px]">
+                              สถานะ
+                            </th>
+                            <th className="py-6 px-6 text-center border-b border-slate-100 w-[180px]">
+                              จัดการ
+                            </th>
+                            <th className="py-6 px-6 text-center border-b border-slate-100 w-[200px]">
+                              หมายเหตุ
+                            </th>
+                            <th className="py-6 px-6 text-center border-b border-slate-100 w-[180px]">
+                              ผู้อนุมัติ
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {filteredOT.length > 0 ? (
+                            filteredOT.map((ot) => {
+                              // Logic คำนวณชั่วโมง (สมมติว่าเป็นการลบกันของ Time String)
+                              return (
+                                <tr
+                                  key={ot.id}
+                                  className="group hover:bg-indigo-50/30 transition-all"
+                                >
+                                  <td className="py-5 px-6">
+                                    <div className="flex items-center gap-4">
+                                      <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm shrink-0">
+                                        <img
+                                          src={
+                                            ot.avatarUrl ||
+                                            `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                              ot.employeeName || "User"
+                                            )}&background=random`
+                                          }
+                                          alt="profile"
+                                          className="w-full h-full object-cover"
+                                        />
+                                      </div>
+                                      <div className="truncate">
+                                        <div className="font-black text-slate-800 text-base leading-none mb-1 truncate">
+                                          {ot.employeeName}
+                                        </div>
+                                        <div className="text-indigo-500 font-mono text-[10px] font-bold italic truncate">
+                                          @{ot.positionName}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2 text-center font-bold text-slate-600">
+                                    {ot.workDate}
+                                  </td>
+                                  <td className="py-5 px-4 text-center">
+                                    <div className="inline-block bg-slate-100 text-slate-700 px-3 py-1 rounded-lg font-black text-[11px] mb-1">
+                                      {ot.startTime} - {ot.endTime}
+                                    </div>
+                                  </td>
+                                  <td className="py-5 px-4 text-center">
+                                    <span className="bg-indigo-600 text-white px-3 py-1 rounded-full font-black text-xs shadow-sm shadow-indigo-200">
+                                      {ot.totalHours} ชม.
+                                    </span>
+                                  </td>
+                                  <td className="py-5 px-4">
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-indigo-600 font-bold text-[10px] uppercase">
+                                        {ot.projectTag || "General Work"}
+                                      </span>
+                                      <p className="text-slate-600 italic text-xs leading-relaxed line-clamp-2">
+                                        "{ot.reason || "ไม่มีระบุรายละเอียด"}"
+                                      </p>
+                                    </div>
+                                  </td>
+                                  <td className="py-5 px-4 text-center">
+                                    <span
+                                      className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase shadow-sm whitespace-nowrap ${
+                                        ot.status === "pending"
+                                          ? "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
+                                          : ot.status === "approved"
+                                          ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
+                                          : "bg-rose-100 text-rose-700 ring-1 ring-rose-200"
+                                      }`}
+                                    >
+                                      {ot.status === "pending"
+                                        ? "• รออนุมัติ"
+                                        : ot.status === "approved"
+                                        ? "✓ อนุมัติแล้ว"
+                                        : "✕ ปฏิเสธ"}
+                                    </span>
+                                  </td>
+                                  <td className="py-5 px-6">
+                                    <div className="flex justify-center gap-2">
+                                      {ot.status === "pending" ? (
+                                        <>
+                                          <button
+                                            onClick={() =>
+                                              handleApproveOT(ot.id)
+                                            }
+                                            className="bg-emerald-600 text-white px-5 py-2 rounded-xl text-xs font-black hover:bg-emerald-700 shadow-lg shadow-emerald-200 active:scale-95 transition-all"
+                                          >
+                                            อนุมัติ
+                                          </button>
+                                          <button
+                                            onClick={() =>
+                                              handleRejectOT(ot.id)
+                                            }
+                                            className="bg-white border border-rose-200 text-rose-500 px-5 py-2 rounded-xl text-xs font-black hover:bg-rose-50 active:scale-95 transition-all"
+                                          >
+                                            ปฏิเสธ
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <button
+                                          onClick={() => resetOTStatus(ot.id)}
+                                          className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-200 flex items-center gap-2 italic transition-all"
+                                        >
+                                          <span>✏️</span> แก้ไข
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-4">
+                                    <input
+                                      type="text"
+                                      placeholder="หมายเหตุ..."
+                                      className={`border rounded-xl px-3 py-1.5 text-xs w-full outline-none transition-all ${
+                                        ot.status !== "pending"
+                                          ? "bg-gray-50 text-gray-700 border-gray-200"
+                                          : "bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                                      }`}
+                                      value={ot.remark || ""}
+                                      readOnly={ot.status !== "pending"}
+                                    />
+                                  </td>
+                                  <td className="p-6 text-center">
+                                    {ot.status !== "pending" ? (
+                                      <div className="inline-flex flex-col items-center">
+                                        <span className="text-[13px] font-bold text-gray-900">
+                                          {ot.approverName}
+                                        </span>
+                                        <span className="text-[9px] text-indigo-500 font-black uppercase tracking-widest">
+                                          {ot.approverPosition}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-300">—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            <tr>
+                              <td
+                                colSpan={9}
+                                className="py-24 text-center text-slate-300 italic font-black tracking-widest"
+                              >
+                                NO OT REQUESTS FOUND
                               </td>
                             </tr>
                           )}
@@ -2348,13 +2701,15 @@ export default function LeaderClientPage({
           </div>
         </div>
       )}
-      
+
       {/* {MODAL OT REQUEST} */}
       {showOTModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div
             className="absolute inset-0"
-            onClick={() => !isProcessingOT && !otSuccess && setShowOTModal(false)}
+            onClick={() =>
+              !isProcessingOT && !otSuccess && setShowOTModal(false)
+            }
           ></div>
 
           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-300 relative z-10">

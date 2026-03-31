@@ -91,17 +91,19 @@ import bcrypt from "bcryptjs";
       currentSiteCoords = validated.coordinates || "";
       finalSiteId = validated.id;
       
-      isOffsiteIn = (!isInside) ? "1" : validated.isOffsiteIn;
+      // 🚩 ปรับ Logic การตัดสินใจเรื่อง Offsite ให้เด็ดขาดเหมือน API ตัวแรก
+      isOffsiteIn = (!isInside) ? "1" : (validated.isOffsiteIn || "0");
       OffsiteCheckInConfirm = validated.OffsiteCheckInConfirm || (!isInside);
       userCoordinatesIn = data.location;
 
+      // 🚩 ดักรอคำยืนยันหากอยู่นอกพื้นที่
       if (OffsiteCheckInConfirm && !data.isConfirmed) {
         return {
           success: false,
           siteName: currentSiteName,
           offsite: true,
           OffsiteCheckInConfirm: true,
-          OffsiteCheckOutConfirm: true 
+          OffsiteCheckOutConfirm: true // ✅ ส่งชื่อนี้เพื่อให้หน้าบ้านเปิด Popup ตัวเดียวกันได้
         };
       }
     } else if (data.siteId) {

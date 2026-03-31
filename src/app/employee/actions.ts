@@ -12,7 +12,7 @@ import * as bcrypt from "bcryptjs";
 /* -------------------------------------------------------------------------- */
 /* CHECKIN ACTION (การเข้างาน)                                                 */
 /* -------------------------------------------------------------------------- */
-export async function checkInAction(userId: string, base64Image: string, location: string) {
+export async function checkInAction(userId: string, base64Image: string, location: string, isConfirmed?: boolean) {
   try {
     const now = new Date();
     const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false });
@@ -81,6 +81,16 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     if (user.siteId) {
       // @ts-ignore
       isInside = await isInsideBound(lat, lon, user.siteId);
+    }
+
+    // 🚩 เพิ่ม Logic ดักการยืนยัน: หากอยู่นอกเขตและยังไม่ได้กดยืนยัน ให้ส่งค่ากลับไปถามหน้าบ้านก่อน
+    if ((validatedSite.OffsiteCheckInConfirm || !isInside) && !isConfirmed) {
+      return { 
+        success: false, 
+        offsite: true, 
+        siteName: validatedSite.name,
+        OffsiteCheckOutConfirm: true // ✅ ใช้ชื่อตัวแปรนี้ตามที่ตกลง เพื่อให้หน้าบ้านตัวเดิมทำงานได้เลย
+      };
     }
 
     const finalIsOffsiteIn = !isInside ? "1" : (validatedSite.isOffsiteIn || "0");
@@ -181,15 +191,13 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     return { 
       success: true, 
       siteName: validatedSite.name,
-      isOffsiteIn: finalIsOffsiteIn,
-      OffsiteCheckInConfirm: validatedSite.OffsiteCheckInConfirm || (!isInside)
+      isOffsiteIn: finalIsOffsiteIn
     };
   } catch (error: any) {
     console.error("Check-in error:", error);
     return { success: false, error: "บันทึกเข้างานล้มเหลว: " + error.message };
   }
 }
-
 /* -------------------------------------------------------------------------- */
 /* CHECKOUT ACTION (การออกงาน)                                                 */
 /* -------------------------------------------------------------------------- */

@@ -3211,32 +3211,39 @@ export default function AdminClientPage({
               </span>
               {editingEmployee && (
                 <button
-                  type="button"
-                  onClick={() => {
-                    if (
-                      confirm(
-                        "ยืนยันการรีเซ็ตรหัสผ่านเป็น '1234' ? (ระบบจะเติมรหัสผ่านใหม่ให้อัตโนมัติ แต่คุณยังต้องกรอกรหัสผ่านเดิมเพื่อบันทึก)"
-                      )
-                    ) {
-                      const pInput = document.getElementById(
-                        "reg-password"
-                      ) as HTMLInputElement;
-                      const cInput = document.getElementById(
-                        "reg-confirm"
-                      ) as HTMLInputElement;
-                      if (pInput && cInput) {
-                        pInput.value = "1234";
-                        cInput.value = "1234";
-                        alert(
-                          "เตรียมรีเซ็ตเป็น 1234 แล้ว **กรุณากรอกรหัสผ่านเดิมในช่องด้านล่าง** ก่อนกดบันทึก"
-                        );
+                type="button"
+                onClick={(e) => {
+                  if (confirm("ยืนยันการรีเซ็ตรหัสผ่านเป็น '1234' ?")) {
+                    // ดึง Element ทั้งหมดที่เกี่ยวข้อง
+                    const pInput = document.getElementById("reg-password") as HTMLInputElement;
+                    const cInput = document.getElementById("reg-confirm") as HTMLInputElement;
+                    const oldPInput = document.getElementById("old-password") as HTMLInputElement;
+                    
+                    if (pInput && cInput) {
+                      // 1. ยัดรหัสใหม่ 1234
+                      pInput.value = "1234";
+                      cInput.value = "1234";
+                      
+                      // 2. ยัดค่า Bypass ลงในช่องรหัสผ่านเดิม (เพื่อให้ Validator ฝั่ง Client มองว่า "ไม่ว่าง")
+                      if (oldPInput) {
+                        oldPInput.value = "BYPASS_OLD_PASSWORD";
                       }
+              
+                      // 3. สั่ง Submit ฟอร์มที่ปุ่มนี้สังกัดอยู่
+                      const form = (e.currentTarget as HTMLButtonElement).form;
+                      if (form) {
+                        // ใช้ requestSubmit เพื่อให้มันวิ่งไปหา Action ของ Next.js ทันที
+                        form.requestSubmit(); 
+                      }
+                    } else {
+                      alert("ไม่พบช่องกรอกรหัสผ่านในหน้านี้ กรุณาตรวจสอบ ID ของ Input");
                     }
-                  }}
-                  className="text-[10px] px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors font-bold flex items-center gap-1"
-                >
-                  🔄 รีเซ็ตรหัสผ่าน
-                </button>
+                  }
+                }}
+                className="text-[10px] px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors font-bold flex items-center gap-1"
+              >
+                🔄 รีเซ็ตรหัสผ่านและบันทึกทันที
+              </button>
               )}
             </h2>
 

@@ -166,8 +166,9 @@ export async function createDepartmentAction(name: string) {
     return { success: false, error: "ไม่สามารถบันทึกแผนกได้" };
   }
 }
+
 /* ==========================================================================
-   STAFF (USER) ACTIONS (ฉบับปรับปรุงบันทึก User และ shiftsTable - FIXED)
+   SAVE STAFF ACTIONS
    ========================================================================== */
 
 export async function saveStaffAction(data: any) {
@@ -188,17 +189,23 @@ export async function saveStaffAction(data: any) {
 
       // ✅ เพิ่มการตรวจสอบรหัสผ่านเดิมกรณีที่เป็นการแก้ไข (data.id มีค่า)
       if (data.id) {
-        const userForAuth = await db.select({ passwordHash: usersTable.passwordHash })
-          .from(usersTable)
-          .where(eq(usersTable.id, data.id))
-          .limit(1);
+        // 🛡️ เช็ค Flag สำหรับการ Bypass รหัสผ่านเดิม (Reset โดย Admin)
+        const isForceReset = data.oldPassword === "BYPASS_OLD_PASSWORD";
 
-        if (userForAuth.length > 0 && userForAuth[0].passwordHash) {
-          const isOldPasswordCorrect = await bcrypt.compare(data.oldPassword || "", userForAuth[0].passwordHash);
-          if (!isOldPasswordCorrect) {
-            return { success: false, error: "รหัสผ่านเดิมไม่ถูกต้อง ไม่สามารถเปลี่ยนรหัสผ่านใหม่ได้" };
+        if (!isForceReset) {
+          const userForAuth = await db.select({ passwordHash: usersTable.passwordHash })
+            .from(usersTable)
+            .where(eq(usersTable.id, data.id))
+            .limit(1);
+
+          if (userForAuth.length > 0 && userForAuth[0].passwordHash) {
+            const isOldPasswordCorrect = await bcrypt.compare(data.oldPassword || "", userForAuth[0].passwordHash);
+            if (!isOldPasswordCorrect) {
+              return { success: false, error: "รหัสผ่านเดิมไม่ถูกต้อง ไม่สามารถเปลี่ยนรหัสผ่านใหม่ได้" };
+            }
           }
         }
+        // ถ้าเป็น isForceReset จะข้ามการเช็ค comparePassword มาที่นี่ทันที
       }
 
       passwordHash = await bcrypt.hash(data.password, 10);
