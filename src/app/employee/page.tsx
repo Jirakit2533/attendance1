@@ -11,6 +11,7 @@ import {
   leaveTable,
   companyTable,
   attendanceTable,
+  overtimeRequestsTable, // ✅ เพิ่ม: นำเข้าตาราง OT
 } from "@/db/schema"; // เพิ่ม companyTable และ attendanceTable
 import { eq, and, isNull, or, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -111,7 +112,31 @@ export default async function Page() {
     .orderBy(desc(leaveTable.createdAt))
     .limit(2); // 🔥 จำกัดจำนวนคำขอลางานให้เหลือเพียง 2 รายการล่าสุดตามที่สั่ง
 
-  // 3. Mapping ข้อมูล (เพิ่มฟิลด์สถานะเพื่อให้ตรงกับ UI)
+  // 🔍 3. ดึงข้อมูล OT พร้อม Join หาชื่อผู้อนุมัติ
+  const otApprover = alias(usersTable, "otApprover");
+  const dbOT = await db
+    .select({
+      id: overtimeRequestsTable.id,
+      overtimeByRequest: overtimeRequestsTable.overtimeByRequest,
+      status: overtimeRequestsTable.status,
+      remarks: overtimeRequestsTable.remarks,
+      createdAt: overtimeRequestsTable.createdAt,
+      approverFirst: otApprover.firstName,
+      approverLast: otApprover.lastName,
+    })
+    .from(overtimeRequestsTable)
+    .leftJoin(
+      otApprover,
+      or(
+        eq(overtimeRequestsTable.approvedBy, otApprover.id),
+        eq(overtimeRequestsTable.rejectedBy, otApprover.id)
+      )
+    )
+    .where(eq(overtimeRequestsTable.userId, user.id))
+    .orderBy(desc(overtimeRequestsTable.createdAt))
+    .limit(10); // 🔥 ดึงประวัติ OT 10 รายการล่าสุด
+
+  // 4. Mapping ข้อมูล (เพิ่มฟิลด์สถานะเพื่อให้ตรงกับ UI)
   const initialRecords = (dbRecords || []).map((r) => ({
     date: r.date,
     // ปรับการแสดงผลเวลา (ตัดวินาทีออกถ้าเป็น string format)
@@ -171,7 +196,7 @@ export default async function Page() {
         l.status === "pending"
           ? "รออนุมัติ"
           : l.status === "approved"
-          ? "อนุมัติ"
+          ? "อนุมัติแล้ว"
           : l.status === "rejected"
           ? "ปฏิเสธ"
           : l.status,
@@ -182,6 +207,17 @@ export default async function Page() {
       approverPosition: l.approverPositionName || "-", // ✅ ส่งชื่อตำแหน่งผู้อนุมัติไปแสดงผล
     };
   });
+
+  // 5. Mapping ข้อมูล OT ให้ตรงกับคีย์ที่ UI ต้องการ
+  const initialOT = (dbOT || []).map((ot) => ({
+    createdAt: ot.createdAt,
+    overtimeByRequest: ot.overtimeByRequest,
+    status: ot.status,
+    remarks: ot.remarks,
+    approverName: ot.approverFirst
+      ? `${ot.approverFirst} ${ot.approverLast || ""}`.trim()
+      : "-",
+  }));
 
   // เตรียมโปรไฟล์ให้ Client Page
   const userProfile = {
@@ -212,6 +248,7 @@ export default async function Page() {
       userProfile={userProfile}
       initialRecords={initialRecords}
       initialLeaves={initialLeaves}
+      initialOT={initialOT} // ✅ ส่งข้อมูล OT ไปยัง Client Page
       companyData={companyData} // ✅ ส่งข้อมูลบริษัทไปด้วย
     />
   );

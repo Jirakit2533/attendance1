@@ -3,12 +3,14 @@ import Image from "next/image";
 
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getAllSitesAction } from "@/app/employee/actions";
 import { logoutAction } from "@/server/auth";
 import {
   checkInAction,
   checkOutAction,
   createLeaveRequest,
   changePasswordAction,
+  createPersonalOTAction,
 } from "./actions";
 
 import { OffsiteCheckOutConfirm } from "@/app/component/modal/OffsiteCheckOutConfirm";
@@ -89,10 +91,10 @@ interface Props {
   userProfile: any;
   initialRecords: any[];
   initialLeaves: any[];
+  initialOT?: any[]; // ✅ ถูกต้องแล้ว
   position: string;
   site: string;
   companyData: {
-    // ✅ กำหนดโครงสร้างให้ชัดเจน
     name: string;
     logoUrl: string | null;
     description: string;
@@ -104,11 +106,16 @@ export default function EmployeeClientPage({
   initialRecords,
   initialLeaves,
   companyData,
+  initialOT = [], // ✨ แก้ไขตรงนี้จาก : เป็น = เพื่อกำหนดค่า Default และให้ตัวแปรถูกประกาศ
 }: Props) {
   const router = useRouter();
 
   const [records, setRecords] = useState<any[]>(initialRecords);
   const [leaves, setLeaves] = useState<any[]>(initialLeaves);
+  
+  // ✅ ต้องประกาศ State นี้เพื่อให้ UI ที่บรรทัด 1088 ใช้งานได้ และไม่ขึ้น undefined
+  const [overtimeRequests, setOvertimeRequests] = useState<any[]>(initialOT);
+
   const [isProcessing, setIsProcessing] = useState(false);
 
   // ✅ Sync ข้อมูลจาก Props เมื่อมีการสั่ง router.refresh()
@@ -119,6 +126,11 @@ export default function EmployeeClientPage({
   useEffect(() => {
     setLeaves(initialLeaves);
   }, [initialLeaves]);
+
+  // ✅ ตอนนี้ initialOT จะถูกมองเห็นแล้ว เพราะถูกประกาศไว้ใน Props ด้านบน
+  useEffect(() => {
+    setOvertimeRequests(initialOT);
+  }, [initialOT]);
 
   const [showCamera, setShowCamera] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -147,14 +159,15 @@ export default function EmployeeClientPage({
   const [showOldPw, setShowOldPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [showOTModal, setShowOTModal] = useState(false);
   const [otError, setOtError] = useState("");
   const [otSuccess, setOtSuccess] = useState(false);
   const [isProcessingOT, setIsProcessingOT] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
   const [otData, setOtData] = useState({
     date: "",
@@ -167,13 +180,13 @@ export default function EmployeeClientPage({
   const calculateOTHours = (startStr: string, endStr: string) => {
     const [startH, startM] = startStr.split(":").map(Number);
     const [endH, endM] = endStr.split(":").map(Number);
-    
+
     const startDate = new Date(0, 0, 0, startH, startM);
     const endDate = new Date(0, 0, 0, endH, endM);
-    
+
     let diff = endDate.getTime() - startDate.getTime();
     if (diff < 0) diff += 24 * 60 * 60 * 1000; // รองรับเคสข้ามคืน
-    
+
     return (diff / (1000 * 60 * 60)).toFixed(1);
   };
 
@@ -534,7 +547,7 @@ export default function EmployeeClientPage({
       setIsProcessing(false);
     }
   };
-  
+
   const leaveDays = useMemo(() => {
     if (!leaveStart || !leaveEnd) return 0;
     const start = new Date(leaveStart);
@@ -548,50 +561,44 @@ export default function EmployeeClientPage({
   }, [leaveStart, leaveEnd]);
 
   const handleOTSubmit = async () => {
-    // 1. Validation เบื้องต้น
+    if (!userProfile?.id) {
+      return setOtError("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่");
+    }
+
     if (!otData.date) return setOtError("กรุณาระบุวันที่ทำ OT");
-    if (!otData.siteId) return setOtError("กรุณาเลือกไซต์งาน");
-    if (!otData.reason.trim()) return setOtError("กรุณาระบุเหตุผลหรือลักษณะงาน");
-  
-    // 2. คำนวณชั่วโมงสุทธิ
-    const totalHours = calculateOTHours(otData.startTime, otData.endTime);
-    if (parseFloat(totalHours) === 0) return setOtError("เวลาเริ่มและสิ้นสุดต้องไม่เท่ากัน");
-  
+    if (!otData.reason.trim())
+      return setOtError("กรุณาระบุเหตุผลหรือลักษณะงาน");
+
     try {
       setIsProcessingOT(true);
       setOtError("");
-  
-      // 3. เตรียม Data ส่งไป API (ปรับตามความต้องการของ Server)
-      const payload = {
-        userId: userProfile.id, // สมมติว่ามี userProfile อยู่ใน context
+
+      const res = await createPersonalOTAction({
+        userId: userProfile.id,
+        userName: userProfile.name,
         date: otData.date,
         startTime: otData.startTime,
         endTime: otData.endTime,
-        totalHours: parseFloat(totalHours),
-        siteId: otData.siteId,
-        reason: otData.reason
-      };
-  
-      // 4. เรียก Server Action หรือ API
-      const res = await createOTAction(payload); // ฟังก์ชันเชื่อมหลังบ้านของคุณ
-  
+        reason: otData.reason,
+      });
+
       if (res.success) {
         setOtSuccess(true);
-        // หน่วงเวลา 2 วินาทีก่อนปิด Modal เพื่อโชว์เครื่องหมายถูก
+        router.refresh();
+
         setTimeout(() => {
           setShowOTModal(false);
           setOtSuccess(false);
-          // Reset ข้อมูล
           setOtData({
             date: "",
-            startTime: "17:30",
-            endTime: "19:30",
-            siteId: "",
+            startTime: "17:00",
+            endTime: "19:00",
             reason: "",
           });
-        }, 2000);
+        }, 2500);
+
       } else {
-        setOtError(res.message || "เกิดข้อผิดพลาดในการส่งข้อมูล");
+        setOtError(res.error || res.message || "เกิดข้อผิดพลาด");
       }
     } catch (error) {
       setOtError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
@@ -611,7 +618,6 @@ export default function EmployeeClientPage({
       window.location.href = "/login";
     }
   };
-
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
@@ -1086,6 +1092,108 @@ export default function EmployeeClientPage({
                   </div>
                 )}
               </div>
+
+              {/* {ตารางคำขอOT} */}
+
+              <div className="pt-10 border-t border-gray-50">
+                {/* Header Section */}
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="w-2 h-8 bg-indigo-600 rounded-full"></div>
+                  <h2 className="font-black text-gray-900 text-xl tracking-tighter uppercase">
+                    คำขอ OT ของฉัน
+                  </h2>
+                </div>
+
+                {overtimeRequests.length === 0 ? (
+                  /* Empty State */
+                  <div className="bg-gray-50/50 p-16 rounded-[2.5rem] border-2 border-dashed border-gray-100 text-center text-gray-300 font-black uppercase text-sm">
+                    ไม่มีประวัติการขอ OT
+                  </div>
+                ) : (
+                  /* Grid List */
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {overtimeRequests.map((ot, i) => (
+                      <div
+                        key={i}
+                        className="p-8 border border-gray-100 rounded-[2rem] bg-white hover:shadow-2xl hover:shadow-indigo-500/10 transition-all relative overflow-hidden group"
+                      >
+                        {/* Accent Line */}
+                        <div className="absolute top-0 left-0 w-2 h-full bg-indigo-500"></div>
+
+                        <div className="flex justify-between items-start mb-6">
+                          <div>
+                            <div className="text-[13px] font-black text-gray-600">
+                              ส่งคำขอเมื่อ :{" "}
+                              {new Date(ot.createdAt).toLocaleDateString(
+                                "th-TH"
+                              )}
+                            </div>
+                            <p className="font-black text-indigo-900 text-lg uppercase tracking-tight">
+                              ทำงานล่วงเวลา (OT)
+                            </p>
+                            <p className="text-xs font-bold text-gray-500 mt-1">
+                              วันที่ทำ: {ot.date} | {ot.startTime} -{" "}
+                              {ot.endTime}
+                            </p>
+                          </div>
+
+                          {/* Status Badge */}
+                          <span
+                            className={`text-[11px] px-4 py-2 rounded-full font-black border uppercase tracking-widest ${
+                              ot.status === "approved"
+                                ? "bg-green-50 text-green-600 border-green-100"
+                                : ot.status === "rejected"
+                                ? "bg-red-50 text-red-600 border-red-100"
+                                : "bg-amber-50 text-amber-600 border-amber-100"
+                            }`}
+                          >
+                            {ot.status === "approved"
+                              ? "อนุมัติแล้ว"
+                              : ot.status === "rejected"
+                              ? "ปฏิเสธ"
+                              : "รออนุมัติ"}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 py-4 border-y border-gray-100">
+                          {/* OT Duration */}
+                          <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
+                            <span className="text-indigo-600 mr-2 font-black">
+                              รวมเวลาที่ขอ:
+                            </span>
+                            {ot.overtimeByRequest} นาที (~
+                            {(ot.overtimeByRequest / 60).toFixed(2)} ชม.)
+                          </div>
+
+                          {/* Approver Info */}
+                          <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
+                            <span className="text-indigo-600 mr-2 font-black">
+                              ผู้อนุมัติ:
+                            </span>
+                            {ot.approverName || "-"}
+                          </div>
+
+                          {/* Remarks - ในที่นี้คือข้อมูลสรุปวันที่/เวลาที่เก็บใน remarks */}
+                          <div className="text-[12px] font-bold text-gray-400 leading-relaxed truncate">
+                            <span className="text-indigo-600 mr-2 font-black">
+                              บันทึกระบบ:
+                            </span>
+                            {ot.remarks || "-"}
+                          </div>
+                        </div>
+
+                        {/* Reason Box */}
+                        <div className="mt-4 bg-gray-50 p-5 rounded-2xl border border-gray-100 text-sm text-gray-600 font-medium italic">
+                          <span className="font-bold not-italic text-gray-900 block mb-1">
+                            เหตุผลที่ขอ:
+                          </span>
+                          {ot.reason || "ไม่ระบุเหตุผล"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
 
@@ -1503,7 +1611,7 @@ export default function EmployeeClientPage({
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div
             className="absolute inset-0"
-            onClick={() => !isProcessingOT && setShowOTModal(false)}
+            onClick={() => !isProcessingOT && !otSuccess && setShowOTModal(false)}
           ></div>
 
           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-300 relative z-10">
@@ -1534,32 +1642,12 @@ export default function EmployeeClientPage({
                   <p className="font-black text-green-600 uppercase tracking-tighter">
                     ส่งคำขอ OT สำเร็จแล้ว!
                   </p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase animate-pulse">
+                    กำลังปิดหน้าต่างอัตโนมัติ...
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* 📍 เลือกไซต์งาน (เพิ่มใหม่) */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
-                      ไซต์งาน / สถานที่ปฏิบัติงาน
-                    </label>
-                    <select
-                      className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all cursor-pointer appearance-none"
-                      value={otData.siteId}
-                      onChange={(e) => {
-                        setOtData({ ...otData, siteId: e.target.value });
-                        setOtError("");
-                      }}
-                    >
-                      <option value="" disabled>
-                        เลือกไซต์งาน
-                      </option>
-                      {/* ตัวอย่างการ Map ข้อมูล (ค่อยมาเชื่อม uuid จริงตรงนี้) */}
-                      <option value="site-uuid-1">สำนักงานใหญ่ (HQ)</option>
-                      <option value="site-uuid-2">ไซต์งาน A (พระราม 9)</option>
-                      <option value="site-uuid-3">ไซต์งาน B (บางนา)</option>
-                    </select>
-                  </div>
-
                   {/* วันที่ต้องการทำ OT */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
@@ -1634,7 +1722,7 @@ export default function EmployeeClientPage({
                               0
                             );
                             let diff = endDate.getTime() - startDate.getTime();
-                            if (diff < 0) diff += 24 * 60 * 60 * 1000;
+                            if (diff < 0) diff += 24 * 60 * 60 * 1000; // รองรับเคสข้ามคืน
                             return (diff / (1000 * 60 * 60)).toFixed(1);
                           })()}
                         </span>
@@ -1663,32 +1751,11 @@ export default function EmployeeClientPage({
                   {/* ปุ่มกด */}
                   <div className="flex gap-3 pt-4">
                     <button
-                      onClick={async () => {
-                        if (!otData.date || !otData.siteId)
-                          return setOtError("กรุณากรอกข้อมูลและเลือกไซต์งาน");
-
-                        setIsProcessingOT(true);
-                        // จำลองการส่งข้อมูล
-                        setTimeout(() => {
-                          setIsProcessingOT(false);
-                          setOtSuccess(true);
-                          setTimeout(() => {
-                            setShowOTModal(false);
-                            setOtSuccess(false);
-                            setOtData({
-                              date: "",
-                              startTime: "17:30",
-                              endTime: "19:30",
-                              siteId: "",
-                              reason: "",
-                            });
-                          }, 2000);
-                        }, 1500);
-                      }}
+                      onClick={handleOTSubmit}
                       disabled={isProcessingOT}
                       className="flex-[2] bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all uppercase text-xs tracking-widest disabled:opacity-50"
                     >
-                      {isProcessingOT ? "กำลังส่ง..." : "ยืนยันส่งคำขอ"}
+                      {isProcessingOT ? "กำลังบันทึก..." : "ยืนยันส่งคำขอ"}
                     </button>
                     <button
                       onClick={() => {
@@ -1707,7 +1774,7 @@ export default function EmployeeClientPage({
           </div>
         </div>
       )}
-
+      
       {/* 📸 MODAL CAMERA */}
       {showCamera && (
         <div className="fixed inset-0 bg-slate-900/98 flex flex-col items-center justify-center z-[999] p-6 backdrop-blur-2xl">

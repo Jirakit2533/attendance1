@@ -15,6 +15,20 @@
       "when": 1774939914892,
       "tag": "0001_curved_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774948867382,
+      "tag": "0002_futuristic_the_enforcers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774949417075,
+      "tag": "0003_strong_energizer",
+      "breakpoints": true
     }
   ]
 }

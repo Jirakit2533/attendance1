@@ -10,6 +10,7 @@ import {
   createLeaveRequestAction,
   updateLeaveStatusAction,
   changePasswordAction,
+  createPersonalOTAction,
 } from "./actions";
 
 import { OffsiteCheckOutConfirm } from "@/app/component/modal/OffsiteCheckOutConfirm";
@@ -113,15 +114,16 @@ export default function LeaderClientPage({
   initialAttendance = [],
   myLeaves = [],
   companyData,
+  initialOT = [],
 }: any) {
   const router = useRouter();
 
   // --- States ---
   const [records, setRecords] = useState<any[]>(myRecords);
   const [leaves, setLeaves] = useState<any[]>(initialLeaves);
-  const [teamAttendance, setTeamAttendance] =
-    useState<any[]>(initialAttendance);
-
+  const [teamAttendance, setTeamAttendance] = useState<any[]>(initialAttendance);
+  const [overtimeRequests, setOvertimeRequests] = useState<any[]>(initialOT);
+  
   // Sync states when props change
   useEffect(() => {
     setRecords(myRecords);
@@ -132,6 +134,15 @@ export default function LeaderClientPage({
   useEffect(() => {
     setTeamAttendance(initialAttendance);
   }, [initialAttendance]);
+
+  useEffect(() => {
+    // ตรวจสอบว่าข้อมูลข้างในเปลี่ยนจริงหรือไม่ ก่อนจะสั่ง Set State
+    const isChanged = JSON.stringify(overtimeRequests) !== JSON.stringify(initialOT);
+    
+    if (isChanged) {
+      setOvertimeRequests(initialOT);
+    }
+  }, [initialOT]);
 
   const { startUpload: uploadAttendance } = useUploadThing("imageUploader");
   const { startUpload: uploadLeave } = useUploadThing("leaveFileUploader");
@@ -171,7 +182,21 @@ export default function LeaderClientPage({
   const streamRef = useRef<MediaStream | null>(null);
   const [viewImage, setViewImage] = useState<string | null>(null);
 
-  // ฟังก์ชันคำนวณจำนวนวันลา
+
+  const [showOTModal, setShowOTModal] = useState(false);
+  const [otError, setOtError] = useState("");
+  const [otSuccess, setOtSuccess] = useState(false);
+  const [isProcessingOT, setIsProcessingOT] = useState(false);
+
+
+  const [otData, setOtData] = useState({
+    date: "",
+    startTime: "17:00", // ตั้ง Default ไว้เวลาเลิกงานปกติ
+    endTime: "19:00",
+    siteId: "",
+    reason: "",
+  });
+
   /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
 
   const calculateLeaveDays = (start: string, end: string): number => {
@@ -591,6 +616,54 @@ export default function LeaderClientPage({
     }
   };
 
+  const handleOTSubmit = async () => {
+      if (!userProfile?.id) {
+        return setOtError("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่");
+      }
+  
+      if (!otData.date) return setOtError("กรุณาระบุวันที่ทำ OT");
+      if (!otData.reason.trim())
+        return setOtError("กรุณาระบุเหตุผลหรือลักษณะงาน");
+  
+      try {
+        setIsProcessingOT(true);
+        setOtError("");
+  
+        const res = await createPersonalOTAction({
+          userId: userProfile.id,
+          userName: userProfile.name,
+          date: otData.date,
+          startTime: otData.startTime,
+          endTime: otData.endTime,
+          reason: otData.reason,
+        });
+  
+        if (res.success) {
+          setOtSuccess(true);
+          router.refresh();
+  
+          setTimeout(() => {
+            setShowOTModal(false);
+            setOtSuccess(false);
+            setOtData({
+              date: "",
+              startTime: "17:00",
+              endTime: "19:00",
+              reason: "",
+            });
+          }, 2500);
+  
+        } else {
+          setOtError(res.error || res.message || "เกิดข้อผิดพลาด");
+        }
+      } catch (error) {
+        setOtError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+      } finally {
+        setIsProcessingOT(false);
+      }
+    };
+  
+
   const handleLogout = async () => {
     if (!confirm("ยืนยันการออกจากระบบ?")) return;
     setIsProcessing(true);
@@ -782,6 +855,14 @@ export default function LeaderClientPage({
               className="w-full bg-white border-2 border-gray-100 hover:border-indigo-600 hover:text-indigo-600 text-gray-500 font-black py-4 rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-3 uppercase text-sm"
             >
               ขอลางาน (ส่วนตัว)
+            </button>
+            {/* 4. ปุ่มขอ OT */}
+            <button
+              onClick={() => setShowOTModal(true)}
+              disabled={isProcessing}
+              className="w-full bg-white border-2 border-gray-100 hover:border-indigo-600 hover:text-indigo-600 text-gray-500 font-black py-4 rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-3 uppercase text-sm"
+            >
+              ขอทำ OT (ส่วนตัว)
             </button>
 
             {/* 5. ปุ่มเปลี่ยนรหัสผ่าน */}
@@ -2257,6 +2338,175 @@ export default function LeaderClientPage({
                       }}
                       disabled={isProcessing}
                       className="flex-1 bg-gray-100 text-gray-400 font-black py-4 rounded-2xl uppercase text-xs tracking-widest disabled:opacity-30"
+                    >
+                      ปิด
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* {MODAL OT REQUEST} */}
+      {showOTModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div
+            className="absolute inset-0"
+            onClick={() => !isProcessingOT && !otSuccess && setShowOTModal(false)}
+          ></div>
+
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-300 relative z-10">
+            <div className="p-8 sm:p-10">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl">
+                  ⏰
+                </div>
+                <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">
+                  ขออนุมัติทำงานล่วงเวลา
+                </h3>
+                <p className="text-orange-500 text-[10px] font-black uppercase tracking-widest mt-1">
+                  Overtime Request
+                </p>
+              </div>
+
+              {otError && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[10px] font-black uppercase animate-shake">
+                  ⚠️ {otError}
+                </div>
+              )}
+
+              {otSuccess ? (
+                <div className="py-6 text-center space-y-4 animate-in zoom-in">
+                  <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-3xl shadow-lg">
+                    ✓
+                  </div>
+                  <p className="font-black text-green-600 uppercase tracking-tighter">
+                    ส่งคำขอ OT สำเร็จแล้ว!
+                  </p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase animate-pulse">
+                    กำลังปิดหน้าต่างอัตโนมัติ...
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* วันที่ต้องการทำ OT */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                      วันที่ต้องการทำ OT
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all"
+                      value={otData.date}
+                      onChange={(e) => {
+                        setOtData({ ...otData, date: e.target.value });
+                        setOtError("");
+                      }}
+                    />
+                  </div>
+
+                  {/* 🕒 ส่วนเลือกเวลา เริ่ม - สิ้นสุด */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                        ตั้งแต่กี่โมง
+                      </label>
+                      <input
+                        type="time"
+                        className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all cursor-pointer"
+                        value={otData.startTime}
+                        onChange={(e) =>
+                          setOtData({ ...otData, startTime: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                        ถึงกี่โมง
+                      </label>
+                      <input
+                        type="time"
+                        className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all cursor-pointer"
+                        value={otData.endTime}
+                        onChange={(e) =>
+                          setOtData({ ...otData, endTime: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {/* 📊 แสดงจำนวนชั่วโมงที่คำนวณได้ */}
+                  {otData.startTime && otData.endTime && (
+                    <div className="p-4 bg-orange-50/50 border border-dashed border-orange-200 rounded-2xl flex items-center justify-between">
+                      <span className="text-[10px] font-black text-orange-600 uppercase ml-2 italic">
+                        Total Hours
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-black text-orange-600 italic">
+                          {(() => {
+                            const start = otData.startTime.split(":");
+                            const end = otData.endTime.split(":");
+                            const startDate = new Date(
+                              0,
+                              0,
+                              0,
+                              parseInt(start[0]),
+                              parseInt(start[1]),
+                              0
+                            );
+                            const endDate = new Date(
+                              0,
+                              0,
+                              0,
+                              parseInt(end[0]),
+                              parseInt(end[1]),
+                              0
+                            );
+                            let diff = endDate.getTime() - startDate.getTime();
+                            if (diff < 0) diff += 24 * 60 * 60 * 1000; // รองรับเคสข้ามคืน
+                            return (diff / (1000 * 60 * 60)).toFixed(1);
+                          })()}
+                        </span>
+                        <span className="text-[10px] font-black text-orange-400 uppercase">
+                          ชั่วโมง
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* เหตุผล */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                      เหตุผล/งานที่ทำ
+                    </label>
+                    <textarea
+                      className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all min-h-[80px]"
+                      placeholder="ระบุรายละเอียดสั้นๆ..."
+                      value={otData.reason}
+                      onChange={(e) =>
+                        setOtData({ ...otData, reason: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  {/* ปุ่มกด */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={handleOTSubmit}
+                      disabled={isProcessingOT}
+                      className="flex-[2] bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all uppercase text-xs tracking-widest disabled:opacity-50"
+                    >
+                      {isProcessingOT ? "กำลังบันทึก..." : "ยืนยันส่งคำขอ"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowOTModal(false);
+                        setOtError("");
+                      }}
+                      disabled={isProcessingOT}
+                      className="flex-1 bg-gray-100 text-gray-400 font-black py-4 rounded-2xl uppercase text-xs tracking-widest"
                     >
                       ปิด
                     </button>

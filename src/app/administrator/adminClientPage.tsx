@@ -605,17 +605,17 @@ export default function AdminClientPage({
      ฟังก์ชันจัดการ ไซต์งาน (Sites)
      ========================================================================== */
 
-     const handleUpdateSite = (site: any) => {
-      setEditingSite(site); 
-      const [latVal, lngVal] = (site.coordinates || ",").split(",");
-      setLat(latVal || "");
-      setLng(lngVal || "");
-  
-      setIsAllSite(site.name === "ทุกไซต์"); // ถ้าชื่อคือ 'ทุกไซต์' ให้ติ๊ก Checkbox isAllSite ไว้ด้วย
-      
-      setShowAddSite(true); 
-      setShowManageModal(false);
-    };
+  const handleUpdateSite = (site: any) => {
+    setEditingSite(site);
+    const [latVal, lngVal] = (site.coordinates || ",").split(",");
+    setLat(latVal || "");
+    setLng(lngVal || "");
+
+    setIsAllSite(site.name === "ทุกไซต์"); // ถ้าชื่อคือ 'ทุกไซต์' ให้ติ๊ก Checkbox isAllSite ไว้ด้วย
+
+    setShowAddSite(true);
+    setShowManageModal(false);
+  };
 
   const handleDeleteSite = async (id: string) => {
     // 1. ถามยืนยันก่อนลบ
@@ -785,14 +785,16 @@ export default function AdminClientPage({
         if (editingSite) {
           // กรณีแก้ไข: หาตัวเดิมใน list แล้วเปลี่ยนค่าใหม่ลงไป
           setAllSites((prev: any[]) =>
-            prev.map((s) => (s.id === editingSite.id ? { ...s, ...siteData } : s))
+            prev.map((s) =>
+              s.id === editingSite.id ? { ...s, ...siteData } : s
+            )
           );
         } else {
           // กรณีเพิ่มใหม่: เอาข้อมูลใหม่ที่ได้จาก Server (res.data หรือ res.id) มาต่อท้าย list
           // หมายเหตุ: res.id คือ ID ที่ Server เจนให้ ถ้าไม่มีให้ใช้ crypto.randomUUID() ไปก่อน
-          const newSite = { 
-            id: res.id || (res.data?.id) || crypto.randomUUID(), 
-            ...siteData 
+          const newSite = {
+            id: res.id || res.data?.id || crypto.randomUUID(),
+            ...siteData,
           };
           setAllSites((prev: any[]) => [...prev, newSite]);
         }
@@ -823,14 +825,14 @@ export default function AdminClientPage({
     setIsProcessing(true);
     try {
       // ตรวจสอบว่าเป็นการแก้ไข (editingPos มีค่า) หรือเพิ่มใหม่
-      const result = await savePositionAction({ 
-        name, 
-        id: editingPos?.id // ส่ง ID ไปถ้าเป็นการแก้ไข เพื่อให้ Server ทราบ
+      const result = await savePositionAction({
+        name,
+        id: editingPos?.id, // ส่ง ID ไปถ้าเป็นการแก้ไข เพื่อให้ Server ทราบ
       });
 
       if (result.success) {
         form.reset();
-        
+
         if (editingPos) {
           // กรณีแก้ไข: Map เพื่ออัปเดตตัวที่ ID ตรงกัน
           setAllPositions((prev) =>
@@ -849,7 +851,11 @@ export default function AdminClientPage({
         setEditingPos(null); // ล้างค่า editing state หลังจากทำงานเสร็จ
         setShowAddPosition(false);
         setShowManageModal(true);
-        alert(`✅ ${editingPos ? "แก้ไข" : "เพิ่ม"}ตำแหน่งงาน "${name}" เรียบร้อยแล้ว`);
+        alert(
+          `✅ ${
+            editingPos ? "แก้ไข" : "เพิ่ม"
+          }ตำแหน่งงาน "${name}" เรียบร้อยแล้ว`
+        );
       } else {
         alert(result.error || "ไม่สามารถบันทึกตำแหน่งได้");
       }
@@ -1584,43 +1590,48 @@ export default function AdminClientPage({
 
                   {/* --- Pagination Controls for Mobile --- */}
                   {filteredEmployees.length > 5 && (
-  <div className="flex justify-center items-center gap-2 mt-8 mb-12">
-    {/* ปุ่มย้อนกลับ */}
-    <button
-      disabled={currentPage === 1}
-      onClick={() => setCurrentPage((prev) => prev - 1)}
-      className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
-    >
-      {"<"}
-    </button>
+                    <div className="flex justify-center items-center gap-2 mt-8 mb-12">
+                      {/* ปุ่มย้อนกลับ */}
+                      <button
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage((prev) => prev - 1)}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+                      >
+                        {"<"}
+                      </button>
 
-    {/* รายการตัวเลขหน้า */}
-    <div className="flex gap-1">
-      {[...Array(Math.ceil(filteredEmployees.length / 5))].map((_, i) => (
-        <button
-          key={i + 1}
-          onClick={() => setCurrentPage(i + 1)}
-          className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
-            currentPage === i + 1
-              ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
-              : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
-          }`}
-        >
-          {i + 1}
-        </button>
-      ))}
-    </div>
+                      {/* รายการตัวเลขหน้า */}
+                      <div className="flex gap-1">
+                        {[
+                          ...Array(Math.ceil(filteredEmployees.length / 5)),
+                        ].map((_, i) => (
+                          <button
+                            key={i + 1}
+                            onClick={() => setCurrentPage(i + 1)}
+                            className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
+                              currentPage === i + 1
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
+                                : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                            }`}
+                          >
+                            {i + 1}
+                          </button>
+                        ))}
+                      </div>
 
-    {/* ปุ่มไปข้างหน้า */}
-    <button
-      disabled={currentPage === Math.ceil(filteredEmployees.length / 5)}
-      onClick={() => setCurrentPage((prev) => prev + 1)}
-      className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
-    >
-      {">"}
-    </button>
-  </div>
-)}
+                      {/* ปุ่มไปข้างหน้า */}
+                      <button
+                        disabled={
+                          currentPage ===
+                          Math.ceil(filteredEmployees.length / 5)
+                        }
+                        onClick={() => setCurrentPage((prev) => prev + 1)}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+                      >
+                        {">"}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* --- Desktop Table View (แสดงทั้งหมดพร้อม Scroll) --- */}
@@ -2066,285 +2077,538 @@ export default function AdminClientPage({
           )}
           {/* --- Tab: คำขอลาพนักงาน --- */}
           {activeTab === "leave" && (
-  <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-    <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-3 px-4 md:px-0">
-      <span className="w-2 h-8 bg-amber-500 rounded-full"></span>
-      คำขอลาพนักงาน
-    </h2>
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-3 px-4 md:px-0">
+                <span className="w-2 h-8 bg-amber-500 rounded-full"></span>
+                คำขอลาพนักงาน
+              </h2>
 
-    {/* Search Bar */}
-    <div className="mb-6 relative max-w-md px-4 md:px-0">
-      <div className="absolute inset-y-0 left-4 md:left-0 pl-4 flex items-center pointer-events-none">
-        <span className="text-gray-400">🔍</span>
-      </div>
-      <input
-        type="text"
-        placeholder="ค้นชื่อพนักงาน หรือ ประเภทลา..."
-        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-        value={searchLeave}
-        onChange={(e) => {
-          setSearchLeave(e.target.value);
-          setCurrentPage(1); // Reset หน้าเมื่อมีการค้นหา
-        }}
-      />
-    </div>
-
-    {/* Logic สำหรับ Pagination */}
-    {(() => {
-      const indexOfLastItem = currentPage * itemsPerPage;
-      const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-      const currentItems = filteredLeaves.slice(indexOfFirstItem, indexOfLastItem);
-      const totalPages = Math.ceil(filteredLeaves.length / itemsPerPage);
-
-      return (
-        <>
-          {/* --- Desktop Table View --- */}
-          <div className="hidden lg:block rounded-4xl border border-slate-100 overflow-hidden bg-white shadow-sm">
-            <div className="overflow-x-auto max-h-[580px] overflow-y-auto custom-scrollbar">
-              <table className="min-w-[1400px] w-full text-sm border-separate border-spacing-0">
-                <thead className="sticky top-0 z-20 bg-white">
-                  <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
-                    <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">รูป</th>
-                    <th className="py-5 px-6 text-left bg-white border-b border-gray-100">พนักงาน</th>
-                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">ประเภท</th>
-                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">วันที่</th>
-                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">จำนวนวัน</th>
-                    <th className="py-5 px-6 text-left bg-white border-b border-gray-100">เหตุผล</th>
-                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">เอกสาร</th>
-                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">สถานะ</th>
-                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">จัดการคำขอ</th>
-                    <th className="py-5 px-6 text-center bg-white border-b border-gray-100">หมายเหตุ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {currentItems.length > 0 ? (
-                    currentItems.map((l) => {
-                      const start = new Date(l.startDate);
-                      const end = new Date(l.endDate);
-                      const diffTime = Math.abs(end.getTime() - start.getTime());
-                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-                      return (
-                        <tr key={l.id} className="group hover:bg-blue-50/40 transition-colors">
-                          <td className="py-4 px-6">
-                            <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100">
-                              <Image
-                                src={l.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(l.employeeName || "User")}&background=random`}
-                                alt="profile"
-                                fill
-                                className="object-cover"
-                              />
-                            </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="font-black text-gray-800 text-base">{l.employeeName || "ไม่ระบุชื่อ"}</div>
-                            <div className="text-blue-500 font-mono text-[11px] font-bold">@{l.userName || "user"}</div>
-                          </td>
-                          <td className="py-4 px-6 text-center font-bold text-blue-600">{l.type}</td>
-                          <td className="py-4 px-6 text-center text-gray-500 text-[11px] font-bold leading-tight">
-                            {new Date(l.startDate).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "2-digit" })}
-                            <br /> - <br />
-                            {new Date(l.endDate).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "2-digit" })}
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            <span className="bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg font-black text-xs border border-orange-100">
-                              {isNaN(diffDays) ? "-" : `${diffDays} วัน`}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-gray-600 italic text-xs max-w-[200px] truncate">"{l.reason || "ไม่มีระบุเหตุผล"}"</td>
-                          <td className="py-4 px-6 text-center">
-                            <div className="flex justify-center">
-                              {l?.fileUrl?.trim() ? (
-                                <div className="relative w-10 h-10 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all" onClick={() => setPreviewImage(l.fileUrl)}>
-                                  <Image src={l.fileUrl} alt="doc" fill className="object-cover" unoptimized={true} />
-                                </div>
-                              ) : (
-                                <span className="text-slate-400 text-sm font-bold">-</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            <span className={`px-4 py-2 rounded-full text-[10px] font-black uppercase shadow-sm border ${
-                                l.status === "pending" ? "bg-orange-100 text-orange-600 border-orange-200" :
-                                l.status === "approved" ? "bg-emerald-100 text-emerald-600 border-emerald-200" :
-                                "bg-red-100 text-red-600 border-red-200"
-                            }`}>
-                              {l.status === "pending" ? "รออนุมัติ" : l.status === "approved" ? "อนุมัติแล้ว" : "ปฏิเสธ"}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="flex justify-center gap-2">
-                              {l.status === "pending" ? (
-                                <>
-                                  <button onClick={() => updateLeaveStatus(l.id, "approved")} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-md shadow-emerald-100">อนุมัติ</button>
-                                  <button onClick={() => updateLeaveStatus(l.id, "rejected")} className="bg-white border border-red-200 text-red-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-50 active:scale-95 transition-all">ปฏิเสธ</button>
-                                </>
-                              ) : (
-                                <button onClick={() => updateLeaveStatus(l.id, "pending")} className="flex items-center gap-1 bg-slate-50 text-slate-600 border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-100 active:scale-95 transition-all">✏️ แก้ไข</button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="relative flex items-center gap-2 min-w-[200px]">
-                              <input
-                                type="text"
-                                placeholder="ระบุหมายเหตุ..."
-                                className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${l.status !== "pending" ? "bg-slate-50 text-slate-500 border-slate-100" : "bg-white border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-50"}`}
-                                value={l.status === "pending" ? leaveRemarks[l.id] ?? l.remark ?? "" : l.remark ?? "-"}
-                                onChange={(e) => handleRemarkChange(l.id, e.target.value)}
-                                readOnly={l.status !== "pending"}
-                              />
-                              {l.status !== "pending" && l.remark && (
-                                <button onClick={() => setViewRemarkId(viewRemarkId === l.id ? null : l.id)} className={`p-2 rounded-lg border transition-all ${viewRemarkId === l.id ? "bg-blue-600 text-white border-blue-600" : "bg-blue-50 text-blue-600 border-blue-100"}`}>🔍</button>
-                              )}
-                              {viewRemarkId === l.id && (
-                                <div className="absolute right-0 bottom-full mb-3 z-50 w-64 bg-white border border-slate-100 rounded-2xl shadow-2xl p-4 animate-in fade-in zoom-in duration-200">
-                                  <p className="text-xs text-slate-600 leading-relaxed font-bold">{l.remark}</p>
-                                  <div className="absolute -bottom-1.5 right-3 w-3 h-3 bg-white border-r border-b border-slate-100 rotate-45"></div>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={10} className="py-24 text-center text-slate-400 italic font-black">ไม่พบคำขอลางานในขณะนี้...</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* --- Mobile Card View --- */}
-          <div className="lg:hidden grid grid-cols-1 gap-4 px-4 pb-20">
-            {currentItems.length > 0 ? (
-              currentItems.map((l) => {
-                const start = new Date(l.startDate);
-                const end = new Date(l.endDate);
-                const dDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-                return (
-                  <div key={l.id} className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden text-left">
-                    <div className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${l.status === "pending" ? "bg-orange-100 text-orange-600" : l.status === "approved" ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"}`}>
-                      {l.status === "pending" ? "รออนุมัติ" : l.status === "approved" ? "อนุมัติแล้ว" : "ปฏิเสธ"}
-                    </div>
-
-                    <div className="absolute top-4 right-4">
-                      <button onClick={() => setViewRemarkId(viewRemarkId === l.id ? null : l.id)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-50 transition-colors text-slate-400 text-xl">⋮</button>
-                      {viewRemarkId === l.id && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setViewRemarkId(null)} />
-                          <div className="absolute right-0 top-12 z-50 w-64 bg-white border border-slate-100 rounded-3xl shadow-2xl p-4 animate-in fade-in zoom-in duration-200">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-3 px-1 text-left">จัดการคำขอ / หมายเหตุ</p>
-                            <textarea
-                              placeholder="ระบุหมายเหตุที่นี่..."
-                              className="w-full h-24 p-3 rounded-2xl border border-slate-100 bg-slate-50 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none text-left"
-                              value={leaveRemarks[l.id] ?? l.remark ?? ""}
-                              onChange={(e) => handleRemarkChange(l.id, e.target.value)}
-                            />
-                            <div className="grid grid-cols-2 gap-2">
-                              <button onClick={() => { updateLeaveStatus(l.id, "approved"); setViewRemarkId(null); }} className="py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-black">อนุมัติ</button>
-                              <button onClick={() => { updateLeaveStatus(l.id, "rejected"); setViewRemarkId(null); }} className="py-2.5 bg-red-500 text-white rounded-xl text-xs font-black">ปฏิเสธ</button>
-                            </div>
-                            {l.status !== "pending" && (
-                              <button onClick={() => { updateLeaveStatus(l.id, "pending"); setViewRemarkId(null); }} className="w-full mt-2 py-2 text-slate-500 text-[10px] font-bold border border-dashed border-slate-200 rounded-xl text-center">ย้อนเป็นรออนุมัติ</button>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="flex items-start gap-4 mb-4">
-                      <div className="w-14 h-14 relative rounded-2xl overflow-hidden border-2 border-slate-50 bg-slate-50 shadow-sm flex-shrink-0">
-                        <Image src={l.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(l.employeeName || "User")}&background=random`} alt="profile" fill className="object-cover" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-black text-slate-800 text-lg leading-none truncate">{l.employeeName || "ไม่ระบุชื่อ"}</h3>
-                        <p className="text-blue-500 font-mono text-xs font-bold mt-1 truncate">@{l.userName || "user"}</p>
-                        <div className="mt-1 font-bold text-blue-600 text-xs uppercase">{l.type}</div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="bg-slate-50 p-3 rounded-2xl">
-                        <p className="text-[10px] text-slate-400 font-black uppercase mb-1">ระยะเวลา</p>
-                        <p className="text-sm font-black text-slate-700">{isNaN(dDays) ? "-" : `${dDays} วัน`}</p>
-                      </div>
-                      <div className="bg-orange-50 p-3 rounded-2xl text-center">
-                        <p className="text-[10px] text-orange-400 font-black uppercase mb-1">วันที่ลา</p>
-                        <p className="text-[10px] font-bold text-orange-600 leading-tight">
-                          {new Date(l.startDate).toLocaleDateString("th-TH")} - {new Date(l.endDate).toLocaleDateString("th-TH")}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mb-4 text-left">
-                      <p className="text-[10px] text-slate-400 font-black uppercase mb-1 px-1">เหตุผลการลา</p>
-                      <p className="text-xs text-slate-600 italic font-medium bg-slate-50/50 p-3 rounded-2xl border border-slate-50">"{l.reason || "ไม่มีระบุเหตุผล"}"</p>
-                    </div>
-
-                    <div className="flex gap-2 mt-2">
-                      {l.fileUrl?.trim() ? (
-                        <button onClick={() => setViewImage(l.fileUrl)} className="flex-1 py-3 bg-slate-900 text-white rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all">📄 ดูเอกสาร</button>
-                      ) : (
-                        <div className="flex-1 py-3 bg-slate-100 text-slate-400 rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 border border-slate-200/50">🚫 ไม่มีเอกสารแนบมา</div>
-                      )}
-                      {l.remark && l.status !== "pending" && (
-                        <div className="flex-1 p-3 bg-blue-50 text-blue-700 rounded-2xl text-[10px] font-bold border border-blue-100 truncate flex items-center justify-center">📌 {l.remark}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="py-20 text-center bg-white rounded-[2.5rem] border border-slate-100 text-slate-400 italic font-black">ไม่พบคำขอลางาน...</div>
-            )}
-          </div>
-
-          {/* --- Pagination Controls --- */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-2 mt-8 mb-12">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => prev - 1)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
-              >
-                {"<"}
-              </button>
-              
-              <div className="flex gap-1">
-                {[...Array(totalPages)].map((_, i) => (
-                  <button
-                    key={i + 1}
-                    onClick={() => setCurrentPage(i + 1)}
-                    className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
-                      currentPage === i + 1 
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110" 
-                        : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+              {/* Search Bar */}
+              <div className="mb-6 relative max-w-md px-4 md:px-0">
+                <div className="absolute inset-y-0 left-4 md:left-0 pl-4 flex items-center pointer-events-none">
+                  <span className="text-gray-400">🔍</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="ค้นชื่อพนักงาน หรือ ประเภทลา..."
+                  className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                  value={searchLeave}
+                  onChange={(e) => {
+                    setSearchLeave(e.target.value);
+                    setCurrentPage(1); // Reset หน้าเมื่อมีการค้นหา
+                  }}
+                />
               </div>
 
-              <button
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => prev + 1)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
-              >
-                {">"}
-              </button>
-            </div>
+              {/* Logic สำหรับ Pagination */}
+              {(() => {
+                const indexOfLastItem = currentPage * itemsPerPage;
+                const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+                const currentItems = filteredLeaves.slice(
+                  indexOfFirstItem,
+                  indexOfLastItem
+                );
+                const totalPages = Math.ceil(
+                  filteredLeaves.length / itemsPerPage
+                );
+
+                return (
+                  <>
+                    {/* --- Desktop Table View --- */}
+                    <div className="hidden lg:block rounded-4xl border border-slate-100 overflow-hidden bg-white shadow-sm">
+                      <div className="overflow-x-auto max-h-[580px] overflow-y-auto custom-scrollbar">
+                        <table className="min-w-[1400px] w-full text-sm border-separate border-spacing-0">
+                          <thead className="sticky top-0 z-20 bg-white">
+                            <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
+                              <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">
+                                รูป
+                              </th>
+                              <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
+                                พนักงาน
+                              </th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
+                                ประเภท
+                              </th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
+                                วันที่
+                              </th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
+                                จำนวนวัน
+                              </th>
+                              <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
+                                เหตุผล
+                              </th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
+                                เอกสาร
+                              </th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
+                                สถานะ
+                              </th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
+                                จัดการคำขอ
+                              </th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
+                                หมายเหตุ
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {currentItems.length > 0 ? (
+                              currentItems.map((l) => {
+                                const start = new Date(l.startDate);
+                                const end = new Date(l.endDate);
+                                const diffTime = Math.abs(
+                                  end.getTime() - start.getTime()
+                                );
+                                const diffDays =
+                                  Math.ceil(diffTime / (1000 * 60 * 60 * 24)) +
+                                  1;
+
+                                return (
+                                  <tr
+                                    key={l.id}
+                                    className="group hover:bg-blue-50/40 transition-colors"
+                                  >
+                                    <td className="py-4 px-6">
+                                      <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100">
+                                        <Image
+                                          src={
+                                            l.avatarUrl ||
+                                            `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                              l.employeeName || "User"
+                                            )}&background=random`
+                                          }
+                                          alt="profile"
+                                          fill
+                                          className="object-cover"
+                                        />
+                                      </div>
+                                    </td>
+                                    <td className="py-4 px-6">
+                                      <div className="font-black text-gray-800 text-base">
+                                        {l.employeeName || "ไม่ระบุชื่อ"}
+                                      </div>
+                                      <div className="text-blue-500 font-mono text-[11px] font-bold">
+                                        @{l.userName || "user"}
+                                      </div>
+                                    </td>
+                                    <td className="py-4 px-6 text-center font-bold text-blue-600">
+                                      {l.type}
+                                    </td>
+                                    <td className="py-4 px-6 text-center text-gray-500 text-[11px] font-bold leading-tight">
+                                      {new Date(l.startDate).toLocaleDateString(
+                                        "th-TH",
+                                        {
+                                          day: "2-digit",
+                                          month: "short",
+                                          year: "2-digit",
+                                        }
+                                      )}
+                                      <br /> - <br />
+                                      {new Date(l.endDate).toLocaleDateString(
+                                        "th-TH",
+                                        {
+                                          day: "2-digit",
+                                          month: "short",
+                                          year: "2-digit",
+                                        }
+                                      )}
+                                    </td>
+                                    <td className="py-4 px-6 text-center">
+                                      <span className="bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg font-black text-xs border border-orange-100">
+                                        {isNaN(diffDays)
+                                          ? "-"
+                                          : `${diffDays} วัน`}
+                                      </span>
+                                    </td>
+                                    <td className="py-4 px-6 text-gray-600 italic text-xs max-w-[200px] truncate">
+                                      "{l.reason || "ไม่มีระบุเหตุผล"}"
+                                    </td>
+                                    <td className="py-4 px-6 text-center">
+                                      <div className="flex justify-center">
+                                        {l?.fileUrl?.trim() ? (
+                                          <div
+                                            className="relative w-10 h-10 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
+                                            onClick={() =>
+                                              setPreviewImage(l.fileUrl)
+                                            }
+                                          >
+                                            <Image
+                                              src={l.fileUrl}
+                                              alt="doc"
+                                              fill
+                                              className="object-cover"
+                                              unoptimized={true}
+                                            />
+                                          </div>
+                                        ) : (
+                                          <span className="text-slate-400 text-sm font-bold">
+                                            -
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-4 px-6 text-center">
+                                      <span
+                                        className={`px-4 py-2 rounded-full text-[10px] font-black uppercase shadow-sm border ${
+                                          l.status === "pending"
+                                            ? "bg-orange-100 text-orange-600 border-orange-200"
+                                            : l.status === "approved"
+                                            ? "bg-emerald-100 text-emerald-600 border-emerald-200"
+                                            : "bg-red-100 text-red-600 border-red-200"
+                                        }`}
+                                      >
+                                        {l.status === "pending"
+                                          ? "รออนุมัติ"
+                                          : l.status === "approved"
+                                          ? "อนุมัติแล้ว"
+                                          : "ปฏิเสธ"}
+                                      </span>
+                                    </td>
+                                    <td className="py-4 px-6">
+                                      <div className="flex justify-center gap-2">
+                                        {l.status === "pending" ? (
+                                          <>
+                                            <button
+                                              onClick={() =>
+                                                updateLeaveStatus(
+                                                  l.id,
+                                                  "approved"
+                                                )
+                                              }
+                                              className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-md shadow-emerald-100"
+                                            >
+                                              อนุมัติ
+                                            </button>
+                                            <button
+                                              onClick={() =>
+                                                updateLeaveStatus(
+                                                  l.id,
+                                                  "rejected"
+                                                )
+                                              }
+                                              className="bg-white border border-red-200 text-red-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-50 active:scale-95 transition-all"
+                                            >
+                                              ปฏิเสธ
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <button
+                                            onClick={() =>
+                                              updateLeaveStatus(l.id, "pending")
+                                            }
+                                            className="flex items-center gap-1 bg-slate-50 text-slate-600 border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-100 active:scale-95 transition-all"
+                                          >
+                                            ✏️ แก้ไข
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-4 px-6">
+                                      <div className="relative flex items-center gap-2 min-w-[200px]">
+                                        <input
+                                          type="text"
+                                          placeholder="ระบุหมายเหตุ..."
+                                          className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${
+                                            l.status !== "pending"
+                                              ? "bg-slate-50 text-slate-500 border-slate-100"
+                                              : "bg-white border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                                          }`}
+                                          value={
+                                            l.status === "pending"
+                                              ? leaveRemarks[l.id] ??
+                                                l.remark ??
+                                                ""
+                                              : l.remark ?? "-"
+                                          }
+                                          onChange={(e) =>
+                                            handleRemarkChange(
+                                              l.id,
+                                              e.target.value
+                                            )
+                                          }
+                                          readOnly={l.status !== "pending"}
+                                        />
+                                        {l.status !== "pending" && l.remark && (
+                                          <button
+                                            onClick={() =>
+                                              setViewRemarkId(
+                                                viewRemarkId === l.id
+                                                  ? null
+                                                  : l.id
+                                              )
+                                            }
+                                            className={`p-2 rounded-lg border transition-all ${
+                                              viewRemarkId === l.id
+                                                ? "bg-blue-600 text-white border-blue-600"
+                                                : "bg-blue-50 text-blue-600 border-blue-100"
+                                            }`}
+                                          >
+                                            🔍
+                                          </button>
+                                        )}
+                                        {viewRemarkId === l.id && (
+                                          <div className="absolute right-0 bottom-full mb-3 z-50 w-64 bg-white border border-slate-100 rounded-2xl shadow-2xl p-4 animate-in fade-in zoom-in duration-200">
+                                            <p className="text-xs text-slate-600 leading-relaxed font-bold">
+                                              {l.remark}
+                                            </p>
+                                            <div className="absolute -bottom-1.5 right-3 w-3 h-3 bg-white border-r border-b border-slate-100 rotate-45"></div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            ) : (
+                              <tr>
+                                <td
+                                  colSpan={10}
+                                  className="py-24 text-center text-slate-400 italic font-black"
+                                >
+                                  ไม่พบคำขอลางานในขณะนี้...
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* --- Mobile Card View --- */}
+                    <div className="lg:hidden grid grid-cols-1 gap-4 px-4 pb-20">
+                      {currentItems.length > 0 ? (
+                        currentItems.map((l) => {
+                          const start = new Date(l.startDate);
+                          const end = new Date(l.endDate);
+                          const dDays =
+                            Math.ceil(
+                              Math.abs(end.getTime() - start.getTime()) /
+                                (1000 * 60 * 60 * 24)
+                            ) + 1;
+
+                          return (
+                            <div
+                              key={l.id}
+                              className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden text-left"
+                            >
+                              <div
+                                className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${
+                                  l.status === "pending"
+                                    ? "bg-orange-100 text-orange-600"
+                                    : l.status === "approved"
+                                    ? "bg-emerald-100 text-emerald-600"
+                                    : "bg-red-100 text-red-600"
+                                }`}
+                              >
+                                {l.status === "pending"
+                                  ? "รออนุมัติ"
+                                  : l.status === "approved"
+                                  ? "อนุมัติแล้ว"
+                                  : "ปฏิเสธ"}
+                              </div>
+
+                              <div className="absolute top-4 right-4">
+                                <button
+                                  onClick={() =>
+                                    setViewRemarkId(
+                                      viewRemarkId === l.id ? null : l.id
+                                    )
+                                  }
+                                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-50 transition-colors text-slate-400 text-xl"
+                                >
+                                  ⋮
+                                </button>
+                                {viewRemarkId === l.id && (
+                                  <>
+                                    <div
+                                      className="fixed inset-0 z-40"
+                                      onClick={() => setViewRemarkId(null)}
+                                    />
+                                    <div className="absolute right-0 top-12 z-50 w-64 bg-white border border-slate-100 rounded-3xl shadow-2xl p-4 animate-in fade-in zoom-in duration-200">
+                                      <p className="text-[10px] font-black text-slate-400 uppercase mb-3 px-1 text-left">
+                                        จัดการคำขอ / หมายเหตุ
+                                      </p>
+                                      <textarea
+                                        placeholder="ระบุหมายเหตุที่นี่..."
+                                        className="w-full h-24 p-3 rounded-2xl border border-slate-100 bg-slate-50 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none text-left"
+                                        value={
+                                          leaveRemarks[l.id] ?? l.remark ?? ""
+                                        }
+                                        onChange={(e) =>
+                                          handleRemarkChange(
+                                            l.id,
+                                            e.target.value
+                                          )
+                                        }
+                                      />
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                          onClick={() => {
+                                            updateLeaveStatus(l.id, "approved");
+                                            setViewRemarkId(null);
+                                          }}
+                                          className="py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-black"
+                                        >
+                                          อนุมัติ
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            updateLeaveStatus(l.id, "rejected");
+                                            setViewRemarkId(null);
+                                          }}
+                                          className="py-2.5 bg-red-500 text-white rounded-xl text-xs font-black"
+                                        >
+                                          ปฏิเสธ
+                                        </button>
+                                      </div>
+                                      {l.status !== "pending" && (
+                                        <button
+                                          onClick={() => {
+                                            updateLeaveStatus(l.id, "pending");
+                                            setViewRemarkId(null);
+                                          }}
+                                          className="w-full mt-2 py-2 text-slate-500 text-[10px] font-bold border border-dashed border-slate-200 rounded-xl text-center"
+                                        >
+                                          ย้อนเป็นรออนุมัติ
+                                        </button>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+
+                              <div className="flex items-start gap-4 mb-4">
+                                <div className="w-14 h-14 relative rounded-2xl overflow-hidden border-2 border-slate-50 bg-slate-50 shadow-sm flex-shrink-0">
+                                  <Image
+                                    src={
+                                      l.avatarUrl ||
+                                      `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                        l.employeeName || "User"
+                                      )}&background=random`
+                                    }
+                                    alt="profile"
+                                    fill
+                                    className="object-cover"
+                                  />
+                                </div>
+                                <div className="min-w-0">
+                                  <h3 className="font-black text-slate-800 text-lg leading-none truncate">
+                                    {l.employeeName || "ไม่ระบุชื่อ"}
+                                  </h3>
+                                  <p className="text-blue-500 font-mono text-xs font-bold mt-1 truncate">
+                                    @{l.userName || "user"}
+                                  </p>
+                                  <div className="mt-1 font-bold text-blue-600 text-xs uppercase">
+                                    {l.type}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3 mb-4">
+                                <div className="bg-slate-50 p-3 rounded-2xl">
+                                  <p className="text-[10px] text-slate-400 font-black uppercase mb-1">
+                                    ระยะเวลา
+                                  </p>
+                                  <p className="text-sm font-black text-slate-700">
+                                    {isNaN(dDays) ? "-" : `${dDays} วัน`}
+                                  </p>
+                                </div>
+                                <div className="bg-orange-50 p-3 rounded-2xl text-center">
+                                  <p className="text-[10px] text-orange-400 font-black uppercase mb-1">
+                                    วันที่ลา
+                                  </p>
+                                  <p className="text-[10px] font-bold text-orange-600 leading-tight">
+                                    {new Date(l.startDate).toLocaleDateString(
+                                      "th-TH"
+                                    )}{" "}
+                                    -{" "}
+                                    {new Date(l.endDate).toLocaleDateString(
+                                      "th-TH"
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="mb-4 text-left">
+                                <p className="text-[10px] text-slate-400 font-black uppercase mb-1 px-1">
+                                  เหตุผลการลา
+                                </p>
+                                <p className="text-xs text-slate-600 italic font-medium bg-slate-50/50 p-3 rounded-2xl border border-slate-50">
+                                  "{l.reason || "ไม่มีระบุเหตุผล"}"
+                                </p>
+                              </div>
+
+                              <div className="flex gap-2 mt-2">
+                                {l.fileUrl?.trim() ? (
+                                  <button
+                                    onClick={() => setViewImage(l.fileUrl)}
+                                    className="flex-1 py-3 bg-slate-900 text-white rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all"
+                                  >
+                                    📄 ดูเอกสาร
+                                  </button>
+                                ) : (
+                                  <div className="flex-1 py-3 bg-slate-100 text-slate-400 rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 border border-slate-200/50">
+                                    🚫 ไม่มีเอกสารแนบมา
+                                  </div>
+                                )}
+                                {l.remark && l.status !== "pending" && (
+                                  <div className="flex-1 p-3 bg-blue-50 text-blue-700 rounded-2xl text-[10px] font-bold border border-blue-100 truncate flex items-center justify-center">
+                                    📌 {l.remark}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="py-20 text-center bg-white rounded-[2.5rem] border border-slate-100 text-slate-400 italic font-black">
+                          ไม่พบคำขอลางาน...
+                        </div>
+                      )}
+                    </div>
+
+                    {/* --- Pagination Controls --- */}
+                    {totalPages > 1 && (
+                      <div className="flex justify-center items-center gap-2 mt-8 mb-12">
+                        <button
+                          disabled={currentPage === 1}
+                          onClick={() => setCurrentPage((prev) => prev - 1)}
+                          className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+                        >
+                          {"<"}
+                        </button>
+
+                        <div className="flex gap-1">
+                          {[...Array(totalPages)].map((_, i) => (
+                            <button
+                              key={i + 1}
+                              onClick={() => setCurrentPage(i + 1)}
+                              className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
+                                currentPage === i + 1
+                                  ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
+                                  : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                              }`}
+                            >
+                              {i + 1}
+                            </button>
+                          ))}
+                        </div>
+
+                        <button
+                          disabled={currentPage === totalPages}
+                          onClick={() => setCurrentPage((prev) => prev + 1)}
+                          className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+                        >
+                          {">"}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </section>
           )}
-        </>
-      );
-    })()}
-  </section>
-)}
         </div>
       </main>
 
@@ -2459,9 +2723,11 @@ export default function AdminClientPage({
                   ))}
 
                 <input
-                  key={isAllSite  ? "ทุกไซต์" : editingSite?.address || ""}
+                  key={isAllSite ? "ทุกไซต์" : editingSite?.address || ""}
                   name="address"
-                  defaultValue={isAllSite ? "ทุกไซต์" : (editingSite?.address ?? "")}
+                  defaultValue={
+                    isAllSite ? "ทุกไซต์" : editingSite?.address ?? ""
+                  }
                   readOnly={isAllSite}
                   placeholder="ที่อยู่ไซต์งาน..."
                   className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${
@@ -3010,24 +3276,24 @@ export default function AdminClientPage({
                   Username {editingEmployee && "(แก้ไขไม่ได้)"}
                 </label>
                 <input
-  name="userName"
-  defaultValue={editingEmployee?.userName}
-  placeholder="ชื่อผู้ใช้งาน..."
-  required
-  disabled={!!editingEmployee}
-  onInput={(e) => {
-    // 1. กรองเอาเฉพาะ a-z, A-Z และ 0-9
-    // 2. แปลงเป็นตัวพิมพ์เล็กทั้งหมดด้วย .toLowerCase()
-    e.currentTarget.value = e.currentTarget.value
-      .replace(/[^a-zA-Z0-9]/g, "")
-      .toLowerCase();
-  }}
-  className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${
-    editingEmployee
-      ? "bg-slate-100 text-slate-400 border-transparent"
-      : "bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white"
-  }`}
-/>
+                  name="userName"
+                  defaultValue={editingEmployee?.userName}
+                  placeholder="ชื่อผู้ใช้งาน..."
+                  required
+                  disabled={!!editingEmployee}
+                  onInput={(e) => {
+                    // 1. กรองเอาเฉพาะ a-z, A-Z และ 0-9
+                    // 2. แปลงเป็นตัวพิมพ์เล็กทั้งหมดด้วย .toLowerCase()
+                    e.currentTarget.value = e.currentTarget.value
+                      .replace(/[^a-zA-Z0-9]/g, "")
+                      .toLowerCase();
+                  }}
+                  className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${
+                    editingEmployee
+                      ? "bg-slate-100 text-slate-400 border-transparent"
+                      : "bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white"
+                  }`}
+                />
               </div>
 
               {/* ช่องรหัสผ่านเดิม (แสดงเฉพาะตอนแก้ไข) */}
