@@ -3010,23 +3010,24 @@ export default function AdminClientPage({
                   Username {editingEmployee && "(แก้ไขไม่ได้)"}
                 </label>
                 <input
-                  name="userName"
-                  defaultValue={editingEmployee?.userName}
-                  placeholder="ชื่อผู้ใช้งาน..."
-                  required
-                  disabled={!!editingEmployee}
-                  onInput={(e) => {
-                    e.currentTarget.value = e.currentTarget.value.replace(
-                      /[^a-zA-Z0-9]/g,
-                      ""
-                    );
-                  }}
-                  className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${
-                    editingEmployee
-                      ? "bg-slate-100 text-slate-400 border-transparent"
-                      : "bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white"
-                  }`}
-                />
+  name="userName"
+  defaultValue={editingEmployee?.userName}
+  placeholder="ชื่อผู้ใช้งาน..."
+  required
+  disabled={!!editingEmployee}
+  onInput={(e) => {
+    // 1. กรองเอาเฉพาะ a-z, A-Z และ 0-9
+    // 2. แปลงเป็นตัวพิมพ์เล็กทั้งหมดด้วย .toLowerCase()
+    e.currentTarget.value = e.currentTarget.value
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .toLowerCase();
+  }}
+  className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${
+    editingEmployee
+      ? "bg-slate-100 text-slate-400 border-transparent"
+      : "bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white"
+  }`}
+/>
               </div>
 
               {/* ช่องรหัสผ่านเดิม (แสดงเฉพาะตอนแก้ไข) */}
