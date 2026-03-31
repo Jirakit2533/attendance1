@@ -18,6 +18,7 @@ import {
   updatePositionAction,
   updateAdminProfileAction,
   updateCompanyAction,
+  updateDepartmentAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -102,6 +103,7 @@ export default function AdminClientPage({
   const [showAddSite, setShowAddSite] = useState(false);
   const [showAddPosition, setShowAddPosition] = useState(false);
   const [showAddDepartment, setShowAddDepartment] = useState(false);
+  const [editingDept, setEditingDept] = useState<any>(null);
 
   const [searchEmp, setSearchEmp] = useState("");
   const [searchAtt, setSearchAtt] = useState("");
@@ -702,28 +704,90 @@ export default function AdminClientPage({
     }
   };
 
-  const handleAddDepartment = async (e) => {
+  // --- 2. จัดการแผนก (Departments) ---
+  const handleEditDept = (dept: any) => {
+    // 1. เก็บข้อมูลแผนกที่จะแก้ไขลง State
+    setEditingDept(dept); 
+    
+    // 2. ปิดหน้าจัดการระบบ (ManageModal) เพื่อให้เห็นฟอร์มแก้ไขชัดเจน
+    setShowManageModal(false); 
+    
+    // 3. เปิดฟอร์มแก้ไข (ใช้อันเดียวกับฟอร์มเพิ่ม)
+    setShowAddDepartment(true); 
+  };
+
+  const handleDeleteDept = async (deptId: string) => {
+    if (!confirm("คุณแน่ใจใช่ไหมที่จะลบแผนกนี้?")) return;
+    setIsProcessing(true);
+    try {
+      const result = await deleteDepartmentAction(deptId);
+      
+      if (result.success) {
+        setAllDepartments((prev) => prev.filter((d) => d.id !== deptId));
+        alert("✅ ลบแผนกเรียบร้อยแล้ว");
+      } else {
+        // ✅ ตรงนี้จะแสดงข้อความ "ติดต่อผู้ให้บริการ" ที่เราแก้ไว้ใน Action
+        alert("❌ " + result.error);
+      }
+    } catch (error) {
+      // ✅ ตรงนี้ก็ต้องแก้ให้เหมือนกัน เผื่อกรณี Error หลุดมาถึงตรงนี้
+      alert("❌ ไม่สามารถลบแผนกได้ หากต้องการลบแผนกกรุณาติดต่อผู้ให้บริการ");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleAddDepartment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
-    const name = formData.get("name");
+    const name = formData.get("name") as string;
 
     if (!name) return;
     setIsProcessing(true);
+
     try {
-      const result = await createDepartmentAction(name);
-      if (result.success) {
-        form.reset();
-        setAllDepartments((prev) => [
-          ...prev,
-          { id: crypto.randomUUID(), name: name },
-        ]);
-        setShowAddDepartment(false);
-        alert(`✅ เพิ่มแผนก "${name}" เรียบร้อยแล้ว`);
+      if (editingDept) {
+        // 📝 กรณี: แก้ไขแผนก (Update)
+        const result = await updateDepartmentAction({
+          id: editingDept.id,
+          name: name,
+        });
+
+        if (result.success) {
+          // อัปเดตข้อมูลใน State ทันทีเพื่อให้หน้าจอเปลี่ยนตาม
+          setAllDepartments((prev) =>
+            prev.map((d) =>
+              d.id === editingDept.id ? { ...d, name: name } : d
+            )
+          );
+          alert(`✅ แก้ไขแผนกเป็น "${name}" เรียบร้อยแล้ว`);
+
+          // ล้างค่าและปิด Modal
+          setEditingDept(null);
+          setShowAddDepartment(false);
+        } else {
+          alert(result.error || "ไม่สามารถอัปเดตแผนกได้");
+        }
       } else {
-        alert(result.error || "ไม่สามารถบันทึกแผนกได้");
+        // ➕ กรณี: เพิ่มแผนกใหม่ (Create)
+        const result = await createDepartmentAction(name);
+
+        if (result.success) {
+          form.reset();
+          // ใช้ id ที่ส่งกลับมาจาก database (ถ้ามี) หรือใช้ id ชั่วคราว
+          setAllDepartments((prev) => [
+            ...prev,
+            { id: result.id || crypto.randomUUID(), name: name },
+          ]);
+          setShowAddDepartment(false);
+          alert(`✅ เพิ่มแผนก "${name}" เรียบร้อยแล้ว`);
+        } else {
+          alert(result.error || "ไม่สามารถบันทึกแผนกได้");
+        }
       }
     } catch (error) {
+      console.error("Department Error:", error);
       alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsProcessing(false);
@@ -1363,7 +1427,7 @@ export default function AdminClientPage({
           {/* ✅ การ์ดที่ 4: ปรับขนาด Padding และความสูงให้พอดีกับอุปกรณ์เคลื่อนที่ */}
           <div
             onClick={() => setShowManageModal(true)}
-            className="relative bg-white rounded-4xl md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer overflow-hidden group flex flex-col h-full min-h-[160px] md:min-h-0"
+            className="relative bg-white rounded-4xl md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer overflow-hidden group flex flex-col h-full min-h-[220px] md:min-h-0"
           >
             {/* 🏷️ Badge มุมขวาบน */}
             <div className="absolute top-4 right-5 z-10 flex items-center gap-1.5">
@@ -1376,9 +1440,9 @@ export default function AdminClientPage({
               </span>
             </div>
 
-            {/* ครึ่งบน: ไซต์งาน */}
-            <div className="flex-1 p-5 md:p-6 flex items-center gap-4 hover:bg-purple-50/50 transition-colors border-b border-slate-50 pt-12 md:pt-10">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center text-lg md:text-xl group-hover:scale-110 transition-transform">
+            {/* ส่วนที่ 1: ไซต์งาน */}
+            <div className="flex-1 p-4 md:p-5 flex items-center gap-4 hover:bg-purple-50/50 transition-colors border-b border-slate-50 pt-12 md:pt-10">
+              <div className="w-10 h-10 md:w-11 md:h-11 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center text-lg md:text-xl group-hover:scale-110 transition-transform">
                 🏢
               </div>
               <div>
@@ -1391,9 +1455,24 @@ export default function AdminClientPage({
               </div>
             </div>
 
-            {/* ครึ่งล่าง: ตำแหน่ง */}
-            <div className="flex-1 p-5 md:p-6 flex items-center gap-4 hover:bg-pink-50/50 transition-colors">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-pink-50 text-pink-600 rounded-xl flex items-center justify-center text-lg md:text-xl group-hover:scale-110 transition-transform">
+            {/* ส่วนที่ 2: แผนก (เพิ่มใหม่) */}
+            <div className="flex-1 p-4 md:p-5 flex items-center gap-4 hover:bg-blue-50/50 transition-colors border-b border-slate-50">
+              <div className="w-10 h-10 md:w-11 md:h-11 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-lg md:text-xl group-hover:scale-110 transition-transform">
+                📊
+              </div>
+              <div>
+                <p className="text-xl md:text-2xl font-black text-slate-900 leading-none">
+                  {allDepartments.length}
+                </p>
+                <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  แผนกทั้งหมด
+                </p>
+              </div>
+            </div>
+
+            {/* ส่วนที่ 3: ตำแหน่ง */}
+            <div className="flex-1 p-4 md:p-5 flex items-center gap-4 hover:bg-pink-50/50 transition-colors">
+              <div className="w-10 h-10 md:w-11 md:h-11 bg-pink-50 text-pink-600 rounded-xl flex items-center justify-center text-lg md:text-xl group-hover:scale-110 transition-transform">
                 💼
               </div>
               <div>
@@ -2614,31 +2693,51 @@ export default function AdminClientPage({
 
       {/* --- 💼 MODAL: ADD DEPARTMENT --- */}
       {showAddDepartment && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
-            <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic">
-              💼 เพิ่มแผนก
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[700] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic flex items-center gap-2">
+              {editingDept ? "📝 แก้ไขแผนก" : "💼 เพิ่มแผนก"}
             </h3>
-            <form onSubmit={handleAddDepartment} className="space-y-4">
+            <form onSubmit={async (e) => {
+              await handleAddDepartment(e);
+              // เมื่อบันทึกสำเร็จ ให้เด้งกลับไปหน้าจัดการระบบ
+              setShowManageModal(true);
+            }} className="space-y-4">
               <input
+                key={editingDept?.id || "new"}
                 name="name"
                 placeholder="ระบุชื่อแผนก..."
                 required
-                className="w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-amber-500"
+                defaultValue={editingDept?.name || ""}
+                className={`w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 ${
+                  editingDept ? "focus:ring-blue-500" : "focus:ring-amber-500"
+                }`}
               />
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddDepartment(false)}
+                  onClick={() => {
+                    setShowAddDepartment(false);
+                    setEditingDept(null);
+                    // กดยกเลิกก็ให้เด้งกลับไปหน้าจัดการระบบ
+                    setShowManageModal(true);
+                  }}
                   className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px]"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-amber-100"
+                  disabled={isProcessing}
+                  className={`flex-1 py-4 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all ${
+                    isProcessing ? "opacity-50" : ""
+                  } ${
+                    editingDept 
+                      ? "bg-blue-600 shadow-blue-100" 
+                      : "bg-amber-600 shadow-amber-100"
+                  }`}
                 >
-                  บันทึก
+                  {isProcessing ? "กำลังประมวลผล..." : "บันทึก"}
                 </button>
               </div>
             </form>
@@ -3211,39 +3310,48 @@ export default function AdminClientPage({
               </span>
               {editingEmployee && (
                 <button
-                type="button"
-                onClick={(e) => {
-                  if (confirm("ยืนยันการรีเซ็ตรหัสผ่านเป็น '1234' ?")) {
-                    // ดึง Element ทั้งหมดที่เกี่ยวข้อง
-                    const pInput = document.getElementById("reg-password") as HTMLInputElement;
-                    const cInput = document.getElementById("reg-confirm") as HTMLInputElement;
-                    const oldPInput = document.getElementById("old-password") as HTMLInputElement;
-                    
-                    if (pInput && cInput) {
-                      // 1. ยัดรหัสใหม่ 1234
-                      pInput.value = "1234";
-                      cInput.value = "1234";
-                      
-                      // 2. ยัดค่า Bypass ลงในช่องรหัสผ่านเดิม (เพื่อให้ Validator ฝั่ง Client มองว่า "ไม่ว่าง")
-                      if (oldPInput) {
-                        oldPInput.value = "BYPASS_OLD_PASSWORD";
+                  type="button"
+                  onClick={(e) => {
+                    if (confirm("ยืนยันการรีเซ็ตรหัสผ่านเป็น '1234' ?")) {
+                      // ดึง Element ทั้งหมดที่เกี่ยวข้อง
+                      const pInput = document.getElementById(
+                        "reg-password"
+                      ) as HTMLInputElement;
+                      const cInput = document.getElementById(
+                        "reg-confirm"
+                      ) as HTMLInputElement;
+                      const oldPInput = document.getElementById(
+                        "old-password"
+                      ) as HTMLInputElement;
+
+                      if (pInput && cInput) {
+                        // 1. ยัดรหัสใหม่ 1234
+                        pInput.value = "1234";
+                        cInput.value = "1234";
+
+                        // 2. ยัดค่า Bypass ลงในช่องรหัสผ่านเดิม (เพื่อให้ Validator ฝั่ง Client มองว่า "ไม่ว่าง")
+                        if (oldPInput) {
+                          oldPInput.value = "BYPASS_OLD_PASSWORD";
+                        }
+
+                        // 3. สั่ง Submit ฟอร์มที่ปุ่มนี้สังกัดอยู่
+                        const form = (e.currentTarget as HTMLButtonElement)
+                          .form;
+                        if (form) {
+                          // ใช้ requestSubmit เพื่อให้มันวิ่งไปหา Action ของ Next.js ทันที
+                          form.requestSubmit();
+                        }
+                      } else {
+                        alert(
+                          "ไม่พบช่องกรอกรหัสผ่านในหน้านี้ กรุณาตรวจสอบ ID ของ Input"
+                        );
                       }
-              
-                      // 3. สั่ง Submit ฟอร์มที่ปุ่มนี้สังกัดอยู่
-                      const form = (e.currentTarget as HTMLButtonElement).form;
-                      if (form) {
-                        // ใช้ requestSubmit เพื่อให้มันวิ่งไปหา Action ของ Next.js ทันที
-                        form.requestSubmit(); 
-                      }
-                    } else {
-                      alert("ไม่พบช่องกรอกรหัสผ่านในหน้านี้ กรุณาตรวจสอบ ID ของ Input");
                     }
-                  }
-                }}
-                className="text-[10px] px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors font-bold flex items-center gap-1"
-              >
-                🔄 รีเซ็ตรหัสผ่านและบันทึกทันที
-              </button>
+                  }}
+                  className="text-[10px] px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors font-bold flex items-center gap-1"
+                >
+                  🔄 รีเซ็ตรหัสผ่านและบันทึกทันที
+                </button>
               )}
             </h2>
 
@@ -4166,7 +4274,7 @@ export default function AdminClientPage({
                 <span className="bg-slate-900 text-white p-2 rounded-xl not-italic text-sm">
                   ⚙️
                 </span>
-                จัดการระบบ (ไซต์งาน & ตำแหน่ง)
+                จัดการระบบ (ไซต์งาน / แผนก / ตำแหน่ง)
               </h3>
               <button
                 onClick={() => setShowManageModal(false)}
@@ -4198,7 +4306,6 @@ export default function AdminClientPage({
                         >
                           <td className="p-4 text-slate-700">{site.name}</td>
                           <td className="p-4 flex justify-center gap-2">
-                            {/* แก้ไข: ซ่อนปุ่มแก้ไขหากเป็นไซต์ "ทุกไซต์" */}
                             {site.name !== "ทุกไซต์" && (
                               <button
                                 onClick={() => handleUpdateSite(site)}
@@ -4221,10 +4328,51 @@ export default function AdminClientPage({
                 </div>
               </section>
 
-              {/* --- ตารางที่ 2: ตำแหน่ง --- --- */}
+              {/* --- ตารางที่ 2: แผนก (เพิ่มใหม่) --- */}
+              <section>
+                <h4 className="text-sm font-black text-blue-600 mb-4 uppercase tracking-widest flex items-center gap-2">
+                  📊 รายการแผนก ({allDepartments.length})
+                </h4>
+                <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-100">
+                  <table className="w-full text-left text-sm font-bold">
+                    <thead className="bg-slate-100 text-slate-400 text-[10px] uppercase">
+                      <tr>
+                        <th className="p-4">ชื่อแผนก</th>
+                        <th className="p-4 text-center">จัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {allDepartments.map((dept) => (
+                        <tr
+                          key={dept.id}
+                          className="hover:bg-white transition-colors"
+                        >
+                          <td className="p-4 text-slate-700">{dept.name}</td>
+                          <td className="p-4 flex justify-center gap-2">
+                            <button
+                              onClick={() => handleEditDept(dept)}
+                              className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              📝
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDept(dept.id)}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              🗑️
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* --- ตารางที่ 3: ตำแหน่ง --- */}
               <section>
                 <h4 className="text-sm font-black text-pink-600 mb-4 uppercase tracking-widest flex items-center gap-2">
-                  💼 รายการตำแหน่งพนักงาน ({positions.length})
+                  💼 รายการตำแหน่งพนักงาน ({allPositions.length})
                 </h4>
                 <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-100">
                   <table className="w-full text-left text-sm font-bold">
@@ -4235,7 +4383,7 @@ export default function AdminClientPage({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {positions.map((pos) => (
+                      {allPositions.map((pos) => (
                         <tr
                           key={pos.id}
                           className="hover:bg-white transition-colors"

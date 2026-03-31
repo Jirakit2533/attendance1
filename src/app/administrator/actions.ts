@@ -482,7 +482,7 @@ export async function getAttendanceAction() {
 }
 
 /* ==========================================================================
- DELETE & UPDATE ACTIONS (SITES & POSITIONS)
+ DELETE & UPDATE ACTIONS (SITES, DEPARTMENTS & POSITIONS)
  ========================================================================== */
 
 /** * ลบไซต์งาน 
@@ -498,6 +498,49 @@ export async function deleteSiteAction(id: string) {
     return { success: true, message: "ลบไซต์งานสำเร็จ" };
   } catch (error) {
     return { success: false, error: "ไม่สามารถลบได้ เนื่องจากมีการใช้งานไซต์งานนี้อยู่" };
+  }
+}
+
+// {/** * ลบแผนก (ปรับปรุงให้เช็คการใช้งานก่อนลบ)}
+/**
+ * ลบแผนก (ฉบับปรับปรุงข้อความแจ้งเตือนตามที่กำหนด)
+ */
+export async function deleteDepartmentAction(id: string) {
+  try {
+    const admin = await getAdminContext();
+    if (!admin) return { success: false, error: "Unauthorized" };
+
+    // ดำเนินการลบแผนกโดยเช็คทั้ง ID และ CompanyID เพื่อความปลอดภัย
+    await db.delete(departmentsTable).where(
+      and(
+        eq(departmentsTable.id, id),
+        eq(departmentsTable.companyId, admin.companyId)
+      )
+    );
+
+    revalidatePath("/administrator");
+    return { success: true, message: "ลบแผนกสำเร็จ" };
+  } catch (error: any) {
+    console.error("Delete Department Error:", error);
+
+    // ตรวจสอบว่าติด Foreign Key Constraint (มีข้อมูลพนักงาน/ตำแหน่ง/ประวัติ ค้างอยู่) หรือไม่
+    const isLinked = 
+      error.message?.toLowerCase().includes("foreign key") || 
+      error.code === "23503" || // Postgres
+      error.code === "1451";    // MySQL
+
+    if (isLinked) {
+      return { 
+        success: false, 
+        error: "ไม่สามารถลบแผนกได้ หากต้องการลบแผนกกรุณาติดต่อผู้ให้บริการ" 
+      };
+    }
+
+    // กรณี Error อื่นๆ ที่ไม่ใช่เรื่องข้อมูลเชื่อมโยง
+    return { 
+      success: false, 
+      error: "เกิดข้อผิดพลาดจากระบบ ไม่สามารถลบข้อมูลได้ในขณะนี้" 
+    };
   }
 }
 
@@ -542,6 +585,37 @@ export async function updateSiteAction(id: string, data: { name: string; address
   }
 }
 
+/** * แก้ไขแผนก (Added)
+ */
+export async function updateDepartmentAction(data: { id: string; name: string }) {
+  try {
+    const { id, name } = data;
+    const admin = await getAdminContext();
+    if (!admin) return { success: false, error: "Unauthorized" };
+
+    if (!id) return { success: false, error: "ไม่พบ ID ที่ต้องการแก้ไข" };
+
+    await db
+      .update(departmentsTable)
+      .set({ 
+        name: name, 
+        updatedAt: new Date() 
+      })
+      .where(
+        and(
+          eq(departmentsTable.id, id),
+          eq(departmentsTable.companyId, admin.companyId)
+        )
+      );
+
+    revalidatePath("/administrator");
+    return { success: true, message: "อัปเดตแผนกสำเร็จ", id: id };
+  } catch (error) {
+    console.error("Update Department Error:", error);
+    return { success: false, error: "ไม่สามารถอัปเดตข้อมูลแผนกได้" };
+  }
+}
+
 /** * แก้ไขตำแหน่ง (Update Only)
  */
 export async function updatePositionAction(data: { id: string; name: string }) {
@@ -578,7 +652,6 @@ export async function updatePositionAction(data: { id: string; name: string }) {
     return { success: false, error: "ไม่สามารถอัปเดตข้อมูลได้" };
   }
 }
-
 /* ==========================================================================
  UPDATE ADMIN
  ========================================================================== */
