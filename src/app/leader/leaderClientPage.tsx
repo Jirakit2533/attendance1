@@ -571,14 +571,16 @@ export default function LeaderClientPage({
         alert(isCheckingOut ? "บันทึกออกงานสำเร็จ" : "บันทึกเข้างานสำเร็จ");
         router.refresh();
       } else {
-        // ✅ ตรวจสอบการยืนยันนอกพื้นที่ (Offsite) ผ่านตัวแปร OffsiteCheckOutConfirm
-        if (result.OffsiteCheckOutConfirm) {
+        // ✅ ปรับ Logic: ถ้าไม่มี site_id (กลุ่มทุกไซต์) และได้รับสัญญาณให้ยืนยัน ให้เปิด Pop-up
+        // แต่ถ้าเป็นพนักงานประจำไซต์ (มี site_id) จะตกลงไปที่ else เพื่อ alert error ทันที
+        if (!userProfile.site_id && (result.OffsiteCheckInConfirm || result.OffsiteCheckOutConfirm || result.offsite)) {
           setPendingData({
             ...attendancePayload,
             siteName: result.siteName,
           });
           setShowOffsitePopup(true);
         } else {
+          // พนักงานประจำไซต์ที่พิกัดไม่ตรง จะแจ้งเตือนข้อผิดพลาดตรงนี้เลย
           alert("ข้อผิดพลาดจากระบบ: " + result.error);
         }
       }
