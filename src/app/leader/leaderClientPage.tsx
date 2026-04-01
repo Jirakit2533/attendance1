@@ -81,8 +81,8 @@ const OffsiteConfirmPopup = ({
           อยู่นอกพื้นที่งาน
         </h3>
         <p className="text-gray-600 mb-6 text-sm">
-          คุณไม่ได้อยู่ในรัศมีของ{" "}
-          <span className="font-semibold text-blue-600">"{siteName}"</span>{" "}
+          คุณไม่ได้อยู่ในรัศมีของไซต์งาน{" "}
+          <span className="font-semibold text-blue-600"></span>{" "}
           <br />
           ต้องการยืนยันการบันทึกข้อมูลหรือไม่?
         </p>

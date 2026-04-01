@@ -1722,71 +1722,78 @@ export default function AdminClientPage({
 
                   {/* --- Pagination Controls for Mobile --- */}
                   {filteredEmployees.length > 5 && (
-  <div className="flex justify-center items-center gap-2 mt-8 mb-12">
-    {/* ปุ่มย้อนกลับ */}
-    <button
-      disabled={currentPage === 1}
-      onClick={() => setCurrentPage((prev) => prev - 1)}
-      className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
-    >
-      {"<"}
-    </button>
+                    <div className="flex justify-center items-center gap-2 mt-8 mb-12">
+                      {/* ปุ่มย้อนกลับ */}
+                      <button
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage((prev) => prev - 1)}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+                      >
+                        {"<"}
+                      </button>
 
-    {/* รายการตัวเลขหน้า (Logic ใหม่: ป้องกันตัวเลขยาวเหยียด) */}
-    <div className="flex gap-1">
-      {(() => {
-        const totalPages = Math.ceil(filteredEmployees.length / 5);
-        const pages = [];
-        const range = 1; // จำนวนหน้าที่จะโชว์ข้างๆ หน้าปัจจุบัน
+                      {/* รายการตัวเลขหน้า (Logic ใหม่: ป้องกันตัวเลขยาวเหยียด) */}
+                      <div className="flex gap-1">
+                        {(() => {
+                          const totalPages = Math.ceil(
+                            filteredEmployees.length / 5
+                          );
+                          const pages = [];
+                          const range = 1; // จำนวนหน้าที่จะโชว์ข้างๆ หน้าปัจจุบัน
 
-        for (let i = 1; i <= totalPages; i++) {
-          // เงื่อนไขการโชว์เลขหน้า: หน้าแรก, หน้าสุดท้าย, หน้าปัจจุบัน, และหน้ารอบข้างหน้าปัจจุบัน
-          if (
-            i === 1 ||
-            i === totalPages ||
-            (i >= currentPage - range && i <= currentPage + range)
-          ) {
-            pages.push(
-              <button
-                key={i}
-                onClick={() => setCurrentPage(i)}
-                className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
-                  currentPage === i
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
-                    : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
-                }`}
-              >
-                {i}
-              </button>
-            );
-          } else if (
-            i === currentPage - range - 1 ||
-            i === currentPage + range + 1
-          ) {
-            // แสดงจุดไข่ปลา (...)
-            pages.push(
-              <span key={i} className="w-10 h-10 flex items-center justify-center text-slate-400 font-bold">
-                ...
-              </span>
-            );
-          }
-        }
-        return pages;
-      })()}
-    </div>
+                          for (let i = 1; i <= totalPages; i++) {
+                            // เงื่อนไขการโชว์เลขหน้า: หน้าแรก, หน้าสุดท้าย, หน้าปัจจุบัน, และหน้ารอบข้างหน้าปัจจุบัน
+                            if (
+                              i === 1 ||
+                              i === totalPages ||
+                              (i >= currentPage - range &&
+                                i <= currentPage + range)
+                            ) {
+                              pages.push(
+                                <button
+                                  key={i}
+                                  onClick={() => setCurrentPage(i)}
+                                  className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
+                                    currentPage === i
+                                      ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
+                                      : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                                  }`}
+                                >
+                                  {i}
+                                </button>
+                              );
+                            } else if (
+                              i === currentPage - range - 1 ||
+                              i === currentPage + range + 1
+                            ) {
+                              // แสดงจุดไข่ปลา (...)
+                              pages.push(
+                                <span
+                                  key={i}
+                                  className="w-10 h-10 flex items-center justify-center text-slate-400 font-bold"
+                                >
+                                  ...
+                                </span>
+                              );
+                            }
+                          }
+                          return pages;
+                        })()}
+                      </div>
 
-    {/* ปุ่มไปข้างหน้า */}
-    <button
-      disabled={
-        currentPage === Math.ceil(filteredEmployees.length / 5)
-      }
-      onClick={() => setCurrentPage((prev) => prev + 1)}
-      className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
-    >
-      {">"}
-    </button>
-  </div>
-)}
+                      {/* ปุ่มไปข้างหน้า */}
+                      <button
+                        disabled={
+                          currentPage ===
+                          Math.ceil(filteredEmployees.length / 5)
+                        }
+                        onClick={() => setCurrentPage((prev) => prev + 1)}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+                      >
+                        {">"}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* --- Desktop Table View (แสดงทั้งหมดพร้อม Scroll) --- */}
@@ -4353,12 +4360,18 @@ export default function AdminClientPage({
                         <tr
                           key={site.id}
                           className={`transition-colors group ${
-                            site.name === "ทุกไซต์" 
-                              ? "bg-orange-50 hover:bg-orange-100" 
+                            site.name === "ทุกไซต์"
+                              ? "bg-orange-50 hover:bg-orange-100"
                               : "hover:bg-white"
                           }`}
                         >
-                          <td className={`p-4 ${site.name === "ทุกไซต์" ? "text-orange-700" : "text-slate-700"}`}>
+                          <td
+                            className={`p-4 ${
+                              site.name === "ทุกไซต์"
+                                ? "text-orange-700"
+                                : "text-slate-700"
+                            }`}
+                          >
                             {site.name}
                           </td>
                           <td className="p-4 flex justify-center gap-2">
