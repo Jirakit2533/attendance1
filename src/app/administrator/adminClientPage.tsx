@@ -19,6 +19,8 @@ import {
   updateAdminProfileAction,
   updateCompanyAction,
   updateDepartmentAction,
+  resetStaffPasswordAction,
+  deleteDepartmentAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -146,6 +148,7 @@ export default function AdminClientPage({
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // เริ่มต้นเป็น false (ปิดอยู่)
 
@@ -450,6 +453,29 @@ export default function AdminClientPage({
   };
 
   // --- HANDLERS ---
+
+  const handleDirectReset = async (targetUserId: string) => {
+    // 1. ถามเพื่อยืนยันป้องกันการกดพลาด
+    if (!confirm("ยืนยันการรีเซ็ตรหัสผ่านเป็น '1234' ?")) return;
+  
+    try {
+      setIsResetting(true);
+      
+      // 2. เรียก Server Action ที่เราสร้างไว้
+      const result = await resetStaffPasswordAction(targetUserId);
+  
+      if (result.success) {
+        alert("✅ " + result.message);
+        // หากมีฟังก์ชันปิด Modal หรือล้างฟอร์ม สามารถใส่ตรงนี้ได้
+      } else {
+        alert("❌ " + result.error);
+      }
+    } catch (error) {
+      alert("❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const handleGenerateReport = async () => {
     // 1. ป้องกันการกดซ้ำ และตรวจสอบว่ามีการเลือกพนักงานหรือไม่
@@ -3332,48 +3358,17 @@ export default function AdminClientPage({
               </span>
               {editingEmployee && (
                 <button
-                  type="button"
-                  onClick={(e) => {
-                    if (confirm("ยืนยันการรีเซ็ตรหัสผ่านเป็น '1234' ?")) {
-                      // ดึง Element ทั้งหมดที่เกี่ยวข้อง
-                      const pInput = document.getElementById(
-                        "reg-password"
-                      ) as HTMLInputElement;
-                      const cInput = document.getElementById(
-                        "reg-confirm"
-                      ) as HTMLInputElement;
-                      const oldPInput = document.getElementById(
-                        "old-password"
-                      ) as HTMLInputElement;
-
-                      if (pInput && cInput) {
-                        // 1. ยัดรหัสใหม่ 1234
-                        pInput.value = "1234";
-                        cInput.value = "1234";
-
-                        // 2. ยัดค่า Bypass ลงในช่องรหัสผ่านเดิม (เพื่อให้ Validator ฝั่ง Client มองว่า "ไม่ว่าง")
-                        if (oldPInput) {
-                          oldPInput.value = "BYPASS_OLD_PASSWORD";
-                        }
-
-                        // 3. สั่ง Submit ฟอร์มที่ปุ่มนี้สังกัดอยู่
-                        const form = (e.currentTarget as HTMLButtonElement)
-                          .form;
-                        if (form) {
-                          // ใช้ requestSubmit เพื่อให้มันวิ่งไปหา Action ของ Next.js ทันที
-                          form.requestSubmit();
-                        }
-                      } else {
-                        alert(
-                          "ไม่พบช่องกรอกรหัสผ่านในหน้านี้ กรุณาตรวจสอบ ID ของ Input"
-                        );
-                      }
-                    }
-                  }}
-                  className="text-[10px] px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors font-bold flex items-center gap-1"
-                >
-                  🔄 รีเซ็ตรหัสผ่านและบันทึกทันที
-                </button>
+                type="button"
+                disabled={isResetting} // ป้องกันการกดซ้ำขณะกำลังทำงาน
+                onClick={() => handleDirectReset(editingEmployee.id)} 
+                className={`text-[10px] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors ${
+                  isResetting 
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
+                    : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                }`}
+              >
+                {isResetting ? "⏳ กำลังรีเซ็ต..." : "🔄 รีเซ็ตรหัสผ่านเป็น '1234'"}
+              </button>
               )}
             </h2>
 

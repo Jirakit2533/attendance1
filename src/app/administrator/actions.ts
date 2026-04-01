@@ -865,3 +865,34 @@ export async function logoutAction() {
 
   return { success: true };
 }
+
+/* ==========================================================================
+   ADMIN DIRECT RESET PASSWORD (ทางด่วนรีเซ็ตรหัสผ่าน)
+   ========================================================================== */
+   export async function resetStaffPasswordAction(targetUserId: string) {
+    try {
+      // 1. เช็คสิทธิ์ Admin ก่อน (ใช้ Helper ที่คุณมีอยู่แล้ว)
+      const admin = await getAdminContext();
+      if (!admin) return { success: false, error: "Unauthorized: เซสชันหมดอายุ" };
+  
+      // 2. เข้ารหัสรหัสผ่านใหม่ "1234"
+      const hashedNewPassword = await bcrypt.hash("1234", 10);
+  
+      // 3. เขียนทับลงฐานข้อมูลโดยตรง (อ้างอิงตาม usersTable.id)
+      await db.update(usersTable)
+        .set({ 
+          passwordHash: hashedNewPassword, // ใช้ชื่อฟิลด์ passwordHash ตาม schema ของคุณ
+          updatedAt: new Date(),
+          updateBy: admin.id 
+        })
+        .where(eq(usersTable.id, targetUserId));
+  
+      // 4. Revalidate หน้าจัดการพนักงาน
+      revalidatePath("/administrator");
+  
+      return { success: true, message: "รีเซ็ตรหัสผ่านเป็น '1234' สำเร็จ" };
+    } catch (error) {
+      console.error("Direct Reset Password Error:", error);
+      return { success: false, error: "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล" };
+    }
+  }
