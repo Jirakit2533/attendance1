@@ -550,7 +550,9 @@ export default function LeaderClientPage({
         throw new Error("อัปโหลดรูปภาพไม่สำเร็จ");
 
       const uploadedFile = uploadRes[0];
-      const locationStr = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+      const locationStr = `${pos.coords.latitude.toFixed(
+        6
+      )}, ${pos.coords.longitude.toFixed(6)}`;
 
       // เตรียมข้อมูลสำหรับการส่ง Action (โครงสร้างตาม saveAttendanceAction)
       const attendancePayload = {
@@ -573,7 +575,12 @@ export default function LeaderClientPage({
       } else {
         // ✅ ปรับ Logic: ถ้าไม่มี site_id (กลุ่มทุกไซต์) และได้รับสัญญาณให้ยืนยัน ให้เปิด Pop-up
         // แต่ถ้าเป็นพนักงานประจำไซต์ (มี site_id) จะตกลงไปที่ else เพื่อ alert error ทันที
-        if (!userProfile.site_id && (result.OffsiteCheckInConfirm || result.OffsiteCheckOutConfirm || result.offsite)) {
+        if (
+          !userProfile.site_id &&
+          (result.OffsiteCheckInConfirm ||
+            result.OffsiteCheckOutConfirm ||
+            result.offsite)
+        ) {
           setPendingData({
             ...attendancePayload,
             siteName: result.siteName,
@@ -945,7 +952,7 @@ export default function LeaderClientPage({
                       <tr>
                         <th className="p-4 text-left">วันที่</th>
                         <th className="p-4 text-left">รอบเข้างาน</th>
-                        <th className="p-4 text-left">สถานะการเข้างาน</th>
+                        <th className="p-4 text-left">สถานะเวลา เข้า-ออก</th>
                         <th className="p-4 text-left">เวลาเข้า / รูปถ่าย</th>
                         <th className="p-4 text-left">เวลาออก / รูปถ่าย</th>
                         <th className="p-4 text-center">พื้นที่ปฏิบัติงาน</th>
@@ -1009,23 +1016,34 @@ export default function LeaderClientPage({
                               </td>
 
                               {/* สถานะ */}
-                              <td className="p-4 font-bold whitespace-nowrap">
+                              <td className="p-4 font-bold whitespace-nowrap space-y-1">
+                                {/* --- ส่วนของ "สาย" (เช็คได้ทันทีหลัง Check-in) --- */}
                                 {r.isLate === 1 ? (
-                                  <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
+                                  <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm block w-fit">
                                     ⚠️ สาย
                                   </span>
                                 ) : (
-                                  <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
-                                    ✅ ปกติ
+                                  <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm block w-fit">
+                                    ✅ เข้างานปกติ
                                   </span>
                                 )}
-                                {r.isEarlyExit === 1 ? (
-                                  <span className="text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 shadow-sm text-sm">
+
+                                {/* --- ส่วนของ "ออกก่อนเวลา" (ต้องเช็คก่อนว่าออกหรือยัง) --- */}
+                                {!r.checkOut ? (
+                                  // กรณีที่ 1: ยังไม่ได้ลงชื่อออก
+                                  <span className="text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 shadow-sm text-sm block w-fit italic">
+                                    ⏳ รอลงชื่อออก...
+                                  </span>
+                                ) : r.isEarlyExit === 1 ||
+                                  r.isEarlyExit === "1" ? (
+                                  // กรณีที่ 2: ลงชื่อออกแล้ว และออกก่อนเวลา
+                                  <span className="text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 shadow-sm text-sm block w-fit">
                                     🏃 ออกก่อนเวลา
                                   </span>
                                 ) : (
-                                  <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
-                                    ✅ ปกติ
+                                  // กรณีที่ 3: ลงชื่อออกแล้ว และเวลาครบถ้วน
+                                  <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm block w-fit">
+                                    ✅ ออกงานปกติ
                                   </span>
                                 )}
                               </td>
@@ -1559,7 +1577,7 @@ export default function LeaderClientPage({
                               เวลาออก
                             </th>
                             <th className="py-6 px-6 text-left border-b border-slate-100">
-                              สถานะการ เข้า-ออก งาน
+                              สถานะเวลา เข้า-ออก
                             </th>
                             <th className="py-6 px-6 text-left border-b border-slate-100">
                               สถานะการลงชื่อพิกัด เข้า-ออก
@@ -1639,23 +1657,34 @@ export default function LeaderClientPage({
                                 <td className="py-5 px-6 text-center font-black text-red-600 text-lg italic whitespace-nowrap">
                                   {a.checkOut ? a.checkOut : "--:--"}
                                 </td>
-                                <td className="p-4 font-bold whitespace-nowrap">
+                                <td className="p-4 font-bold whitespace-nowrap flex flex-col gap-1">
+                                  {/* --- ตรวจสอบการ "สาย" (รู้ผลทันทีที่ Check-in) --- */}
                                   {a.isLate === 1 ? (
-                                    <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
+                                    <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm w-fit">
                                       ⚠️ สาย
                                     </span>
                                   ) : (
-                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
-                                      ✅ ปกติ
+                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm w-fit">
+                                      ✅ เข้างานปกติ
                                     </span>
                                   )}
-                                  {a.isEarlyExit === 1 ? (
-                                    <span className="text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 shadow-sm text-sm">
+
+                                  {/* --- ตรวจสอบการ "ออกก่อนเวลา" (ต้องรอ Check-out ก่อนถึงจะตัดสิน) --- */}
+                                  {!a.checkOut ? (
+                                    // กรณีที่ 1: ยังไม่กดออก
+                                    <span className="text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-sm w-fit italic">
+                                      ⏳ กำลังปฏิบัติงาน...
+                                    </span>
+                                  ) : a.isEarlyExit === 1 ||
+                                    a.isEarlyExit === "1" ? (
+                                    // กรณีที่ 2: กดออกแล้ว และออกก่อนเวลาจริง
+                                    <span className="text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 shadow-sm text-sm w-fit">
                                       🏃 ออกก่อนเวลา
                                     </span>
                                   ) : (
-                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
-                                      ✅ ปกติ
+                                    // กรณีที่ 3: กดออกแล้ว และอยู่จนครบเวลา
+                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm w-fit">
+                                      ✅ ออกงานปกติ
                                     </span>
                                   )}
                                 </td>
