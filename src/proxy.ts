@@ -17,29 +17,36 @@ export function middleware(request: NextRequest) {
 
   // --- LOGIC 1: ถ้ายังไม่ได้ Login แต่อยากเข้าหน้า Protected ---
   if (isProtected && !userId) {
+    // แก้ไข: ถ้าไม่มี userId แต่ยังมี userRole ค้าง (Zombie Cookie) ให้สั่งลบทิ้งทันทีแทนการวน Loop
     if (userRole) {
-      return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
+      const response = NextResponse.redirect(new URL('/login', request.url));
+      response.cookies.delete('session_user_id');
+      response.cookies.delete('user_role');
+      return response;
     }
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // --- LOGIC 2: ถ้า Login อยู่แล้ว แต่พยายามจะเข้าหน้า / login ---
+  // --- LOGIC 2: ถ้า Login อยู่แล้ว แต่พยายามจะเข้าหน้า /login ---
   if (userId && pathname === '/login') {
     if (!userRole) {
       return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
     }
 
-    // แก้ไข: เพิ่ม key ตัวพิมพ์เล็กเพื่อให้ตรงกับค่าจาก loginAction
+    // แก้ไข: เพิ่ม key ให้ครอบคลุมทุก format ที่อาจเกิดขึ้นจากฐานข้อมูลเก่า/ใหม่
     const roleRedirects: Record<string, string> = {
       superAdmin: '/superAdmin',
-      superadmin: '/superAdmin', // เพิ่ม
+      superadmin: '/superAdmin',
+      super_Admin: '/superAdmin',
+      super_admin: '/superAdmin',
       admin: '/administrator',
       administrator: '/administrator',
       leader: '/leader',
       employee: '/employee',
     };
 
-    const targetPath = roleRedirects[userRole] || '/employee';
+    // ป้องกันกรณี userRole เป็นตัวพิมพ์ใหญ่/เล็กไม่ตรงกัน
+    const targetPath = roleRedirects[userRole] || roleRedirects[userRole.toLowerCase()] || '/employee';
     return NextResponse.redirect(new URL(targetPath, request.url));
   }
 
@@ -47,27 +54,29 @@ export function middleware(request: NextRequest) {
   let response = NextResponse.next();
 
   if (userId && userRole) {
+    const role = userRole.toLowerCase(); // ใช้ตัวแปรช่วยเช็คเพื่อลดความผิดพลาด
+
     // 1. ถ้าเป็น Leader แต่หลงมาหน้า Employee
-    if (pathname.startsWith('/employee') && userRole === 'leader') {
+    if (pathname.startsWith('/employee') && role === 'leader') {
       return NextResponse.redirect(new URL('/leader', request.url));
     }
 
     // 2. ป้องกันระดับสิทธิ์เด็ดขาด
-    if (pathname.startsWith('/leader') && userRole !== 'leader') {
-      const fallback = userRole === 'employee' ? '/employee' : '/login';
+    if (pathname.startsWith('/leader') && role !== 'leader') {
+      const fallback = role === 'employee' ? '/employee' : '/login';
       return NextResponse.redirect(new URL(fallback, request.url));
     }
 
     if (pathname.startsWith('/administrator')) {
-      // แก้ไข: ให้เช็คได้ทั้ง 'admin' (จาก loginAction) และ 'administrator'
-      if (!(userRole === 'admin' || userRole === 'administrator')) {
+      // เช็คได้ทั้ง 'admin' และ 'administrator'
+      if (!(role === 'admin' || role === 'administrator')) {
         return NextResponse.redirect(new URL('/login', request.url));
       }
     }
 
     if (pathname.startsWith('/superAdmin')) {
-      // แก้ไข: ให้เช็คได้ทั้ง 'superAdmin' และ 'superadmin'
-      if (!(userRole === 'superAdmin' || userRole === 'superadmin' || userRole === 'super_Admin' || userRole === 'super_admin')) {
+      // เช็คทุกความเป็นไปได้ของ Super Admin
+      if (!['superadmin', 'superadmin', 'super_admin', 'super_admin'].includes(role)) {
         return NextResponse.redirect(new URL('/login', request.url));
       }
     }

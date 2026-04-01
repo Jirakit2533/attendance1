@@ -13,9 +13,9 @@ export async function loginAction(formData: FormData) {
   try {
     const cookieStore = await cookies();
 
-    // เคลียร์คุกกี้เก่าออกก่อนเพื่อป้องกัน Session ค้าง
-    cookieStore.delete("session_user_id");
-    cookieStore.delete("user_role");
+    // เคลียร์คุกกี้เก่าออกก่อนเพื่อป้องกัน Session ค้าง (เพิ่มความชัวร์ด้วย maxAge: 0)
+    cookieStore.set("session_user_id", "", { path: "/", maxAge: 0 });
+    cookieStore.set("user_role", "", { path: "/", maxAge: 0 });
 
     // --- 1. ตรวจสอบในตาราง Super Admin ---
     const [superAdmin] = await db
@@ -25,19 +25,22 @@ export async function loginAction(formData: FormData) {
       .limit(1);
 
     if (superAdmin && (await bcrypt.compare(password, superAdmin.passwordHash))) {
-      // ✅ ดึงค่า role จาก DB (ที่คุณเพิ่งเพิ่มเข้าไป เช่น 'superAdmin')
-      const role = superAdmin.role; 
+      // ปรับเป็นตัวพิมพ์เล็กเพื่อให้สอดคล้องกับ Middleware และระบบตรวจสอบใหม่
+      const role = superAdmin.role.toLowerCase(); 
 
       cookieStore.set("session_user_id", superAdmin.id, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         path: "/",
         maxAge: 60 * 60 * 24,
+        sameSite: "lax", // เพิ่มความปลอดภัยในการส่ง Cookie
       });
       cookieStore.set("user_role", role, {
         httpOnly: false, 
+        secure: process.env.NODE_ENV === "production",
         path: "/",
         maxAge: 60 * 60 * 24,
+        sameSite: "lax",
       });
 
       return { 
@@ -56,7 +59,7 @@ export async function loginAction(formData: FormData) {
       .limit(1);
 
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
-      // ปรับเป็นตัวพิมพ์เล็กเพื่อให้เปรียบเทียบกับ redirectMap ง่ายขึ้น
+      // บังคับเป็นตัวพิมพ์เล็กเสมอเพื่อป้องกันความผิดพลาดจากข้อมูลเก่าใน DB
       const role = user.role.toLowerCase(); 
       
       cookieStore.set("session_user_id", user.id, {
@@ -64,17 +67,21 @@ export async function loginAction(formData: FormData) {
         secure: process.env.NODE_ENV === "production",
         maxAge: 60 * 60 * 24,
         path: "/",
+        sameSite: "lax",
       });
 
       cookieStore.set("user_role", role, {
         httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
         maxAge: 60 * 60 * 24,
         path: "/",
+        sameSite: "lax",
       });
 
-      // Mapping เส้นทางตามบทบาท
+      // Mapping เส้นทางตามบทบาท (รองรับทั้งชื่อเก่าและชื่อใหม่)
       const redirectMap: Record<string, string> = {
         superadmin: "/superAdmin",
+        super_admin: "/superAdmin",
         admin: "/administrator",
         administrator: "/administrator",
         leader: "/leader",
@@ -99,10 +106,8 @@ export async function loginAction(formData: FormData) {
 export async function logoutAction() {
   try {
     const cookieStore = await cookies();
-    cookieStore.delete("session_user_id");
-    cookieStore.delete("user_role");
     
-    // เคลียร์ค่าว่างซ้ำอีกครั้งเพื่อความชัวร์ในบาง Browser
+    // เคลียร์ค่าด้วย maxAge: 0 และระบุ Path ให้ชัดเจนเพื่อลบ Cookie ทุกระดับ
     cookieStore.set("session_user_id", "", { path: "/", maxAge: 0 });
     cookieStore.set("user_role", "", { path: "/", maxAge: 0 });
 
