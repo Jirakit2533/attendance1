@@ -28,7 +28,6 @@ import bcrypt from "bcryptjs";
       hour12: false
     });
 
-    // --- Logic กะกลางคืน: ถ้าเช็คอินช่วง 00:00 - 05:00 ให้ลองหากะของ "เมื่อวาน" ---
     const nowH = now.getHours();
     let lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
     if (data.type === "IN" && nowH >= 0 && nowH < 5) {
@@ -38,13 +37,12 @@ import bcrypt from "bcryptjs";
     }
     const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
 
-    // 1. ดึงข้อมูลผู้ใช้, กะงาน, และบริษัท (เพื่อเอา Rounding Option)
     const [userData, shiftData, tempShift] = await Promise.all([
       db.select().from(usersTable).where(eq(usersTable.id, data.userId)).limit(1),
       db.select().from(shiftsTable).where(eq(shiftsTable.userId, data.userId)).limit(1),
       db.select().from(temporaryShiftsTable).where(and(
         eq(temporaryShiftsTable.userId, data.userId),
-        eq(temporaryShiftsTable.targetDate, lookupDate), // ใช้ lookupDate รองรับกะดึก
+        eq(temporaryShiftsTable.targetDate, lookupDate),
         eq(temporaryShiftsTable.status, "approved")
       )).limit(1)
     ]);
@@ -52,7 +50,6 @@ import bcrypt from "bcryptjs";
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-    // ดึง Rounding Option ของบริษัท
     const [companyData] = await db.select({ 
       otRoundingOption: companyTable.otRoundingOption 
     }).from(companyTable).where(eq(companyTable.id, user.companyId || "")).limit(1);
@@ -73,37 +70,26 @@ import bcrypt from "bcryptjs";
     let currentSiteCoords = "";
     let finalSiteId = data.siteId;
     let isOffsiteIn = "0";
-    let OffsiteCheckInConfirm = false;
-    let userCoordinatesIn = "";
 
     if (data.type === "IN") {
       const [uLat, uLon] = data.location.split(',').map(Number);
       
-      const validated = await validateAndGetSite(uLat.toString(), uLon.toString(), data.departmentId, data.siteId);
+      // 🚩 ตรวจสอบพิกัด (ส่ง companyId เพื่อเข้าถึงกฎ 20 เมตร)
+      const validated = await validateAndGetSite(uLat.toString(), uLon.toString(), user.companyId || "", data.siteId);
       
-      let isInside = true;
-      if (data.siteId) {
-        // @ts-ignore
-        isInside = await isInsideBound(uLat, uLon, data.siteId);
-      }
-
       currentSiteName = validated.name;
       currentSiteCoords = validated.coordinates || "";
       finalSiteId = validated.id;
-      
-      // 🚩 ปรับ Logic การตัดสินใจเรื่อง Offsite ให้เด็ดขาดเหมือน API ตัวแรก
-      isOffsiteIn = (!isInside) ? "1" : (validated.isOffsiteIn || "0");
-      OffsiteCheckInConfirm = validated.OffsiteCheckInConfirm || (!isInside);
-      userCoordinatesIn = data.location;
+      isOffsiteIn = validated.isOffsiteIn || "0";
 
-      // 🚩 ดักรอคำยืนยันหากอยู่นอกพื้นที่
-      if (OffsiteCheckInConfirm && !data.isConfirmed) {
+      // 🚩 ดักรอคำยืนยันหากเป็นกลุ่มทุกไซต์ที่อยู่นอกพื้นที่
+      if (validated.OffsiteCheckInConfirm && !data.isConfirmed) {
         return {
           success: false,
           siteName: currentSiteName,
           offsite: true,
           OffsiteCheckInConfirm: true,
-          OffsiteCheckOutConfirm: true // ✅ ส่งชื่อนี้เพื่อให้หน้าบ้านเปิด Popup ตัวเดียวกันได้
+          OffsiteCheckOutConfirm: true 
         };
       }
     } else if (data.siteId) {
@@ -119,30 +105,24 @@ import bcrypt from "bcryptjs";
     }
 
     if (data.type === "IN") {
-      // --- LOGIC กำแพงเวลา (รองรับกะกลางคืน) ---
       let currentWorkingStatus: "normal" | "extra" = "normal";
       if (activeEndTime && activeStartTime) {
         let nowM = toMin(currentTimeStr);
         let endM = toMin(activeEndTime);
         let startM = toMin(activeStartTime);
 
-        if (endM < startM) endM += 1440; // กะกลางคืน
+        if (endM < startM) endM += 1440;
         const adjNowM = (nowM < startM && endM > 1440) ? nowM + 1440 : nowM;
 
-        if (adjNowM > endM) {
-          currentWorkingStatus = "extra";
-        }
+        if (adjNowM > endM) currentWorkingStatus = "extra";
       }
 
       let isLate = 0;
       let lateMinutes = 0;
 
-      // ตรวจสอบสายเฉพาะกะปกติ
       if (currentWorkingStatus === "normal" && activeStartTime) {
         let nowM = toMin(currentTimeStr);
         let startM = toMin(activeStartTime);
-        
-        // กรณีสายหลังเที่ยงคืนสำหรับกะดึก
         if (nowM < 300 && startM > 1000) nowM += 1440;
 
         const diff = nowM - startM;
@@ -171,7 +151,7 @@ import bcrypt from "bcryptjs";
         workingStatusEnum: currentWorkingStatus,
         isLate: isLate,
         isOffsiteIn: isOffsiteIn,
-        isOffsiteInCoordinates: isOffsiteIn === "1" ? userCoordinatesIn : null,
+        isOffsiteInCoordinates: isOffsiteIn === "1" ? data.location : null,
         lateMinutes: lateMinutes,
       }).returning({ id: attendanceTable.id });
 
@@ -221,16 +201,14 @@ import bcrypt from "bcryptjs";
       const currentRecord = lastCheckIn[0];
       const [uLatOut, uLonOut] = data.location.split(',').map(Number);
       
-      // @ts-ignore
+      // 🚩 ตรวจสอบพิกัดขาออก
       const locationValidation = await validateCheckOutLocation(data.userId, uLatOut, uLonOut, currentRecord);
-
       const isOffsiteOutValue = locationValidation.isOffsiteOut;
-      const showPopUp = locationValidation.OffsiteCheckOutConfirm;
 
-      if (showPopUp && !data.isConfirmed) {
+      if (locationValidation.OffsiteCheckOutConfirm && !data.isConfirmed) {
         return {
           success: false,
-          siteName: currentRecord.siteInNameSnapshot || locationValidation.siteName || "",
+          siteName: locationValidation.siteOutName || currentRecord.siteInNameSnapshot || "",
           offsite: true,
           OffsiteCheckInConfirm: false,
           OffsiteCheckOutConfirm: true 
@@ -262,7 +240,6 @@ import bcrypt from "bcryptjs";
           let endTotalMinutes = toMin(finalEndTime);
           const checkInTotalMinutes = toMin(currentRecord.checkIn);
 
-          // Logic ข้ามวันสำหรับกะดึก
           if (endTotalMinutes < checkInTotalMinutes) {
             if (currentTotalMinutes < checkInTotalMinutes) currentTotalMinutes += 1440;
             endTotalMinutes += 1440;
@@ -316,7 +293,7 @@ import bcrypt from "bcryptjs";
 
       return {
         success: true,
-        siteName: currentRecord.siteInNameSnapshot || "",
+        siteName: locationValidation.siteOutName || currentRecord.siteInNameSnapshot || "",
         offsite: isOffsiteOutValue === "1",
         OffsiteCheckOutConfirm: false,
         otTotal: otResult?.totalMinutes || 0

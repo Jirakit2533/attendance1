@@ -2,8 +2,8 @@ import { db } from "@/db/db";
 import { sitesTable, attendanceTable, usersTable } from "@/db/schema"; 
 import { and, eq, sql, ne, isNull, desc } from "drizzle-orm"; 
 
-// รัศมีประมาณ 10 เมตร (รวมกรอบเป็น 20x20 เมตร)
-const OFFSET_10M = 0.00009; 
+// ปรับเป็น 20 เมตร (0.00018) ตามที่กำหนด เพื่อความเข้มงวดของระบบ
+const OFFSET_20M = 0.00018; 
 
 /**
  * 1. ฟังก์ชันสำหรับเช็คว่าพิกัดอยู่ในกรอบหรือไม่
@@ -22,16 +22,15 @@ export const isInsideBound = (
   if (isNaN(uLat) || isNaN(uLon) || isNaN(sLat) || isNaN(sLon)) return false;
 
   return (
-    uLat >= sLat - OFFSET_10M &&
-    uLat <= sLat + OFFSET_10M &&
-    uLon >= sLon - OFFSET_10M &&
-    uLon <= sLon + OFFSET_10M
+    uLat >= sLat - OFFSET_20M &&
+    uLat <= sLat + OFFSET_20M &&
+    uLon >= sLon - OFFSET_20M &&
+    uLon <= sLon + OFFSET_20M
   );
 };
 
 /**
  * 2. ฟังก์ชันหลักสำหรับหา "ไซต์งานผู้ชนะ" (Check-in)
- * ปรับปรุง: พนักงานทุกไซต์หากอยู่นอกเขตจะส่ง Flag เพื่อให้หน้าต่างยืนยันเด้ง
  */
 export const validateAndGetSite = async (
   userLat: number | string,
@@ -44,10 +43,10 @@ export const validateAndGetSite = async (
   let isOffsiteIn = "0";
   let OffsiteCheckInConfirm = false; 
 
-  // --- ขั้นตอนที่ 1: ตรวจสอบสถานะ User ว่าผูกกับ "ทุกไซต์" หรือไม่ ---
+  // --- ขั้นตอนที่ 1: ตรวจสอบสถานะ User (ทุกไซต์?) ---
   if (fixedSiteId && fixedSiteId !== "") {
     const site = await db.query.sitesTable.findFirst({
-      where: eq(sitesTable.id, fixedSiteId),
+      where: and(eq(sitesTable.id, fixedSiteId), eq(sitesTable.companyId, companyId)),
     });
 
     if (site?.name === "ทุกไซต์") {
@@ -55,52 +54,58 @@ export const validateAndGetSite = async (
     }
   }
 
-  // --- ขั้นตอนที่ 2: กวาดหาไซต์จริงจากฐานข้อมูล ---
+  // --- ขั้นตอนที่ 2: กวาดหาไซต์จริงที่พิกัดตรงกัน ---
   const allActualSites = await db.query.sitesTable.findMany({
-    where: ne(sitesTable.name, "ทุกไซต์")
+    where: and(
+      ne(sitesTable.name, "ทุกไซต์"),
+      eq(sitesTable.companyId, companyId)
+    )
   }); 
 
   const actualLocationSite = allActualSites.find(site => {
-    if (!site.coordinates) return false;
+    if (!site.coordinates || !site.coordinates.includes(',')) return false;
     const [sLat, sLon] = site.coordinates.split(',').map(s => s.trim());
     return isInsideBound(userLat, userLon, sLat, sLon);
   });
 
-  // --- ขั้นตอนที่ 3: ตัดสินผู้ชนะตาม Logic ใหม่ ---
+  // --- ขั้นตอนที่ 3: ตัดสินตามเงื่อนไขวินัย ---
   if (isEverySiteUser) {
     if (actualLocationSite) {
       winnerSite = { ...actualLocationSite };
       isOffsiteIn = "0";
       OffsiteCheckInConfirm = false;
     } else {
-      // กลุ่มทุกไซต์ แต่อยู่นอกเขต: ส่ง Flag true เพื่อให้หน้าต่างยืนยันเด้ง
-      winnerSite = { ...allActualSites[0], name: "ไม่ตรงไซต์" }; 
+      // กลุ่มทุกไซต์ แต่อยู่นอกเขต: ใช้ ID ของแถว "ทุกไซต์" เป็นหลัก แต่บันทึกชื่อว่า "ไม่ตรงไซต์"
+      winnerSite = { 
+        id: fixedSiteId, 
+        name: "ไม่ตรงไซต์" 
+      }; 
       isOffsiteIn = "1";
       OffsiteCheckInConfirm = true; 
     }
   } else {
     // กรณีมีไซต์ประจำ (Fixed Site)
     if (fixedSiteId) {
-      const site = await db.query.sitesTable.findFirst({ where: eq(sitesTable.id, fixedSiteId) });
-      if (site && site.coordinates) {
+      const site = await db.query.sitesTable.findFirst({ 
+        where: eq(sitesTable.id, fixedSiteId) 
+      });
+      
+      if (site && site.coordinates && site.coordinates.includes(',')) {
         const [sLat, sLon] = site.coordinates.split(',').map(s => s.trim());
         const isInside = isInsideBound(userLat, userLon, sLat, sLon);
         
         if (!isInside) {
-          throw new Error(`คุณไม่อยู่ในรัศมีไซต์งานที่กำหนด (${site.name}) ไม่สามารถลงชื่อเข้างานได้`);
+          throw new Error(`คุณไม่อยู่ในรัศมีไซต์งานที่กำหนดกรุณาเข้างานในพื้นที่ที่กำหนด`);
         }
 
         isOffsiteIn = "0";
-        winnerSite = { 
-          ...site, 
-          name: site.name 
-        };
+        winnerSite = { ...site };
         OffsiteCheckInConfirm = false;
       }
     }
   }
 
-  if (!winnerSite) throw new Error("ไม่พบข้อมูลไซต์งานที่ถูกต้อง");
+  if (!winnerSite) throw new Error("ไม่พบข้อมูลไซต์งานที่ถูกต้องในระบบ");
 
   return {
     ...winnerSite,
@@ -112,7 +117,6 @@ export const validateAndGetSite = async (
 
 /**
  * 3. ฟังก์ชันสำหรับ Validate พิกัดตอนเช็คเอาท์ (Check-out)
- * ปรับปรุง: พนักงานทุกไซต์หากอยู่นอกเขตจะส่ง Flag เพื่อให้หน้าต่างยืนยันเด้งตอนออก
  */
 export const validateCheckOutLocation = async (
   userId: string,
@@ -125,18 +129,24 @@ export const validateCheckOutLocation = async (
   });
 
   const mainSite = await db.query.sitesTable.findFirst({
-    where: eq(sitesTable.id, userProfile?.site_id || ""),
+    where: and(
+        eq(sitesTable.id, userProfile?.site_id || ""),
+        eq(sitesTable.companyId, userProfile?.companyId || "")
+    ),
   });
   
   const isEverySiteUser = mainSite?.name === "ทุกไซต์";
 
   if (isEverySiteUser) {
     const allActualSites = await db.query.sitesTable.findMany({
-      where: ne(sitesTable.name, "ทุกไซต์")
+      where: and(
+        ne(sitesTable.name, "ทุกไซต์"),
+        eq(sitesTable.companyId, userProfile?.companyId || "")
+      )
     });
 
     const isAtAnySite = allActualSites.some(site => {
-      if (!site.coordinates) return false;
+      if (!site.coordinates || !site.coordinates.includes(',')) return false;
       const [sLat, sLon] = site.coordinates.split(',').map(s => s.trim());
       return isInsideBound(userLat, userLon, sLat, sLon);
     });
@@ -145,25 +155,23 @@ export const validateCheckOutLocation = async (
     return { 
       isOffsiteOut, 
       isOffsiteOutCoordinates: `${userLat}, ${userLon}`, 
-      OffsiteCheckOutConfirm: isOffsiteOut === "1", // ถ้าอยู่นอกเขตให้เด้งยืนยัน
+      OffsiteCheckOutConfirm: isOffsiteOut === "1", 
       siteOutName: isOffsiteOut === "1" ? "ไม่ตรงไซต์" : (currentRecord?.siteInNameSnapshot || "ทุกไซต์")
     };
   }
 
-  if (!currentRecord?.site_id) {
-    return { 
-      isOffsiteOut: "1", 
-      isOffsiteOutCoordinates: `${userLat}, ${userLon}`, 
-      OffsiteCheckOutConfirm: true, // บังคับยืนยันกรณีไม่มีข้อมูลไซต์
-      siteOutName: "ไม่ตรงไซต์"
-    };
+  // กรณีพนักงานประจำไซต์
+  const targetSiteId = currentRecord?.site_id || userProfile?.site_id;
+  
+  if (!targetSiteId) {
+    throw new Error("ไม่พบข้อมูลไซต์งานสำหรับการตรวจสอบพิกัดออกงาน");
   }
 
   const siteInDb = await db.query.sitesTable.findFirst({
-    where: eq(sitesTable.id, currentRecord.site_id),
+    where: eq(sitesTable.id, targetSiteId),
   });
 
-  if (siteInDb && siteInDb.coordinates) {
+  if (siteInDb && siteInDb.coordinates && siteInDb.coordinates.includes(',')) {
     const [sLat, sLon] = siteInDb.coordinates.split(',').map(s => s.trim());
     const isInside = isInsideBound(userLat, userLon, sLat, sLon);
     
@@ -179,5 +187,5 @@ export const validateCheckOutLocation = async (
     };
   }
 
-  throw new Error("ไม่พบข้อมูลพิกัดไซต์งานสำหรับการตรวจสอบ");
+  throw new Error("ข้อมูลพิกัดไซต์งานไม่สมบูรณ์ ไม่สามารถตรวจสอบตำแหน่งได้");
 };

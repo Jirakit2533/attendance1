@@ -17,7 +17,6 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const now = new Date();
     const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false });
     
-    // --- Logic กะกลางคืน: ถ้าเช็คอินช่วง 00:00 - 05:00 ให้ลองหากะของ "เมื่อวาน" ---
     const nowH = now.getHours();
     let lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
     if (nowH >= 0 && nowH < 5) {
@@ -55,7 +54,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
         .from(temporaryShiftsTable)
         .where(and(
           eq(temporaryShiftsTable.userId, userId),
-          eq(temporaryShiftsTable.targetDate, lookupDate), // ใช้ lookupDate เพื่อรองรับการมาสายในกะดึก
+          eq(temporaryShiftsTable.targetDate, lookupDate),
           eq(temporaryShiftsTable.status, "approved")
         ))
         .limit(1)
@@ -70,30 +69,25 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     
     const companyRounding = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
 
+    // 🚩 ตรวจสอบพิกัดด้วย Logic รัศมี 20 เมตร และประเภทพนักงาน
     const validatedSite = await validateAndGetSite(
       lat.toString(), 
       lon.toString(), 
-      user.departmentId || "", 
+      user.companyId || "", 
       user.siteId || ""
     );
 
-    let isInside = true;
-    if (user.siteId) {
-      // @ts-ignore
-      isInside = await isInsideBound(lat, lon, user.siteId);
-    }
-
-    // 🚩 เพิ่ม Logic ดักการยืนยัน: หากอยู่นอกเขตและยังไม่ได้กดยืนยัน ให้ส่งค่ากลับไปถามหน้าบ้านก่อน
-    if ((validatedSite.OffsiteCheckInConfirm || !isInside) && !isConfirmed) {
+    // ถ้าเป็นกลุ่มทุกไซต์ แต่อยู่นอกเขต และยังไม่ได้กดยืนยัน (แสดง Pop-up)
+    if (validatedSite.OffsiteCheckInConfirm && !isConfirmed) {
       return { 
         success: false, 
         offsite: true, 
         siteName: validatedSite.name,
-        OffsiteCheckOutConfirm: true // ✅ ใช้ชื่อตัวแปรนี้ตามที่ตกลง เพื่อให้หน้าบ้านตัวเดิมทำงานได้เลย
+        OffsiteCheckOutConfirm: true 
       };
     }
 
-    const finalIsOffsiteIn = !isInside ? "1" : (validatedSite.isOffsiteIn || "0");
+    const finalIsOffsiteIn = validatedSite.isOffsiteIn || "0";
 
     let deptNameSnapshot = "";
     if (user.departmentId) {
@@ -117,16 +111,9 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       const nowMin = toMin(currentTimeStr);
       let endMin = toMin(activeEndTime);
       let startMin = toMin(activeStartTime);
-
-      // ถ้าเป็นกะกลางคืน (เลิกงานน้อยกว่าเริ่มงาน) ให้บวก 1 วันที่เวลาเลิก
       if (endMin < startMin) endMin += 1440;
-
-      // ถ้าเวลาปัจจุบันน้อยกว่าเวลาเริ่มมาก (เช่น เช็คอิน 00:30 ของกะ 22:00) ให้ถือว่าเป็นวันเดียวกัน
       const adjustedNowMin = (nowMin < startMin && endMin > 1440) ? nowMin + 1440 : nowMin;
-
-      if (adjustedNowMin > endMin) {
-        currentWorkingStatus = "extra";
-      }
+      if (adjustedNowMin > endMin) currentWorkingStatus = "extra";
     }
 
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
@@ -150,13 +137,12 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       imageInId: uploadRes.fileId,
       locationIn: location,
       isOffsiteIn: finalIsOffsiteIn,
-      isOffsiteInCoordinates: location,
+      isOffsiteInCoordinates: finalIsOffsiteIn === "1" ? location : null,
       workingStatusEnum: currentWorkingStatus,
       isLate: currentWorkingStatus === "normal" && activeStartTime ? (toMin(currentTimeStr) > toMin(activeStartTime) ? 1 : 0) : 0,
       lateMinutes: currentWorkingStatus === "normal" && activeStartTime ? (() => {
         let nowM = toMin(currentTimeStr);
         let startM = toMin(activeStartTime);
-        // กรณีเช็คอินสายหลังเที่ยงคืน
         if (nowM < 300 && startM > 1000) nowM += 1440; 
         const diff = nowM - startM;
         return diff > 0 ? diff : 0;
@@ -195,9 +181,10 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     };
   } catch (error: any) {
     console.error("Check-in error:", error);
-    return { success: false, error: "บันทึกเข้างานล้มเหลว: " + error.message };
+    return { success: false, error: error.message };
   }
 }
+
 /* -------------------------------------------------------------------------- */
 /* CHECKOUT ACTION (การออกงาน)                                                 */
 /* -------------------------------------------------------------------------- */
@@ -240,6 +227,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
     const userName = row.userName || "Unknown";
     const companyId = row.companyId || "";
 
+    // 🚩 ตรวจสอบพิกัดขาออก (ห้ามประจำไซต์เช็คเอาท์นอกพื้นที่)
     const locationValidation = await validateCheckOutLocation(userId, lat, lon, currentRecord);
     const isOffsiteOutValue = locationValidation.isOffsiteOut === "1" ? "1" : "0";
 
@@ -247,7 +235,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
       return {
         success: false,
         offsite: true,
-        siteName: locationValidation.siteName,
+        siteName: locationValidation.siteOutName,
         OffsiteCheckOutConfirm: true 
       };
     }
@@ -287,7 +275,6 @@ export async function checkOutAction(userId: string, base64Image: string, locati
       let endTotalMinutes = endH * 60 + endM;
       const checkInTotalMinutes = inH * 60 + inM;
 
-      // Logic ข้ามวันสำหรับกะดึก
       if (endTotalMinutes < checkInTotalMinutes) {
         if (currentTotalMinutes < checkInTotalMinutes) currentTotalMinutes += 1440;
         endTotalMinutes += 1440;
@@ -343,12 +330,12 @@ export async function checkOutAction(userId: string, base64Image: string, locati
     return {
       success: true,
       offsite: isOffsiteOutValue === "1",
-      siteName: currentRecord.siteInNameSnapshot || "",
+      siteName: locationValidation.siteOutName || currentRecord.siteInNameSnapshot || "",
       otTotal: otResult.totalMinutes 
     };
   } catch (error: any) {
     console.error("Check-out error:", error);
-    return { success: false, error: "บันทึกเลิกงานล้มเหลว: " + error.message };
+    return { success: false, error: error.message };
   }
 }
 /* -------------------------------------------------------------------------- */
