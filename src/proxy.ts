@@ -17,9 +17,9 @@ export function middleware(request: NextRequest) {
 
   // --- LOGIC 1: ถ้ายังไม่ได้ Login แต่อยากเข้าหน้า Protected ---
   if (isProtected && !userId) {
-    // แก้ไข: ถ้าไม่มี userId แต่ยังมี userRole ค้าง (Zombie Cookie) ให้สั่งลบทิ้งทันทีแทนการวน Loop
+    // แก้ไข: เพิ่ม parameter error เพื่อให้ UI แสดงแจ้งเตือน และลบคุกกี้ที่ค้างอยู่ทิ้งทันที
     if (userRole) {
-      const response = NextResponse.redirect(new URL('/login', request.url));
+      const response = NextResponse.redirect(new URL('/login?error=session_expired', request.url));
       response.cookies.delete('session_user_id');
       response.cookies.delete('user_role');
       return response;
@@ -33,7 +33,6 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
     }
 
-    // แก้ไข: เพิ่ม key ให้ครอบคลุมทุก format ที่อาจเกิดขึ้นจากฐานข้อมูลเก่า/ใหม่
     const roleRedirects: Record<string, string> = {
       superAdmin: '/superAdmin',
       superadmin: '/superAdmin',
@@ -45,8 +44,9 @@ export function middleware(request: NextRequest) {
       employee: '/employee',
     };
 
-    // ป้องกันกรณี userRole เป็นตัวพิมพ์ใหญ่/เล็กไม่ตรงกัน
-    const targetPath = roleRedirects[userRole] || roleRedirects[userRole.toLowerCase()] || '/employee';
+    // ใช้ .trim() เพื่อป้องกันกรณีมี Space หลุดมาจาก DB เก่า
+    const roleKey = userRole.trim();
+    const targetPath = roleRedirects[roleKey] || roleRedirects[roleKey.toLowerCase()] || '/employee';
     return NextResponse.redirect(new URL(targetPath, request.url));
   }
 
@@ -54,7 +54,8 @@ export function middleware(request: NextRequest) {
   let response = NextResponse.next();
 
   if (userId && userRole) {
-    const role = userRole.toLowerCase(); // ใช้ตัวแปรช่วยเช็คเพื่อลดความผิดพลาด
+    // ใช้ .trim() และ .toLowerCase() เพื่อให้ข้อมูลเก่า-ใหม่เช็คได้ตรงกันเสมอ
+    const role = userRole.trim().toLowerCase();
 
     // 1. ถ้าเป็น Leader แต่หลงมาหน้า Employee
     if (pathname.startsWith('/employee') && role === 'leader') {
@@ -63,21 +64,19 @@ export function middleware(request: NextRequest) {
 
     // 2. ป้องกันระดับสิทธิ์เด็ดขาด
     if (pathname.startsWith('/leader') && role !== 'leader') {
-      const fallback = role === 'employee' ? '/employee' : '/login';
+      const fallback = role === 'employee' ? '/employee' : '/login?error=session_expired';
       return NextResponse.redirect(new URL(fallback, request.url));
     }
 
     if (pathname.startsWith('/administrator')) {
-      // เช็คได้ทั้ง 'admin' และ 'administrator'
-      if (!(role === 'admin' || role === 'administrator')) {
-        return NextResponse.redirect(new URL('/login', request.url));
+      if (!(role === 'admin' || role === 'admin')) {
+        return NextResponse.redirect(new URL('/login?error=session_expired', request.url));
       }
     }
 
     if (pathname.startsWith('/superAdmin')) {
-      // เช็คทุกความเป็นไปได้ของ Super Admin
-      if (!['superadmin', 'superadmin', 'super_admin', 'super_admin'].includes(role)) {
-        return NextResponse.redirect(new URL('/login', request.url));
+      if (!['superadmin', 'super_admin'].includes(role)) {
+        return NextResponse.redirect(new URL('/login?error=session_expired', request.url));
       }
     }
   }

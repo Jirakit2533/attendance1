@@ -457,13 +457,13 @@ export default function AdminClientPage({
   const handleDirectReset = async (targetUserId: string) => {
     // 1. ถามเพื่อยืนยันป้องกันการกดพลาด
     if (!confirm("ยืนยันการรีเซ็ตรหัสผ่านเป็น '1234' ?")) return;
-  
+
     try {
       setIsResetting(true);
-      
+
       // 2. เรียก Server Action ที่เราสร้างไว้
       const result = await resetStaffPasswordAction(targetUserId);
-  
+
       if (result.success) {
         alert("✅ " + result.message);
         // หากมีฟังก์ชันปิด Modal หรือล้างฟอร์ม สามารถใส่ตรงนี้ได้
@@ -633,22 +633,22 @@ export default function AdminClientPage({
      ฟังก์ชันจัดการ ไซต์งาน (Sites)
      ========================================================================== */
 
-     const handleUpdateSite = (site: any) => {
-      setEditingSite(site);
-      const [latVal, lngVal] = (site.coordinates || ",").split(",");
-      
-      // 🚩 ปรับปรุง: ถ้ามีค่าพิกัด ให้ตัดเหลือ 6 หลักทันทีที่ดึงมาแสดงในหน้าแก้ไข
-      const formattedLat = latVal ? parseFloat(latVal).toFixed(6) : "";
-      const formattedLng = lngVal ? parseFloat(lngVal).toFixed(6) : "";
-  
-      setLat(formattedLat);
-      setLng(formattedLng);
-  
-      setIsAllSite(site.name === "ทุกไซต์"); 
-  
-      setShowAddSite(true);
-      setShowManageModal(false);
-    };
+  const handleUpdateSite = (site: any) => {
+    setEditingSite(site);
+    const [latVal, lngVal] = (site.coordinates || ",").split(",");
+
+    // 🚩 ปรับปรุง: ถ้ามีค่าพิกัด ให้ตัดเหลือ 6 หลักทันทีที่ดึงมาแสดงในหน้าแก้ไข
+    const formattedLat = latVal ? parseFloat(latVal).toFixed(6) : "";
+    const formattedLng = lngVal ? parseFloat(lngVal).toFixed(6) : "";
+
+    setLat(formattedLat);
+    setLng(formattedLng);
+
+    setIsAllSite(site.name === "ทุกไซต์");
+
+    setShowAddSite(true);
+    setShowManageModal(false);
+  };
 
   const handleDeleteSite = async (id: string) => {
     // 1. ถามยืนยันก่อนลบ
@@ -738,13 +738,13 @@ export default function AdminClientPage({
   // --- 2. จัดการแผนก (Departments) ---
   const handleEditDept = (dept: any) => {
     // 1. เก็บข้อมูลแผนกที่จะแก้ไขลง State
-    setEditingDept(dept); 
-    
+    setEditingDept(dept);
+
     // 2. ปิดหน้าจัดการระบบ (ManageModal) เพื่อให้เห็นฟอร์มแก้ไขชัดเจน
-    setShowManageModal(false); 
-    
+    setShowManageModal(false);
+
     // 3. เปิดฟอร์มแก้ไข (ใช้อันเดียวกับฟอร์มเพิ่ม)
-    setShowAddDepartment(true); 
+    setShowAddDepartment(true);
   };
 
   const handleDeleteDept = async (deptId: string) => {
@@ -752,7 +752,7 @@ export default function AdminClientPage({
     setIsProcessing(true);
     try {
       const result = await deleteDepartmentAction(deptId);
-      
+
       if (result.success) {
         setAllDepartments((prev) => prev.filter((d) => d.id !== deptId));
         alert("✅ ลบแผนกเรียบร้อยแล้ว");
@@ -843,23 +843,26 @@ export default function AdminClientPage({
 
         setLat(formattedLat);
         setLng(formattedLng);
-        
+
         setIsProcessing(false); // โหลดเสร็จแล้ว
       },
       (error) => {
         // จัดการข้อผิดพลาดให้ละเอียดขึ้นเพื่อให้ User ทราบสาเหตุ
         let errorMsg = "ไม่สามารถดึงพิกัดได้";
-        if (error.code === 1) errorMsg = "กรุณาอนุญาตสิทธิ์การเข้าถึงตำแหน่ง (Location Permission)";
-        else if (error.code === 2) errorMsg = "ไม่สามารถระบุตำแหน่งได้ (สัญญาณ GPS อ่อน)";
-        else if (error.code === 3) errorMsg = "การดึงพิกัดใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง";
-        
+        if (error.code === 1)
+          errorMsg = "กรุณาอนุญาตสิทธิ์การเข้าถึงตำแหน่ง (Location Permission)";
+        else if (error.code === 2)
+          errorMsg = "ไม่สามารถระบุตำแหน่งได้ (สัญญาณ GPS อ่อน)";
+        else if (error.code === 3)
+          errorMsg = "การดึงพิกัดใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง";
+
         alert(errorMsg);
         setIsProcessing(false); // จบการโหลดแม้จะ Error
       },
-      { 
+      {
         enableHighAccuracy: true, // 🎯 สำคัญมาก: เพื่อให้ได้พิกัดจากดาวเทียมที่แม่นยำที่สุด
-        timeout: 15000,           // เพิ่มเวลาเป็น 15 วินาที เผื่อกรณีอยู่ในอาคารที่สัญญาณเข้าถึงยาก
-        maximumAge: 0             // บังคับให้ดึงพิกัดใหม่เสมอ ไม่เอาค่าเก่าที่ค้างอยู่ใน Cache
+        timeout: 15000, // เพิ่มเวลาเป็น 15 วินาที เผื่อกรณีอยู่ในอาคารที่สัญญาณเข้าถึงยาก
+        maximumAge: 0, // บังคับให้ดึงพิกัดใหม่เสมอ ไม่เอาค่าเก่าที่ค้างอยู่ใน Cache
       }
     );
   };
@@ -900,7 +903,9 @@ export default function AdminClientPage({
         if (editingSite) {
           setAllSites((prev: any[]) =>
             prev.map((s) =>
-              s.id === editingSite.id ? { ...s, ...siteData, coordinates: `${cleanLat},${cleanLng}` } : s
+              s.id === editingSite.id
+                ? { ...s, ...siteData, coordinates: `${cleanLat},${cleanLng}` }
+                : s
             )
           );
         } else {
@@ -1717,48 +1722,71 @@ export default function AdminClientPage({
 
                   {/* --- Pagination Controls for Mobile --- */}
                   {filteredEmployees.length > 5 && (
-                    <div className="flex justify-center items-center gap-2 mt-8 mb-12">
-                      {/* ปุ่มย้อนกลับ */}
-                      <button
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage((prev) => prev - 1)}
-                        className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
-                      >
-                        {"<"}
-                      </button>
+  <div className="flex justify-center items-center gap-2 mt-8 mb-12">
+    {/* ปุ่มย้อนกลับ */}
+    <button
+      disabled={currentPage === 1}
+      onClick={() => setCurrentPage((prev) => prev - 1)}
+      className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+    >
+      {"<"}
+    </button>
 
-                      {/* รายการตัวเลขหน้า */}
-                      <div className="flex gap-1">
-                        {[
-                          ...Array(Math.ceil(filteredEmployees.length / 5)),
-                        ].map((_, i) => (
-                          <button
-                            key={i + 1}
-                            onClick={() => setCurrentPage(i + 1)}
-                            className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
-                              currentPage === i + 1
-                                ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
-                                : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
-                            }`}
-                          >
-                            {i + 1}
-                          </button>
-                        ))}
-                      </div>
+    {/* รายการตัวเลขหน้า (Logic ใหม่: ป้องกันตัวเลขยาวเหยียด) */}
+    <div className="flex gap-1">
+      {(() => {
+        const totalPages = Math.ceil(filteredEmployees.length / 5);
+        const pages = [];
+        const range = 1; // จำนวนหน้าที่จะโชว์ข้างๆ หน้าปัจจุบัน
 
-                      {/* ปุ่มไปข้างหน้า */}
-                      <button
-                        disabled={
-                          currentPage ===
-                          Math.ceil(filteredEmployees.length / 5)
-                        }
-                        onClick={() => setCurrentPage((prev) => prev + 1)}
-                        className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
-                      >
-                        {">"}
-                      </button>
-                    </div>
-                  )}
+        for (let i = 1; i <= totalPages; i++) {
+          // เงื่อนไขการโชว์เลขหน้า: หน้าแรก, หน้าสุดท้าย, หน้าปัจจุบัน, และหน้ารอบข้างหน้าปัจจุบัน
+          if (
+            i === 1 ||
+            i === totalPages ||
+            (i >= currentPage - range && i <= currentPage + range)
+          ) {
+            pages.push(
+              <button
+                key={i}
+                onClick={() => setCurrentPage(i)}
+                className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
+                  currentPage === i
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
+                    : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                }`}
+              >
+                {i}
+              </button>
+            );
+          } else if (
+            i === currentPage - range - 1 ||
+            i === currentPage + range + 1
+          ) {
+            // แสดงจุดไข่ปลา (...)
+            pages.push(
+              <span key={i} className="w-10 h-10 flex items-center justify-center text-slate-400 font-bold">
+                ...
+              </span>
+            );
+          }
+        }
+        return pages;
+      })()}
+    </div>
+
+    {/* ปุ่มไปข้างหน้า */}
+    <button
+      disabled={
+        currentPage === Math.ceil(filteredEmployees.length / 5)
+      }
+      onClick={() => setCurrentPage((prev) => prev + 1)}
+      className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
+    >
+      {">"}
+    </button>
+  </div>
+)}
                 </div>
 
                 {/* --- Desktop Table View (แสดงทั้งหมดพร้อม Scroll) --- */}
@@ -2746,11 +2774,14 @@ export default function AdminClientPage({
             <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic flex items-center gap-2">
               {editingDept ? "📝 แก้ไขแผนก" : "💼 เพิ่มแผนก"}
             </h3>
-            <form onSubmit={async (e) => {
-              await handleAddDepartment(e);
-              // เมื่อบันทึกสำเร็จ ให้เด้งกลับไปหน้าจัดการระบบ
-              setShowManageModal(true);
-            }} className="space-y-4">
+            <form
+              onSubmit={async (e) => {
+                await handleAddDepartment(e);
+                // เมื่อบันทึกสำเร็จ ให้เด้งกลับไปหน้าจัดการระบบ
+                setShowManageModal(true);
+              }}
+              className="space-y-4"
+            >
               <input
                 key={editingDept?.id || "new"}
                 name="name"
@@ -2780,8 +2811,8 @@ export default function AdminClientPage({
                   className={`flex-1 py-4 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all ${
                     isProcessing ? "opacity-50" : ""
                   } ${
-                    editingDept 
-                      ? "bg-blue-600 shadow-blue-100" 
+                    editingDept
+                      ? "bg-blue-600 shadow-blue-100"
                       : "bg-amber-600 shadow-amber-100"
                   }`}
                 >
@@ -3358,17 +3389,19 @@ export default function AdminClientPage({
               </span>
               {editingEmployee && (
                 <button
-                type="button"
-                disabled={isResetting} // ป้องกันการกดซ้ำขณะกำลังทำงาน
-                onClick={() => handleDirectReset(editingEmployee.id)} 
-                className={`text-[10px] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors ${
-                  isResetting 
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
-                    : "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                }`}
-              >
-                {isResetting ? "⏳ กำลังรีเซ็ต..." : "🔄 รีเซ็ตรหัสผ่านเป็น '1234'"}
-              </button>
+                  type="button"
+                  disabled={isResetting} // ป้องกันการกดซ้ำขณะกำลังทำงาน
+                  onClick={() => handleDirectReset(editingEmployee.id)}
+                  className={`text-[10px] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors ${
+                    isResetting
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                  }`}
+                >
+                  {isResetting
+                    ? "⏳ กำลังรีเซ็ต..."
+                    : "🔄 รีเซ็ตรหัสผ่านเป็น '1234'"}
+                </button>
               )}
             </h2>
 
@@ -4291,7 +4324,7 @@ export default function AdminClientPage({
                 <span className="bg-slate-900 text-white p-2 rounded-xl not-italic text-sm">
                   ⚙️
                 </span>
-                จัดการระบบ (ไซต์งาน / แผนก / ตำแหน่ง)
+                จัดการระบบ (ไซต์งาน / ตำแหน่ง / แผนก)
               </h3>
               <button
                 onClick={() => setShowManageModal(false)}
@@ -4302,7 +4335,7 @@ export default function AdminClientPage({
             </div>
 
             <div className="p-8 overflow-y-auto space-y-10 custom-scrollbar">
-              {/* --- ตารางที่ 1: ไซต์งาน --- */}
+              {/* --- 1. ไซต์งาน --- */}
               <section>
                 <h4 className="text-sm font-black text-purple-600 mb-4 uppercase tracking-widest flex items-center gap-2">
                   🏢 รายการไซต์งาน ({allSites.length})
@@ -4319,9 +4352,15 @@ export default function AdminClientPage({
                       {allSites.map((site) => (
                         <tr
                           key={site.id}
-                          className="hover:bg-white transition-colors group"
+                          className={`transition-colors group ${
+                            site.name === "ทุกไซต์" 
+                              ? "bg-orange-50 hover:bg-orange-100" 
+                              : "hover:bg-white"
+                          }`}
                         >
-                          <td className="p-4 text-slate-700">{site.name}</td>
+                          <td className={`p-4 ${site.name === "ทุกไซต์" ? "text-orange-700" : "text-slate-700"}`}>
+                            {site.name}
+                          </td>
                           <td className="p-4 flex justify-center gap-2">
                             {site.name !== "ทุกไซต์" && (
                               <button
@@ -4345,48 +4384,7 @@ export default function AdminClientPage({
                 </div>
               </section>
 
-              {/* --- ตารางที่ 2: แผนก (เพิ่มใหม่) --- */}
-              <section>
-                <h4 className="text-sm font-black text-blue-600 mb-4 uppercase tracking-widest flex items-center gap-2">
-                  📊 รายการแผนก ({allDepartments.length})
-                </h4>
-                <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-100">
-                  <table className="w-full text-left text-sm font-bold">
-                    <thead className="bg-slate-100 text-slate-400 text-[10px] uppercase">
-                      <tr>
-                        <th className="p-4">ชื่อแผนก</th>
-                        <th className="p-4 text-center">จัดการ</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {allDepartments.map((dept) => (
-                        <tr
-                          key={dept.id}
-                          className="hover:bg-white transition-colors"
-                        >
-                          <td className="p-4 text-slate-700">{dept.name}</td>
-                          <td className="p-4 flex justify-center gap-2">
-                            <button
-                              onClick={() => handleEditDept(dept)}
-                              className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                            >
-                              📝
-                            </button>
-                            <button
-                              onClick={() => handleDeleteDept(dept.id)}
-                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              🗑️
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              {/* --- ตารางที่ 3: ตำแหน่ง --- */}
+              {/* --- 2. ตำแหน่ง --- */}
               <section>
                 <h4 className="text-sm font-black text-pink-600 mb-4 uppercase tracking-widest flex items-center gap-2">
                   💼 รายการตำแหน่งพนักงาน ({allPositions.length})
@@ -4415,6 +4413,47 @@ export default function AdminClientPage({
                             </button>
                             <button
                               onClick={() => handleDeletePos(pos.id)}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              🗑️
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* --- 3. แผนก --- */}
+              <section>
+                <h4 className="text-sm font-black text-blue-600 mb-4 uppercase tracking-widest flex items-center gap-2">
+                  📊 รายการแผนก ({allDepartments.length})
+                </h4>
+                <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-100">
+                  <table className="w-full text-left text-sm font-bold">
+                    <thead className="bg-slate-100 text-slate-400 text-[10px] uppercase">
+                      <tr>
+                        <th className="p-4">ชื่อแผนก</th>
+                        <th className="p-4 text-center">จัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {allDepartments.map((dept) => (
+                        <tr
+                          key={dept.id}
+                          className="hover:bg-white transition-colors"
+                        >
+                          <td className="p-4 text-slate-700">{dept.name}</td>
+                          <td className="p-4 flex justify-center gap-2">
+                            <button
+                              onClick={() => handleEditDept(dept)}
+                              className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              📝
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDept(dept.id)}
                               className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                             >
                               🗑️

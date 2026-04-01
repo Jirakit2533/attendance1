@@ -170,11 +170,15 @@ export async function saveAdminAction(data: any) {
     const lastName = nameParts.slice(1).join(" ") || "";
     const email = data.email || ""; 
 
+    // กำหนดค่า Role ให้เป็นมาตรฐานเดียวกัน (ตัวเล็กทั้งหมด)
+    const targetRole = "admin"; 
+
     if (data.isEdit && data.id) {
       const updatePayload: any = {
         firstName,
         lastName,
         userName: data.username,
+        role: targetRole, // ✅ บังคับอัปเดต Role ให้ถูกต้องทุกครั้งที่แก้ไข
         companyId: data.companyId,
         updatedAt: new Date(),
       };
@@ -183,8 +187,10 @@ export async function saveAdminAction(data: any) {
         updatePayload.passwordHash = await bcrypt.hash(data.password, 10);
       }
 
+      // อัปเดตตาราง Users
       await db.update(usersTable).set(updatePayload).where(eq(usersTable.id, data.id));
       
+      // อัปเดตตาราง Admins
       await db.update(adminsTable)
         .set({
           company: data.companyId,
@@ -195,6 +201,7 @@ export async function saveAdminAction(data: any) {
         .where(eq(adminsTable.user_id, data.id));
 
     } else {
+      // ตรวจสอบ Username ซ้ำ
       const existingUser = await db.query.usersTable.findFirst({
         where: eq(usersTable.userName, data.username)
       });
@@ -202,12 +209,13 @@ export async function saveAdminAction(data: any) {
 
       const hashedPassword = await bcrypt.hash(data.password || "123456", 10);
 
+      // สร้าง User ใหม่พร้อมระบุ Role ให้ชัดเจน
       const [newUser] = await db.insert(usersTable).values({
         firstName,
         lastName,
         userName: data.username,
         passwordHash: hashedPassword,
-        role: "admin",
+        role: targetRole, // ✅ ใช้ตัวแปรเดียวกัน
         companyId: data.companyId,
       }).returning({ id: usersTable.id });
 
