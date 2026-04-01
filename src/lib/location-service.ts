@@ -14,10 +14,11 @@ export const isInsideBound = (
   siteLat: number | string, 
   siteLon: number | string
 ) => {
-  const uLat = typeof userLat === "string" ? parseFloat(userLat.trim()) : userLat;
-  const uLon = typeof userLon === "string" ? parseFloat(userLon.trim()) : userLon;
-  const sLat = typeof siteLat === "string" ? parseFloat(siteLat.trim()) : siteLat;
-  const sLon = typeof siteLon === "string" ? parseFloat(siteLon.trim()) : siteLon;
+  // ทำความสะอาดพิกัดฝั่ง User และ Site ให้เป็น 6 หลักก่อนคำนวณ
+  const uLat = typeof userLat === "string" ? parseFloat(parseFloat(userLat.trim()).toFixed(6)) : parseFloat(userLat.toFixed(6));
+  const uLon = typeof userLon === "string" ? parseFloat(parseFloat(userLon.trim()).toFixed(6)) : parseFloat(userLon.toFixed(6));
+  const sLat = typeof siteLat === "string" ? parseFloat(parseFloat(siteLat.trim()).toFixed(6)) : parseFloat(siteLat.toFixed(6));
+  const sLon = typeof siteLon === "string" ? parseFloat(parseFloat(siteLon.trim()).toFixed(6)) : parseFloat(siteLon.toFixed(6));
 
   if (isNaN(uLat) || isNaN(uLon) || isNaN(sLat) || isNaN(sLon)) return false;
 
@@ -75,7 +76,6 @@ export const validateAndGetSite = async (
       isOffsiteIn = "0";
       OffsiteCheckInConfirm = false;
     } else {
-      // กลุ่มทุกไซต์ แต่อยู่นอกเขต: ใช้ ID ของแถว "ทุกไซต์" เป็นหลัก แต่บันทึกชื่อว่า "ไม่ตรงไซต์"
       winnerSite = { 
         id: fixedSiteId, 
         name: "ไม่ตรงไซต์" 
@@ -84,7 +84,6 @@ export const validateAndGetSite = async (
       OffsiteCheckInConfirm = true; 
     }
   } else {
-    // กรณีมีไซต์ประจำ (Fixed Site)
     if (fixedSiteId) {
       const site = await db.query.sitesTable.findFirst({ 
         where: eq(sitesTable.id, fixedSiteId) 
@@ -107,11 +106,15 @@ export const validateAndGetSite = async (
 
   if (!winnerSite) throw new Error("ไม่พบข้อมูลไซต์งานที่ถูกต้องในระบบ");
 
+  // ล้างค่าพิกัดที่จะบันทึกลงฐานข้อมูลให้เป็น 6 หลัก
+  const cleanUserLat = typeof userLat === "string" ? parseFloat(userLat).toFixed(6) : userLat.toFixed(6);
+  const cleanUserLon = typeof userLon === "string" ? parseFloat(userLon).toFixed(6) : userLon.toFixed(6);
+
   return {
     ...winnerSite,
     isOffsiteIn,
     OffsiteCheckInConfirm,
-    userCoordinates: `${userLat}, ${userLon}`
+    userCoordinates: `${cleanUserLat}, ${cleanUserLon}`
   };
 };
 
@@ -137,6 +140,10 @@ export const validateCheckOutLocation = async (
   
   const isEverySiteUser = mainSite?.name === "ทุกไซต์";
 
+  // ล้างค่าพิกัดผู้ใช้ให้เป็น 6 หลัก
+  const cleanUserLat = typeof userLat === "string" ? parseFloat(userLat).toFixed(6) : userLat.toFixed(6);
+  const cleanUserLon = typeof userLon === "string" ? parseFloat(userLon).toFixed(6) : userLon.toFixed(6);
+
   if (isEverySiteUser) {
     const allActualSites = await db.query.sitesTable.findMany({
       where: and(
@@ -154,13 +161,12 @@ export const validateCheckOutLocation = async (
     const isOffsiteOut = isAtAnySite ? "0" : "1";
     return { 
       isOffsiteOut, 
-      isOffsiteOutCoordinates: `${userLat}, ${userLon}`, 
+      isOffsiteOutCoordinates: `${cleanUserLat}, ${cleanUserLon}`, 
       OffsiteCheckOutConfirm: isOffsiteOut === "1", 
       siteOutName: isOffsiteOut === "1" ? "ไม่ตรงไซต์" : (currentRecord?.siteInNameSnapshot || "ทุกไซต์")
     };
   }
 
-  // กรณีพนักงานประจำไซต์
   const targetSiteId = currentRecord?.site_id || userProfile?.site_id;
   
   if (!targetSiteId) {
@@ -181,7 +187,7 @@ export const validateCheckOutLocation = async (
 
     return { 
       isOffsiteOut: "0", 
-      isOffsiteOutCoordinates: `${userLat}, ${userLon}`, 
+      isOffsiteOutCoordinates: `${cleanUserLat}, ${cleanUserLon}`, 
       OffsiteCheckOutConfirm: false,
       siteOutName: currentRecord?.siteInNameSnapshot || siteInDb.name
     };
