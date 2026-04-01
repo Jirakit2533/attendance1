@@ -607,17 +607,22 @@ export default function AdminClientPage({
      ฟังก์ชันจัดการ ไซต์งาน (Sites)
      ========================================================================== */
 
-  const handleUpdateSite = (site: any) => {
-    setEditingSite(site);
-    const [latVal, lngVal] = (site.coordinates || ",").split(",");
-    setLat(latVal || "");
-    setLng(lngVal || "");
-
-    setIsAllSite(site.name === "ทุกไซต์"); // ถ้าชื่อคือ 'ทุกไซต์' ให้ติ๊ก Checkbox isAllSite ไว้ด้วย
-
-    setShowAddSite(true);
-    setShowManageModal(false);
-  };
+     const handleUpdateSite = (site: any) => {
+      setEditingSite(site);
+      const [latVal, lngVal] = (site.coordinates || ",").split(",");
+      
+      // 🚩 ปรับปรุง: ถ้ามีค่าพิกัด ให้ตัดเหลือ 6 หลักทันทีที่ดึงมาแสดงในหน้าแก้ไข
+      const formattedLat = latVal ? parseFloat(latVal).toFixed(6) : "";
+      const formattedLng = lngVal ? parseFloat(lngVal).toFixed(6) : "";
+  
+      setLat(formattedLat);
+      setLng(formattedLng);
+  
+      setIsAllSite(site.name === "ทุกไซต์"); 
+  
+      setShowAddSite(true);
+      setShowManageModal(false);
+    };
 
   const handleDeleteSite = async (id: string) => {
     // 1. ถามยืนยันก่อนลบ
@@ -805,15 +810,31 @@ export default function AdminClientPage({
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setLat(position.coords.latitude.toString());
-        setLng(position.coords.longitude.toString());
+        // 🚩 ปรับปรุง: ตัดทศนิยมเหลือ 6 ตำแหน่ง (มาตรฐาน 10-11 ซม.) ทันทีที่ดึงค่าได้
+        // การใช้ toFixed จะคืนค่าเป็น String ซึ่งเหมาะกับ setLat/setLng ที่คุณใช้พอดี
+        const formattedLat = position.coords.latitude.toFixed(6);
+        const formattedLng = position.coords.longitude.toFixed(6);
+
+        setLat(formattedLat);
+        setLng(formattedLng);
+        
         setIsProcessing(false); // โหลดเสร็จแล้ว
       },
       (error) => {
-        alert("ไม่สามารถดึงพิกัดได้ กรุณาเปิด GPS หรืออนุญาตสิทธิ์");
+        // จัดการข้อผิดพลาดให้ละเอียดขึ้นเพื่อให้ User ทราบสาเหตุ
+        let errorMsg = "ไม่สามารถดึงพิกัดได้";
+        if (error.code === 1) errorMsg = "กรุณาอนุญาตสิทธิ์การเข้าถึงตำแหน่ง (Location Permission)";
+        else if (error.code === 2) errorMsg = "ไม่สามารถระบุตำแหน่งได้ (สัญญาณ GPS อ่อน)";
+        else if (error.code === 3) errorMsg = "การดึงพิกัดใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง";
+        
+        alert(errorMsg);
         setIsProcessing(false); // จบการโหลดแม้จะ Error
       },
-      { enableHighAccuracy: true, timeout: 10000 } // เพิ่มความแม่นยำและ Timeout
+      { 
+        enableHighAccuracy: true, // 🎯 สำคัญมาก: เพื่อให้ได้พิกัดจากดาวเทียมที่แม่นยำที่สุด
+        timeout: 15000,           // เพิ่มเวลาเป็น 15 วินาที เผื่อกรณีอยู่ในอาคารที่สัญญาณเข้าถึงยาก
+        maximumAge: 0             // บังคับให้ดึงพิกัดใหม่เสมอ ไม่เอาค่าเก่าที่ค้างอยู่ใน Cache
+      }
     );
   };
   const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -828,13 +849,18 @@ export default function AdminClientPage({
         ? "ทุกไซต์"
         : (formData.get("siteName") as string);
 
+      // 🚩 ปรับปรุง: ตัดทศนิยมเหลือ 6 ตำแหน่งก่อนส่งออกไป Action
+      // ตรวจสอบก่อนว่ามีค่า lat, lng หรือไม่ (ป้องกันกรณี String ว่าง)
+      const cleanLat = lat ? parseFloat(lat).toFixed(6) : "";
+      const cleanLng = lng ? parseFloat(lng).toFixed(6) : "";
+
       const siteData = {
         name: siteNameValue,
         address: isAllSiteChecked
           ? "ไม่ประจำไซต์"
           : (formData.get("address") as string),
-        lat: isAllSiteChecked ? "" : lat,
-        lng: isAllSiteChecked ? "" : lng,
+        lat: isAllSiteChecked ? "" : cleanLat,
+        lng: isAllSiteChecked ? "" : cleanLng,
       };
 
       let res;
@@ -845,24 +871,20 @@ export default function AdminClientPage({
       }
 
       if (res.success) {
-        // --- ส่วนที่เพิ่มเข้าไปเพื่อให้อัปเดต UI ทันที ---
         if (editingSite) {
-          // กรณีแก้ไข: หาตัวเดิมใน list แล้วเปลี่ยนค่าใหม่ลงไป
           setAllSites((prev: any[]) =>
             prev.map((s) =>
-              s.id === editingSite.id ? { ...s, ...siteData } : s
+              s.id === editingSite.id ? { ...s, ...siteData, coordinates: `${cleanLat},${cleanLng}` } : s
             )
           );
         } else {
-          // กรณีเพิ่มใหม่: เอาข้อมูลใหม่ที่ได้จาก Server (res.data หรือ res.id) มาต่อท้าย list
-          // หมายเหตุ: res.id คือ ID ที่ Server เจนให้ ถ้าไม่มีให้ใช้ crypto.randomUUID() ไปก่อน
           const newSite = {
             id: res.id || res.data?.id || crypto.randomUUID(),
             ...siteData,
+            coordinates: `${cleanLat},${cleanLng}`, // เก็บรูปแบบเดียวกับ DB เพื่อความเสถียรของ UI
           };
           setAllSites((prev: any[]) => [...prev, newSite]);
         }
-        // ------------------------------------------
 
         setShowAddSite(false);
         setEditingSite(null);
