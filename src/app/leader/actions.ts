@@ -20,14 +20,14 @@ import bcrypt from "bcryptjs";
   departmentId: string;
   siteId: string | null;
   isConfirmed?: boolean;
-}) {
+ }) {
   try {
     const now = new Date();
     const currentTimeStr = now.toLocaleTimeString('en-GB', {
       timeZone: 'Asia/Bangkok',
       hour12: false
     });
-
+ 
     const nowH = now.getHours();
     let lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
     if (data.type === "IN" && nowH >= 0 && nowH < 5) {
@@ -36,7 +36,7 @@ import bcrypt from "bcryptjs";
       lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(yesterday);
     }
     const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
-
+ 
     const [userData, shiftData, tempShift] = await Promise.all([
       db.select().from(usersTable).where(eq(usersTable.id, data.userId)).limit(1),
       db.select().from(shiftsTable).where(eq(shiftsTable.userId, data.userId)).limit(1),
@@ -46,42 +46,47 @@ import bcrypt from "bcryptjs";
         eq(temporaryShiftsTable.status, "approved")
       )).limit(1)
     ]);
-
+ 
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
-
+ 
     const [companyData] = await db.select({ 
       otRoundingOption: companyTable.otRoundingOption 
     }).from(companyTable).where(eq(companyTable.id, user.companyId || "")).limit(1);
     
     const companyRounding = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
-
+ 
     const shift = shiftData[0];
     const activeStartTime = tempShift[0]?.startTime || shift?.startTime || null;
     const activeEndTime = tempShift[0]?.endTime || shift?.endTime || null;
-
+ 
     const toMin = (t: string | null) => {
       if (!t) return 0;
       const [h, m] = t.split(':').map(Number);
       return (h * 60) + (m || 0);
     };
-
+ 
     let currentSiteName = "";
     let currentSiteCoords = "";
     let finalSiteId = data.siteId;
     let isOffsiteIn = "0";
-
+ 
     if (data.type === "IN") {
       const [uLat, uLon] = data.location.split(',').map(Number);
       
-      // 🚩 ตรวจสอบพิกัด (ส่ง companyId เพื่อเข้าถึงกฎ 20 เมตร)
-      const validated = await validateAndGetSite(uLat.toString(), uLon.toString(), user.companyId || "", data.siteId);
+      // 🚩 แก้ไข: ใช้ user.site_id จาก DB เพื่อความแม่นยำสำหรับพนักงานประจำไซต์
+      const validated = await validateAndGetSite(
+        uLat.toString(), 
+        uLon.toString(), 
+        user.companyId || "", 
+        user.site_id || "" 
+      );
       
       currentSiteName = validated.name;
       currentSiteCoords = validated.coordinates || "";
       finalSiteId = validated.id;
       isOffsiteIn = validated.isOffsiteIn || "0";
-
+ 
       // 🚩 ดักรอคำยืนยันหากเป็นกลุ่มทุกไซต์ที่อยู่นอกพื้นที่
       if (validated.OffsiteCheckInConfirm && !data.isConfirmed) {
         return {
@@ -97,41 +102,41 @@ import bcrypt from "bcryptjs";
       currentSiteName = site?.name || "";
       currentSiteCoords = site?.coordinates || "";
     }
-
+ 
     let deptNameSnapshot = "";
     if (data.departmentId) {
       const [dept] = await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, data.departmentId)).limit(1);
       deptNameSnapshot = dept?.name || "";
     }
-
+ 
     if (data.type === "IN") {
       let currentWorkingStatus: "normal" | "extra" = "normal";
       if (activeEndTime && activeStartTime) {
         let nowM = toMin(currentTimeStr);
         let endM = toMin(activeEndTime);
         let startM = toMin(activeStartTime);
-
+ 
         if (endM < startM) endM += 1440;
         const adjNowM = (nowM < startM && endM > 1440) ? nowM + 1440 : nowM;
-
+ 
         if (adjNowM > endM) currentWorkingStatus = "extra";
       }
-
+ 
       let isLate = 0;
       let lateMinutes = 0;
-
+ 
       if (currentWorkingStatus === "normal" && activeStartTime) {
         let nowM = toMin(currentTimeStr);
         let startM = toMin(activeStartTime);
         if (nowM < 300 && startM > 1000) nowM += 1440;
-
+ 
         const diff = nowM - startM;
         if (diff > 0) {
           isLate = 1;
           lateMinutes = diff;
         }
       }
-
+ 
       const [insertedAttendance] = await db.insert(attendanceTable).values({
         user_id: data.userId,
         department_id: data.departmentId,
@@ -154,7 +159,7 @@ import bcrypt from "bcryptjs";
         isOffsiteInCoordinates: isOffsiteIn === "1" ? data.location : null,
         lateMinutes: lateMinutes,
       }).returning({ id: attendanceTable.id });
-
+ 
       if (insertedAttendance) {
         const otResult = calculateOvertime({
           checkIn: currentTimeStr,
@@ -163,7 +168,7 @@ import bcrypt from "bcryptjs";
           shiftEnd: activeEndTime,
           roundingMode: companyRounding,
         });
-
+ 
         await db.insert(overtimeTable).values({
           userId: data.userId,
           userName: user?.firstName || "Unknown",
@@ -176,35 +181,35 @@ import bcrypt from "bcryptjs";
           status: "pending"
         });
       }
-
+ 
       revalidatePath("/", "layout");
       revalidatePath("/leader");
       revalidatePath("/employee");
       return { success: true, siteName: currentSiteName, offsite: isOffsiteIn === "1" };
-
+ 
     } else {
       // --- ขาออก (Check-out) ---
       let isEarlyExit = 0;
       let earlyExitMinutes = 0;
-
+ 
       const lastCheckIn = await db
         .select()
         .from(attendanceTable)
         .where(and(eq(attendanceTable.user_id, data.userId), isNull(attendanceTable.checkOut)))
         .orderBy(desc(attendanceTable.createdAt))
         .limit(1);
-
+ 
       if (lastCheckIn.length === 0) {
         return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ค้างอยู่" };
       }
-
+ 
       const currentRecord = lastCheckIn[0];
       const [uLatOut, uLonOut] = data.location.split(',').map(Number);
       
       // 🚩 ตรวจสอบพิกัดขาออก
       const locationValidation = await validateCheckOutLocation(data.userId, uLatOut, uLonOut, currentRecord);
       const isOffsiteOutValue = locationValidation.isOffsiteOut;
-
+ 
       if (locationValidation.OffsiteCheckOutConfirm && !data.isConfirmed) {
         return {
           success: false,
@@ -214,9 +219,9 @@ import bcrypt from "bcryptjs";
           OffsiteCheckOutConfirm: true 
         };
       }
-
+ 
       const finalEndTime = currentRecord.shiftEndTimeSnapshot;
-
+ 
       let otResult;
       if (currentRecord.workingStatusEnum === "extra") {
         otResult = calculateOvertime({
@@ -234,24 +239,24 @@ import bcrypt from "bcryptjs";
           shiftEnd: currentRecord.shiftEndTimeSnapshot,
           roundingMode: companyRounding,
         });
-
+ 
         if (finalEndTime) {
           let currentTotalMinutes = toMin(currentTimeStr);
           let endTotalMinutes = toMin(finalEndTime);
           const checkInTotalMinutes = toMin(currentRecord.checkIn);
-
+ 
           if (endTotalMinutes < checkInTotalMinutes) {
             if (currentTotalMinutes < checkInTotalMinutes) currentTotalMinutes += 1440;
             endTotalMinutes += 1440;
           }
-
+ 
           if (currentTotalMinutes < endTotalMinutes) {
             isEarlyExit = 1;
             earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
           }
         }
       }
-
+ 
       await db.update(attendanceTable)
         .set({
           checkOut: currentTimeStr,
@@ -264,7 +269,7 @@ import bcrypt from "bcryptjs";
           isOffsiteOutCoordinates: isOffsiteOutValue === "1" ? data.location : null,
         })
         .where(eq(attendanceTable.id, currentRecord.id));
-
+ 
       await db.insert(overtimeTable).values({
         userId: data.userId,
         userName: user?.firstName || "Unknown",
@@ -286,11 +291,11 @@ import bcrypt from "bcryptjs";
           otRoundingOption: companyRounding
         }
       });
-
+ 
       revalidatePath("/", "layout");
       revalidatePath("/leader");
       revalidatePath("/employee");
-
+ 
       return {
         success: true,
         siteName: locationValidation.siteOutName || currentRecord.siteInNameSnapshot || "",
@@ -306,7 +311,7 @@ import bcrypt from "bcryptjs";
       error: error.message || "เกิดข้อผิดพลาดภายในระบบ" 
     };
   }
-}
+ }
 /**------------------------------------------------------------------------------------------
  * 2. ส่งคำขอลางาน
 --------------------------------------------------------------------------------------------- */
