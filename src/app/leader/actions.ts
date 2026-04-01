@@ -206,8 +206,15 @@ import bcrypt from "bcryptjs";
       const currentRecord = lastCheckIn[0];
       const [uLatOut, uLonOut] = data.location.split(',').map(Number);
       
-      // 🚩 ตรวจสอบพิกัดขาออก
-      const locationValidation = await validateCheckOutLocation(data.userId, uLatOut, uLonOut, currentRecord);
+      // 🚩 แก้ไข: ส่ง user.site_id จาก DB เข้าไปเพื่อให้ validateCheckOutLocation ตรวจสอบพิกัดได้ถูกต้อง
+      const locationValidation = await validateCheckOutLocation(
+        data.userId, 
+        uLatOut, 
+        uLonOut, 
+        currentRecord, 
+        user.site_id || "" 
+      );
+      
       const isOffsiteOutValue = locationValidation.isOffsiteOut;
  
       if (locationValidation.OffsiteCheckOutConfirm && !data.isConfirmed) {
