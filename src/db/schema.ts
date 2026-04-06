@@ -125,14 +125,14 @@ export const overtimeRequestsTable = pgTable("overtime_requests", {
   requestedWorkers: jsonb("requested_workers").$type<string[]>().default([]),
   reason: text("reason").notNull(),
   remarks: text("remarks"),
-  status: leaveStatusEnum("status").default("pending").notNull(),
+  status: otStatusEnum("status").default("pending").notNull(),
   approvedAt: timestamp("approved_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
   approvedBy: uuid("approved_by").references(() => usersTable.id),
   rejectedAt: timestamp("rejected_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
   rejectedBy: uuid("rejected_by").references(() => usersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
   createdBy: uuid("created_by").references(() => usersTable.id),
-  deletedAt: timestamp("deleted_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   deletedBy: uuid("deleted_by").references(() => usersTable.id),
 })
 

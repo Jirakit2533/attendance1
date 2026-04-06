@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import * as XLSX from "xlsx";
 import {
@@ -90,6 +91,7 @@ interface AdminClientPageProps {
   initialCompanyData?: any;
   hasMultiSiteActive?: boolean;
   initialOvertimeRequests?: OvertimeRequest[];
+  currentAdminId?: string;
 }
 
 export default function AdminClientPage({
@@ -103,8 +105,10 @@ export default function AdminClientPage({
   initialCompanyData,
   hasMultiSiteActive,
   initialOvertimeRequests = [],
-}) {
+  currentAdminId,
+}: AdminClientPageProps) {
   // --- STATE MANAGEMENT ---
+  console.log("Check Data:", initialOvertimeRequests);
   const [employees, setEmployees] = useState(initialEmployees || []);
   const [attendance, setAttendance] = useState(initialAttendance || []);
   const [leaves, setLeaves] = useState(initialLeaves || []);
@@ -141,6 +145,7 @@ export default function AdminClientPage({
   const [searchEmp, setSearchEmp] = useState("");
   const [searchAtt, setSearchAtt] = useState("");
   const [searchLeave, setSearchLeave] = useState("");
+  const router = useRouter();
 
   const [showAdminEdit, setShowAdminEdit] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -164,9 +169,7 @@ export default function AdminClientPage({
   const [showReport, setShowReport] = useState(false); // เปิด/ปิดหน้าแสดงตัวอย่างรายงาน
   const [reportData, setReportData] = useState<any[]>([]); // ถังเก็บข้อมูลที่จะโชว์ในตารางรายงาน
 
-  const [overtimeData, setOvertimeData] = useState<OvertimeRequest[]>(
-    initialOvertimeRequests
-  );
+  const [overtimeReques, setOvertimeReques] = useState<OvertimeRequest[]>(initialOvertimeRequests);
   const [isUpdating, setIsUpdating] = useState(false);
   const [otRemarks, setOtRemarks] = useState<Record<string, string>>({});
 
@@ -493,62 +496,90 @@ export default function AdminClientPage({
 
   // 2. ฟังก์ชันอัปเดตสถานะ OT
   // ฟังก์ชันช่วยดึง Remark ปัจจุบัน (ดูจากที่พิมพ์ค้างไว้ หรือถ้าไม่มีให้ดูจาก Data เดิม)
-  const getEffectiveRemark = (id: string) => {
-    return otRemarks[id] !== undefined
-      ? otRemarks[id]
-      : overtimeData.find((ot) => ot.id === id)?.remark || "";
-  };
-
   const handleOTRemarkChange = (id: string, value: string) => {
     setOtRemarks((prev) => ({ ...prev, [id]: value }));
   };
 
-  // --- 3. ฟังก์ชันอัปเดตสถานะ OT (เวอร์ชันปรับปรุง) ---
-  const updateOvertimeStatus = async (
-    id: string,
-    newStatus: "pending" | "approved" | "rejected"
-  ) => {
-    // ป้องกันการกดซ้ำขณะกำลังอัปเดต
-    if (isUpdating) return;
-
+  const handleApproveOT = async (otId: string) => {
+    if (!confirm("ยืนยันการอนุมัติ OT นี้ใช่หรือไม่?")) return;
+    setIsUpdating(true); 
     try {
-      setIsUpdating(true);
-      const currentRemark = getEffectiveRemark(id);
+      const remark = otRemarks[otId] || "";
+      // 🚩 เพิ่ม currentAdminId เป็นตัวที่ 4 ตรงนี้
+      const res = await updateOvertimeStatusAction(otId, "approved", remark, currentAdminId);
 
-      const result = await updateOvertimeStatusAction(
-        id,
-        newStatus,
-        currentRemark
-      );
-
-      if (result.success) {
-        // อัปเดตข้อมูลในตารางทันที
-        setOvertimeData((prev) =>
+      if (res.success) {
+        setOvertimeReques((prev) =>
           prev.map((item) =>
-            item.id === id
-              ? { ...item, status: newStatus, remark: currentRemark }
+            item.id === otId 
+              ? { ...item, status: "approved", remarks: remark, approvedBy: currentAdminId } 
               : item
           )
         );
-
-        // ล้าง Remark ที่พิมพ์ค้างไว้เมื่อสถานะเปลี่ยน (ยกเว้นเปลี่ยนกลับเป็น Pending เพื่อให้แก้ไขต่อได้)
-        if (newStatus !== "pending") {
-          setOtRemarks((prev) => {
-            const newState = { ...prev };
-            delete newState[id];
-            return newState;
-          });
-        }
+        router.refresh();
       } else {
-        alert(result.error || "เกิดข้อผิดพลาดในการอัปเดต");
+        alert(res.error || "เกิดข้อผิดพลาด");
       }
     } catch (error) {
-      console.error("OT Update Error:", error);
-      alert("ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง");
+      console.error("Debug Error:", error);
+      alert("ระบบขัดข้อง กรุณาลองใหม่");
     } finally {
       setIsUpdating(false);
     }
   };
+
+  const handleRejectOT = async (otId: string) => {
+    if (!confirm("ยืนยันการปฏิเสธ OT นี้ใช่หรือไม่?")) return;
+    setIsUpdating(true);
+    try {
+      const remark = otRemarks[otId] || "";
+      // 🚩 เพิ่ม currentAdminId เป็นตัวที่ 4 ตรงนี้
+      const res = await updateOvertimeStatusAction(otId, "rejected", remark, currentAdminId);
+
+      if (res.success) {
+        setOvertimeReques((prev) =>
+          prev.map((item) =>
+            item.id === otId 
+              ? { ...item, status: "rejected", remarks: remark, rejectedBy: currentAdminId } 
+              : item
+          )
+        );
+        router.refresh();
+      } else {
+        alert(res.error || "เกิดข้อผิดพลาด");
+      }
+    } catch (error) {
+      console.error("Debug Error:", error);
+      alert("ระบบขัดข้อง กรุณาลองใหม่");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const resetOTStatus = async (otId: string) => {
+    if (!confirm("ต้องการดึงรายการกลับมาเป็นรออนุมัติใช่หรือไม่?")) return;
+    setIsUpdating(true);
+    try {
+      const res = await updateOvertimeStatusAction(otId, "pending", "");
+
+      if (res.success) {
+        setOvertimeReques((prev) =>
+          prev.map((item) =>
+            item.id === otId ? { ...item, status: "pending", remark: "" } : item
+          )
+        );
+        router.refresh();
+      } else {
+        alert(res.error || "ไม่สามารถแก้ไขสถานะได้");
+      }
+    } catch (error) {
+      console.error("Debug Error:", error);
+      alert("ระบบขัดข้อง");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
 
   const handleDirectReset = async (targetUserId: string) => {
     // 1. ถามเพื่อยืนยันป้องกันการกดพลาด
@@ -1104,8 +1135,8 @@ export default function AdminClientPage({
       status === "approved"
         ? "อนุมัติ"
         : status === "rejected"
-        ? "ปฏิเสธ"
-        : "ดึงกลับมาเป็นรอนุมัติ";
+          ? "ปฏิเสธ"
+          : "ดึงกลับมาเป็นรอนุมัติ";
     if (!confirm(`ยืนยันการ "${actionText}" คำขอลานี้?`)) return;
 
     setIsProcessing(true);
@@ -1544,8 +1575,8 @@ export default function AdminClientPage({
                     s.color === "blue"
                       ? "bg-blue-50 text-blue-600"
                       : s.color === "emerald"
-                      ? "bg-emerald-50 text-emerald-600"
-                      : "bg-orange-50 text-orange-600"
+                        ? "bg-emerald-50 text-emerald-600"
+                        : "bg-orange-50 text-orange-600"
                   }`}
                 >
                   {s.icon}
@@ -2513,15 +2544,15 @@ export default function AdminClientPage({
                                           l.status === "pending"
                                             ? "bg-orange-100 text-orange-600 border-orange-200"
                                             : l.status === "approved"
-                                            ? "bg-emerald-100 text-emerald-600 border-emerald-200"
-                                            : "bg-red-100 text-red-600 border-red-200"
+                                              ? "bg-emerald-100 text-emerald-600 border-emerald-200"
+                                              : "bg-red-100 text-red-600 border-red-200"
                                         }`}
                                       >
                                         {l.status === "pending"
                                           ? "รออนุมัติ"
                                           : l.status === "approved"
-                                          ? "อนุมัติแล้ว"
-                                          : "ปฏิเสธ"}
+                                            ? "อนุมัติแล้ว"
+                                            : "ปฏิเสธ"}
                                       </span>
                                     </td>
                                     <td className="py-4 px-6">
@@ -2575,10 +2606,10 @@ export default function AdminClientPage({
                                           }`}
                                           value={
                                             l.status === "pending"
-                                              ? leaveRemarks[l.id] ??
+                                              ? (leaveRemarks[l.id] ??
                                                 l.remark ??
-                                                ""
-                                              : l.remark ?? "-"
+                                                "")
+                                              : (l.remark ?? "-")
                                           }
                                           onChange={(e) =>
                                             handleRemarkChange(
@@ -2656,15 +2687,15 @@ export default function AdminClientPage({
                                   l.status === "pending"
                                     ? "bg-orange-100 text-orange-600"
                                     : l.status === "approved"
-                                    ? "bg-emerald-100 text-emerald-600"
-                                    : "bg-red-100 text-red-600"
+                                      ? "bg-emerald-100 text-emerald-600"
+                                      : "bg-red-100 text-red-600"
                                 }`}
                               >
                                 {l.status === "pending"
                                   ? "รออนุมัติ"
                                   : l.status === "approved"
-                                  ? "อนุมัติแล้ว"
-                                  : "ปฏิเสธ"}
+                                    ? "อนุมัติแล้ว"
+                                    : "ปฏิเสธ"}
                               </div>
 
                               <div className="absolute top-4 right-4">
@@ -2943,13 +2974,10 @@ export default function AdminClientPage({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-50">
-                            {overtimeData.length > 0 ? (
-                              overtimeData.map((l) => {
+                            {overtimeReques.length > 0 ? (
+                              overtimeReques.map((l) => {
                                 // ✅ ใช้ฟังก์ชัน getEffectiveRemark ที่เราเขียนไว้ใน State
-                                const currentRemark =
-                                  otRemarks[l.id] !== undefined
-                                    ? otRemarks[l.id]
-                                    : l.remark || "";
+                                const currentRemark = otRemarks[l.id] ?? l.remark ?? "";
 
                                 return (
                                   <tr
@@ -3028,15 +3056,15 @@ export default function AdminClientPage({
                                           l.status === "pending"
                                             ? "bg-orange-100 text-orange-600 border-orange-200"
                                             : l.status === "approved"
-                                            ? "bg-emerald-100 text-emerald-600 border-emerald-200"
-                                            : "bg-red-100 text-red-600 border-red-200"
+                                              ? "bg-emerald-100 text-emerald-600 border-emerald-200"
+                                              : "bg-red-100 text-red-600 border-red-200"
                                         }`}
                                       >
                                         {l.status === "pending"
                                           ? "รออนุมัติ"
                                           : l.status === "approved"
-                                          ? "อนุมัติแล้ว"
-                                          : "ปฏิเสธ"}
+                                            ? "อนุมัติแล้ว"
+                                            : "ปฏิเสธ"}
                                       </span>
                                     </td>
 
@@ -3046,25 +3074,15 @@ export default function AdminClientPage({
                                         {l.status === "pending" ? (
                                           <>
                                             <button
-                                              disabled={isUpdating}
-                                              onClick={() =>
-                                                updateOvertimeStatus(
-                                                  l.id,
-                                                  "approved"
-                                                )
-                                              }
+                                              disabled={isProcessing}
+                                              onClick={() => handleApproveOT(l.id)}
                                               className="disabled:opacity-50 bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-md"
                                             >
                                               อนุมัติ
                                             </button>
                                             <button
-                                              disabled={isUpdating}
-                                              onClick={() =>
-                                                updateOvertimeStatus(
-                                                  l.id,
-                                                  "rejected"
-                                                )
-                                              }
+                                              disabled={isProcessing}
+                                              onClick={() => handleRejectOT(l.id)}
                                               className="disabled:opacity-50 bg-white border border-red-200 text-red-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-50"
                                             >
                                               ปฏิเสธ
@@ -3072,13 +3090,8 @@ export default function AdminClientPage({
                                           </>
                                         ) : (
                                           <button
-                                            disabled={isUpdating}
-                                            onClick={() =>
-                                              updateOvertimeStatus(
-                                                l.id,
-                                                "pending"
-                                              )
-                                            }
+                                            disabled={isProcessing}
+                                            onClick={() => resetOTStatus(l.id)}
                                             className="disabled:opacity-50 flex items-center gap-1 bg-slate-50 text-slate-600 border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-100"
                                           >
                                             ✏️ แก้ไข
@@ -3106,7 +3119,7 @@ export default function AdminClientPage({
                                             )
                                           }
                                           readOnly={
-                                            l.status !== "pending" || isUpdating
+                                            l.status !== "pending" || isProcessing
                                           }
                                         />
                                       </div>
@@ -3152,15 +3165,15 @@ export default function AdminClientPage({
                                   l.status === "pending"
                                     ? "bg-orange-100 text-orange-600"
                                     : l.status === "approved"
-                                    ? "bg-emerald-100 text-emerald-600"
-                                    : "bg-red-100 text-red-600"
+                                      ? "bg-emerald-100 text-emerald-600"
+                                      : "bg-red-100 text-red-600"
                                 }`}
                               >
                                 {l.status === "pending"
                                   ? "รออนุมัติ"
                                   : l.status === "approved"
-                                  ? "อนุมัติแล้ว"
-                                  : "ปฏิเสธ"}
+                                    ? "อนุมัติแล้ว"
+                                    : "ปฏิเสธ"}
                               </div>
 
                               {/* Action Menu & Remark Popover */}
@@ -3509,7 +3522,7 @@ export default function AdminClientPage({
                   key={isAllSite ? "ทุกไซต์" : editingSite?.address || ""}
                   name="address"
                   defaultValue={
-                    isAllSite ? "ทุกไซต์" : editingSite?.address ?? ""
+                    isAllSite ? "ทุกไซต์" : (editingSite?.address ?? "")
                   }
                   readOnly={isAllSite}
                   placeholder="ที่อยู่ไซต์งาน..."
@@ -3635,8 +3648,8 @@ export default function AdminClientPage({
                   {isProcessing
                     ? "กำลังบันทึก..."
                     : editingSite
-                    ? "ยืนยันการแก้ไข"
-                    : "ยืนยันเพิ่มไซต์งาน"}
+                      ? "ยืนยันการแก้ไข"
+                      : "ยืนยันเพิ่มไซต์งาน"}
                 </button>
               </div>
             </form>
@@ -4308,8 +4321,8 @@ export default function AdminClientPage({
                 {isProcessing
                   ? "กำลังบันทึก..."
                   : editingEmployee
-                  ? "💾 บันทึกการแก้ไข"
-                  : "➕ ลงทะเบียนพนักงาน"}
+                    ? "💾 บันทึกการแก้ไข"
+                    : "➕ ลงทะเบียนพนักงาน"}
               </button>
             </div>
           </form>

@@ -177,7 +177,7 @@ export default async function AdminDashboardPage() {
         .where(eq(companyTable.id, companyId || ""))
         .limit(1),
 
-      // --- OT Requests: ดึงข้อมูลและ Join ข้อมูลพนักงาน ---
+      // --- OT Requests: แก้ไขเงื่อนไขการกรองเพื่อให้แสดงผล (ถอด isNull ของ OT ออกชั่วคราวเหมือน Leader) ---
       db
         .select({
           id: overtimeRequestsTable.id,
@@ -190,16 +190,21 @@ export default async function AdminDashboardPage() {
           timeStart: overtimeRequestsTable.timeStart,
           timeEnd: overtimeRequestsTable.timeEnd,
           overtimeByRequest: overtimeRequestsTable.overtimeByRequest,
-          reason: overtimeRequestsTable.reason, // ดึงจาก field reason
+          reason: overtimeRequestsTable.reason, 
           status: overtimeRequestsTable.status,
-          remarks: overtimeRequestsTable.remarks, // ดึงจาก field remarks
+          remarks: overtimeRequestsTable.remarks, 
+          positionName: positionsTable.name, 
+          departmentName: departmentsTable.name, 
         })
         .from(overtimeRequestsTable)
         .leftJoin(usersTable, eq(overtimeRequestsTable.userId, usersTable.id))
+        .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
+        .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id))
         .where(
           and(
             eq(overtimeRequestsTable.companyId, companyId || ""),
-            isNull(overtimeRequestsTable.deletedAt)
+            // ถอด isNull(overtimeRequestsTable.deletedAt) ออกชั่วคราวเพื่อให้ข้อมูลที่ติด Bug แสดงผล
+            isNull(usersTable.deletedAt) // กรองเฉพาะพนักงานที่ยังไม่ถูกลบ
           )
         )
         .orderBy(desc(overtimeRequestsTable.createdAt)),
@@ -276,7 +281,9 @@ export default async function AdminDashboardPage() {
       totalHours: String(ot.overtimeByRequest || "0"),
       reason: String(ot.reason || ""),
       status: String(ot.status || "pending"),
-      remark: String(ot.remarks || ""), // Mapping จาก remarks เข้าตัวแปร remark
+      remark: String(ot.remarks || ""), // Mapping จาก field remarks เข้า UI
+      positionName: ot.positionName || "พนักงาน",
+      departmentName: ot.departmentName || "ไม่ระบุแผนก",
     }));
 
     const sites = (sitesData || []).map((s) => ({
@@ -301,6 +308,7 @@ export default async function AdminDashboardPage() {
     };
 
     const rawProps = {
+      currentAdminId: adminId, // 🚩 เพิ่ม ID เข้าไปเพื่อให้ Client เรียกใช้บันทึก approvedBy/rejectedBy
       initialEmployees: employees,
       initialAttendance: attendance,
       initialLeaves: (rawLeaves || []).map((l) => ({

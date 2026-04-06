@@ -378,8 +378,6 @@ export default function LeaderClientPage({
     }
   };
 
-
-
   /* ---------------- LEAVE LOGIC ---------------- */
 
   const submitLeave = async () => {
@@ -1576,13 +1574,13 @@ export default function LeaderClientPage({
                               <td className="p-4 sm:p-6 text-center">
                                 <span
                                   className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-tighter shadow-sm border whitespace-nowrap
-            ${
-              ot.status === "approved"
-                ? "bg-green-50 text-green-600 border-green-100"
-                : ot.status === "rejected"
-                  ? "bg-red-50 text-red-600 border-red-100"
-                  : "bg-amber-50 text-amber-600 border-amber-100"
-            }`}
+                                  ${
+                                    ot.status === "approved"
+                                      ? "bg-green-50 text-green-600 border-green-100"
+                                      : ot.status === "rejected"
+                                        ? "bg-red-50 text-red-600 border-red-100"
+                                        : "bg-amber-50 text-amber-600 border-amber-100"
+                                  }`}
                                 >
                                   {ot.status === "pending"
                                     ? "รออนุมัติ"

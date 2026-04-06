@@ -1,0 +1,1 @@
+ALTER TABLE "overtime_requests" ALTER COLUMN "deleted_at" DROP DEFAULT;

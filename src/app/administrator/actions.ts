@@ -896,40 +896,66 @@ export async function logoutAction() {
     }
   }
 
-  /* ==========================================================================
-   ADMIN UPDATE OVERTIME STATUS
+ /* ==========================================================================
+   ADMIN UPDATE OVERTIME STATUS (STRICT SCHEMA MATCH)
    ========================================================================== */
-   export async function updateOvertimeStatusAction(
-    id: string, // แก้เป็น string เพราะใน DB เป็น uuid
-    status: "pending" | "approved" | "rejected",
-    remark?: string
-  ) {
-    try {
-      if (!id) return { success: false, error: "ID is required" };
-  
-      // เตรียมข้อมูลที่จะอัปเดต
-      const updateData: any = {
-        status: status,
-        remarks: remark ?? null, // ใน Schema มึงใช้ชื่อ 'remarks' (มี s)
+export async function updateOvertimeStatusAction(
+  id: string, 
+  status: "pending" | "approved" | "rejected",
+  remark?: string,
+  adminId?: string 
+) {
+  try {
+    if (!id) return { success: false, error: "ID is required" };
+
+    // 1. กำหนดค่าเริ่มต้นสำหรับอัปเดต (ใช้ 'remarks' ตาม Schema)
+    let updateData: any = {
+      status: status,
+      remarks: remark || null,
+    };
+
+    // 2. แยก Logic ตามสถานะ เพื่อจัดการฟิลด์ timestamp และ references (approvedBy, rejectedBy)
+    if (status === "approved") {
+      updateData = {
+        ...updateData,
+        approvedAt: new Date(),
+        approvedBy: adminId || null,
+        rejectedAt: null,
+        rejectedBy: null,
       };
-  
-      // ใส่ Logic เก็บ Timestamp ตามสถานะ (ถ้ามึงต้องการ)
-      if (status === "approved") {
-        updateData.approvedAt = new Date();
-      } else if (status === "rejected") {
-        updateData.rejectedAt = new Date();
-      }
-  
-      await db
-        .update(overtimeRequestsTable)
-        .set(updateData)
-        .where(eq(overtimeRequestsTable.id, id));
-  
-      revalidatePath("/administrator"); // ปรับ path ให้ตรงกับที่มึงใช้งาน
-      
-      return { success: true, message: "อัปเดตสถานะ OT เรียบร้อย" };
-    } catch (error) {
-      console.error("Update OT Error:", error);
-      return { success: false, error: "ไม่สามารถเชื่อมต่อฐานข้อมูลได้" };
+    } 
+    else if (status === "rejected") {
+      updateData = {
+        ...updateData,
+        rejectedAt: new Date(),
+        rejectedBy: adminId || null,
+        approvedAt: null,
+        approvedBy: null,
+      };
+    } 
+    else if (status === "pending") {
+      updateData = {
+        ...updateData,
+        approvedAt: null,
+        approvedBy: null,
+        rejectedAt: null,
+        rejectedBy: null,
+      };
     }
+
+    // 3. Execution - อัปเดตลง Database
+    await db
+      .update(overtimeRequestsTable)
+      .set(updateData)
+      .where(eq(overtimeRequestsTable.id, id));
+
+    // 4. Revalidate
+    revalidatePath("/administrator"); 
+    
+    return { success: true };
+  } catch (error) {
+    // ตรวจสอบ Error ใน Terminal หากชื่อ Column ไม่ตรงกับ pgTable
+    console.error("❌ Database Update Error Details:", error);
+    return { success: false, error: "Database update failed" };
   }
+}
