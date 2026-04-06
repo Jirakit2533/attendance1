@@ -520,7 +520,7 @@ export default function LeaderClientPage({
     const checkOutValue = todayRecord?.checkOut?.toString().trim();
 
     return {
-      // 2. ปรับการเช็ค hasCheckedIn ให้เข้มงวดเหมือน checkOut (กันค่า "-" หรือค่าว่าง)
+      // 2. ปรับการเช็ค hasCheckedIn ให้เข้มงวดเหมือน checkOut (กันค่า "-" หรือค่าว่าง)1
       hasCheckedIn: 
         !!checkInValue && checkInValue !== "-" && checkInValue !== "",
       

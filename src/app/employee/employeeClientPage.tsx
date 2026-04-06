@@ -256,7 +256,7 @@ export default function EmployeeClientPage({
 
   // ตรวจสอบว่าวันที่เลือกถูกต้องตามกฎธุรกิจหรือไม่
 
-  // ✅ คำนวณสถานะปุ่มจากข้อมูลปัจจุบัน (รองรับ Timezone ไทย)
+  // ✅ คำนวณสถานะปุ่มจากข้อมูลปัจจุบัน (รองรับ Timezone ไทย)d
   const todayStatus = useMemo(() => {
     const now = new Date();
     const todayStr = new Intl.DateTimeFormat("en-CA", {
