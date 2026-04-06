@@ -1,0 +1,1 @@
+ALTER TYPE "public"."ot_status" ADD VALUE 'executed';

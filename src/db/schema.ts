@@ -5,7 +5,7 @@ import { relations, sql } from "drizzle-orm";
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
 export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected", "expired"]);
 export const workingStatusEnum = pgEnum("working_status", ["normal", "extra"]);
-export const otStatusEnum = pgEnum("ot_status", ["pending", "approved", "rejected", "expired"]);
+export const otStatusEnum = pgEnum("ot_status", ["pending", "approved", "rejected", "expired", "executed"]);
 
 export const superAdminTable = pgTable("super_admins", {
   id: uuid("id").primaryKey().defaultRandom(),
