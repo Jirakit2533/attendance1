@@ -188,6 +188,7 @@ export default function LeaderClientPage({
   const [showOTModal, setShowOTModal] = useState(false);
   const [otError, setOtError] = useState("");
   const [otSuccess, setOtSuccess] = useState(false);
+  const [otRemarks, setOtRemarks] = useState<{ [key: string]: string }>({});
   const [isProcessingOT, setIsProcessingOT] = useState(false);
 
   const [searchOT, setSearchOT] = useState("");
@@ -286,7 +287,8 @@ export default function LeaderClientPage({
   const teamOT = useMemo(
     () =>
       (initialOT || []).filter(
-        (ot: any) => ot.userId !== userProfile.id && ot.user_id !== userProfile.id
+        (ot: any) =>
+          ot.userId !== userProfile.id && ot.user_id !== userProfile.id
       ),
     [initialOT, userProfile.id]
   );
@@ -300,33 +302,83 @@ export default function LeaderClientPage({
         ot.reason?.toLowerCase().includes(searchTerm)
     );
   }, [teamOT, searchOT]);
-  const handleApproveOT = async (id: string) => {
+  /* ---------------- OT ACTIONS ---------------- */
+
+  /* -------------------------------------------------------------------------- */
+  /* LEADER OT ACTIONS (จัดการอนุมัติ/ปฏิเสธ OT)                                     */
+  /* -------------------------------------------------------------------------- */
+
+  const handleOTRemarkChange = (id: string, value: string) => {
+    setOtRemarks((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleApproveOT = async (otId: string) => {
+    if (!confirm("คุณต้องการอนุมัติการทำ OT นี้ใช่หรือไม่?")) return;
+    setIsProcessingOT(true);
     try {
-      await updateOTStatusAction(Number(id), "approved");
-      toast.success("อนุมัติ OT เรียบร้อยแล้ว");
+      // ดึงหมายเหตุ OT ที่พิมพ์ไว้
+      const remark = otRemarks[otId] || "";
+      const res = await updateOTStatusAction(
+        otId,
+        "approved",
+        remark // ส่ง remark เป็นตัวที่ 3 ตามที่ Backend รับ (เอา userProfile.id ออก)
+      );
+      if (res.success) {
+        router.refresh(); // สั่งให้หน้าจอรีเฟรชเพื่อเปลี่ยนสถานะปุ่ม
+      } else {
+        alert(res.error || "เกิดข้อผิดพลาดในการอนุมัติ OT");
+      }
     } catch (error) {
-      toast.error("เกิดข้อผิดพลาดในการอนุมัติ");
+      alert("ระบบขัดข้อง กรุณาลองใหม่ในภายหลัง");
+    } finally {
+      setIsProcessingOT(false);
     }
   };
-  
-  const handleRejectOT = async (id: string) => {
+
+  const handleRejectOT = async (otId: string) => {
+    if (!confirm("คุณต้องการปฏิเสธการทำ OT นี้ใช่หรือไม่?")) return;
+    setIsProcessingOT(true);
     try {
-      // คุณอาจจะดึงค่า remark จาก State มาส่งไปด้วยก็ได้
-      await updateOTStatusAction(Number(id), "rejected");
-      toast.error("ปฏิเสธคำขอ OT แล้ว");
+      const remark = otRemarks[otId] || "";
+      const res = await updateOTStatusAction(
+        otId,
+        "rejected",
+        remark // ส่ง remark เป็นตัวที่ 3 ตามที่ Backend รับ (เอา userProfile.id ออก)
+      );
+      if (res.success) {
+        router.refresh(); // สั่งให้หน้าจอรีเฟรชเพื่อเปลี่ยนสถานะปุ่ม
+      } else {
+        alert(res.error || "เกิดข้อผิดพลาดในการปฏิเสธ OT");
+      }
     } catch (error) {
-      toast.error("เกิดข้อผิดพลาด");
+      alert("ระบบขัดข้อง กรุณาลองใหม่ในภายหลัง");
+    } finally {
+      setIsProcessingOT(false);
     }
   };
-  
-  const resetOTStatus = async (id: string) => {
+
+  const resetOTStatus = async (otId: string) => {
+    if (!confirm("คุณต้องการดึงรายการนี้กลับมาแก้ไขใหม่ใช่หรือไม่?")) return;
+    setIsProcessingOT(true);
     try {
-      await updateOTStatusAction(Number(id), "pending");
-      toast.secondary("รีเซ็ตสถานะเป็นรออนุมัติ");
+      const res = await updateOTStatusAction(
+        otId,
+        "pending",
+        "" // ล้างหมายเหตุเมื่อดึงกลับมา (ส่งเป็นตัวที่ 3)
+      );
+      if (res.success) {
+        router.refresh();
+      } else {
+        alert(res.error || "ไม่สามารถแก้ไขสถานะได้");
+      }
     } catch (error) {
-      toast.error("เกิดข้อผิดพลาด");
+      alert("ระบบขัดข้อง");
+    } finally {
+      setIsProcessingOT(false);
     }
   };
+
+
 
   /* ---------------- LEAVE LOGIC ---------------- */
 
@@ -2213,7 +2265,7 @@ export default function LeaderClientPage({
                               หมายเหตุ
                             </th>
                             <th className="py-6 px-6 text-center border-b border-slate-100 w-[180px]">
-                              ผู้อนุมัติ
+                              ผู้จัดการคำขอ
                             </th>
                           </tr>
                         </thead>
@@ -2300,69 +2352,176 @@ export default function LeaderClientPage({
                                       {ot.status === "pending" ? (
                                         <>
                                           <button
+                                            disabled={isProcessingOT}
                                             onClick={() =>
                                               handleApproveOT(ot.id)
                                             }
-                                            className="bg-emerald-600 text-white px-5 py-2 rounded-xl text-xs font-black hover:bg-emerald-700 shadow-lg shadow-emerald-200 active:scale-95 transition-all"
+                                            className="bg-emerald-600 text-white px-5 py-2 rounded-xl text-xs font-black hover:bg-emerald-700 hover:-translate-y-0.5 transition-all shadow-lg shadow-emerald-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                                           >
-                                            อนุมัติ
+                                            {isProcessingOT ? "..." : "อนุมัติ"}
                                           </button>
                                           <button
+                                            disabled={isProcessingOT}
                                             onClick={() =>
                                               handleRejectOT(ot.id)
                                             }
-                                            className="bg-white border border-rose-200 text-rose-500 px-5 py-2 rounded-xl text-xs font-black hover:bg-rose-50 active:scale-95 transition-all"
+                                            className="bg-white border border-rose-200 text-rose-500 px-5 py-2 rounded-xl text-xs font-black hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                           >
-                                            ปฏิเสธ
+                                            {isProcessingOT ? "..." : "ปฏิเสธ"}
                                           </button>
                                         </>
                                       ) : (
                                         <button
+                                          disabled={isProcessingOT}
                                           onClick={() => resetOTStatus(ot.id)}
-                                          className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-200 flex items-center gap-2 italic transition-all"
+                                          className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-200 transition-all flex items-center gap-2 italic disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                          <span>✏️</span> แก้ไข
+                                          <span>
+                                            {isProcessingOT ? "⏳" : "✏️"}
+                                          </span>{" "}
+                                          แก้ไข
                                         </button>
                                       )}
                                     </div>
                                   </td>
                                   <td className="py-4 px-4">
-                                    <input
-                                      type="text"
-                                      placeholder="หมายเหตุ..."
-                                      className={`border rounded-xl px-3 py-1.5 text-xs w-full outline-none transition-all ${
-                                        ot.status !== "pending"
-                                          ? "bg-gray-50 text-gray-700 border-gray-200 cursor-not-allowed"
-                                          : "bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                                      }`}
-                                      value={ot.remark || ""}
-                                      onChange={(e) => {
-                                        if (
-                                          typeof handleRemarkChange ===
-                                          "function"
-                                        ) {
-                                          handleRemarkChange(
+                                    <div className="relative flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        placeholder="ระบุหมายเหตุ..."
+                                        className={`border rounded-xl px-3 py-1.5 text-xs w-full transition-all outline-none ${
+                                          ot.status !== "pending"
+                                            ? "bg-gray-50 text-gray-700 border-gray-200 shadow-sm"
+                                            : "bg-white border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                                        }`}
+                                        value={
+                                          ot.status === "pending"
+                                            ? (otRemarks[ot.id] ??
+                                              ot.remark ??
+                                              "")
+                                            : (ot.remark ?? "-")
+                                        }
+                                        onChange={(e) =>
+                                          handleOTRemarkChange(
                                             ot.id,
                                             e.target.value
-                                          );
+                                          )
                                         }
-                                      }}
-                                      readOnly={ot.status !== "pending"}
-                                    />
+                                        readOnly={ot.status !== "pending"}
+                                      />
+                                      {ot.status !== "pending" && ot.remark && (
+                                        <div className="relative shrink-0">
+                                          <button
+                                            onClick={() =>
+                                              setViewRemarkId(
+                                                viewRemarkId === ot.id
+                                                  ? null
+                                                  : ot.id
+                                              )
+                                            }
+                                            className={`shrink-0 p-1.5 rounded-lg transition-colors border ${
+                                              viewRemarkId === ot.id
+                                                ? "bg-blue-600 text-white border-blue-600"
+                                                : "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
+                                            }`}
+                                          >
+                                            <svg
+                                              xmlns="http://www.w3.org/2000/svg"
+                                              width="14"
+                                              height="14"
+                                              viewBox="0 0 24 24"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth="2.5"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            >
+                                              <circle
+                                                cx="11"
+                                                cy="11"
+                                                r="8"
+                                              ></circle>
+                                              <line
+                                                x1="21"
+                                                y1="21"
+                                                x2="16.65"
+                                                y2="16.65"
+                                              ></line>
+                                            </svg>
+                                          </button>
+                                          {viewRemarkId === ot.id && (
+                                            <>
+                                              <div
+                                                className="fixed inset-0 z-40"
+                                                onClick={() =>
+                                                  setViewRemarkId(null)
+                                                }
+                                              ></div>
+                                              <div className="absolute right-0 bottom-full mb-2 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl p-3 animate-in fade-in zoom-in duration-200">
+                                                <div className="flex justify-between items-center mb-2 pb-1 border-b border-gray-100">
+                                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                    หมายเหตุจากผู้อนุมัติ
+                                                  </span>
+                                                  <button
+                                                    onClick={() =>
+                                                      setViewRemarkId(null)
+                                                    }
+                                                    className="text-gray-400 hover:text-gray-600"
+                                                  >
+                                                    <svg
+                                                      xmlns="http://www.w3.org/2000/svg"
+                                                      width="12"
+                                                      height="12"
+                                                      viewBox="0 0 24 24"
+                                                      fill="none"
+                                                      stroke="currentColor"
+                                                      strokeWidth="3"
+                                                      strokeLinecap="round"
+                                                      strokeLinejoin="round"
+                                                    >
+                                                      <line
+                                                        x1="18"
+                                                        y1="6"
+                                                        x2="6"
+                                                        y2="18"
+                                                      ></line>
+                                                      <line
+                                                        x1="6"
+                                                        y1="6"
+                                                        x2="18"
+                                                        y2="18"
+                                                      ></line>
+                                                    </svg>
+                                                  </button>
+                                                </div>
+                                                <p className="text-xs text-gray-700 leading-relaxed wrap-break-word whitespace-normal text-left">
+                                                  {ot.remark}
+                                                </p>
+                                                <div className="absolute -bottom-1 right-3 w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45"></div>
+                                              </div>
+                                            </>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="p-6 text-center">
-                                    {ot.status !== "pending" ? (
+                                    {ot.status !== "pending" &&
+                                    (ot.approverFirst || ot.approverName) ? (
                                       <div className="inline-flex flex-col items-center">
-                                        <span className="text-[13px] font-bold text-gray-900">
-                                          {ot.approverName || "-"}
+                                        <span className="text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
+                                          {ot.approverName ||
+                                            `${ot.approverFirst} ${ot.approverLast || ""}`.trim()}
                                         </span>
-                                        <span className="text-[9px] text-indigo-500 font-black uppercase tracking-widest">
+                                        <span className="text-[9px] text-indigo-500 font-black uppercase tracking-widest mt-0.5 whitespace-nowrap">
                                           {ot.approverPosition ||
                                             "Manager/Leader"}
                                         </span>
                                       </div>
                                     ) : (
-                                      <span className="text-gray-300">—</span>
+                                      <span className="text-gray-300 font-medium">
+                                        —
+                                      </span>
                                     )}
                                   </td>
                                 </tr>

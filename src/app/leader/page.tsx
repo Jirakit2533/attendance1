@@ -21,18 +21,21 @@ import { sql } from "drizzle-orm";
 export const dynamic = "force-dynamic";
 
 // ฟังก์ชันจัดรูปแบบวันที่เป็นสไตล์ UTC (DD/MM/YYYY HH:mm)
+// ฟังก์ชันจัดรูปแบบวันที่ให้ตรงกับเวลาประเทศไทย (UTC+7)
 const formatThaiDate = (date: Date | string | null) => {
   if (!date) return null;
   const d = new Date(date);
   
-  // ดึงค่าตามมาตรฐาน UTC ทั้งหมด
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const year = d.getUTCFullYear();
-  const hours = String(d.getUTCHours()).padStart(2, '0');
-  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
-  
-  return `${day}/${month}/${year} ${hours}:${minutes}`;
+  // ใช้ Intl.DateTimeFormat เพื่อจัดการเรื่อง Timezone ให้แม่นยำ
+  return new Intl.DateTimeFormat('th-TH', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Bangkok'
+  }).format(d).replace(',', '');
 };
 
 export default async function LeaderPage() {

@@ -6,6 +6,7 @@ import { eq, and, sql, isNull, desc } from "drizzle-orm"; // เพิ่ม isN
 import { revalidatePath } from "next/cache";
 import { isInsideBound, validateAndGetSite, validateCheckOutLocation } from "@/lib/location-service";
 import { calculateOvertime } from "@/lib/over-time/ot-calculate";
+import { getCurrentUser } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 
 /**------------------------------------------------------------------
@@ -582,9 +583,7 @@ export async function updateOTStatusAction(
         status: status,
         remarks: remark || null, // บันทึกหมายเหตุถ้ามีการส่งมา
         approvedBy: status === "approved" ? leader.id : null,
-        rejectedBy: status === "rejected" ? leader.id : null,
-        // หากต้องการเก็บร่องรอยว่าใครแก้สถานะล่าสุด (ถ้าใน schema มีฟิลด์ updatedBy)
-        // updatedBy: leader.id, 
+        rejectedBy: status === "rejected" ? leader.id : null, 
         updatedAt: new Date(),
       })
       .where(eq(overtimeRequestsTable.id, otId))
