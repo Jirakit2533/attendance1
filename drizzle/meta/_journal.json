@@ -29,6 +29,55 @@
       "when": 1774949417075,
       "tag": "0003_strong_energizer",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775216394147,
+      "tag": "0004_boring_prodigy",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775216519934,
+      "tag": "0005_tired_gamora",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775217552605,
+      "tag": "0006_flawless_yellow_claw",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775219494676,
+      "tag": "0007_great_runaways",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775230799777,
+      "tag": "0008_mute_odin",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1775231182662,
+      "tag": "0009_pink_smasher",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1775312159235,
+      "tag": "0010_concerned_red_hulk",
+      "breakpoints": true
     }
   ]
 }

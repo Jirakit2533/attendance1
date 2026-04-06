@@ -1,43 +1,55 @@
-import { db } from "@/db/db"; // 1. ดึงตัวเชื่อมต่อ Database มาใช้
-import { overtimeTable, overtimeRequestsTable } from "@/db/schema"; // 2. ดึงโครงสร้างตารางมาใช้
-import { and, eq, lte } from "drizzle-orm"; // 3. ดึงเครื่องมือสร้างเงื่อนไข SQL มาใช้
+// @/lib/over-time/overtime-status-actions.ts
 
-/**
- * ฟังก์ชันสำหรับตัดจบ OT ที่ไม่มีคำขอ หรือ คำขอที่ไม่มีคนทำจริง เกิน 72 ชม.
- */
+import { db } from "@/db/db"; 
+import { overtimeTable, overtimeRequestsTable } from "@/db/schema"; 
+import { and, eq, lt, ne, sql } from "drizzle-orm"; 
+import { subDays } from "date-fns"; // แนะนำให้ใช้ช่วยคำนวณวันที่
+
 export async function cleanupExpiredOvertime() {
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setHours(threeDaysAgo.getHours() - 72);
-  
+    // 1. ตั้งเกณฑ์ 7 วันย้อนหลัง
+    const thresholdDate = subDays(new Date(), 7);
+    const dateLimit = thresholdDate.toISOString().split('T')[0];
+
     try {
       return await db.transaction(async (tx) => {
-        // 1. ตัด OT ดิบที่ไม่มีคำขอมารองรับภายใน 3 วัน
-        // ปรับให้ตรงกับ Schema: ใช้ status 'pending' ตามค่าเริ่มต้นของคุณ
+        
+        // --- ส่วนที่ 1: จัดการ OT ดิบ (overtimeTable) ---
+        // Logic: ถ้ายัง 'pending' และเก่าเกิน 7 วัน -> เปลี่ยนเป็น 'expired'
         const expiredRaw = await tx.update(overtimeTable)
-          .set({ status: "expired" })
+          .set({ 
+            otStatusEnum: "expired", 
+          })
           .where(
             and(
-              eq(overtimeTable.status, "pending"),
-              lte(overtimeTable.date, threeDaysAgo.toISOString().split('T')[0]) 
+              eq(overtimeTable.otStatusEnum, "pending"),
+              lt(overtimeTable.date, dateLimit)
             )
-          );
-  
-        // 2. ตัดคำขอที่อนุมัติแล้วแต่ไม่มีใครมาทำจริงภายใน 3 วัน
+          )
+          .returning({ id: overtimeTable.id }); // เพิ่มเพื่อให้ count ได้แม่นยำ
+
+        // --- ส่วนที่ 2: จัดการใบคำขอ (overtimeRequestsTable) ---
+        // Logic: ใบคำขอที่ยัง 'pending' หรือ 'approved' (แต่ไม่มีคนทำ)
+        // ถ้าเก่าเกิน 7 วัน -> เปลี่ยนเป็น 'expired' ทั้งหมด
         const expiredRequests = await tx.update(overtimeRequestsTable)
-          .set({ status: "expired" })
+          .set({ 
+            status: "expired",
+            remarks: sql`CONCAT(COALESCE(remarks, ''), ' [System: Auto-expired after 7 days]')`
+          })
           .where(
             and(
-              eq(overtimeRequestsTable.status, "approved"),
-              lte(overtimeRequestsTable.date, threeDaysAgo.toISOString().split('T')[0])
+              sql`${overtimeRequestsTable.status} IN ('pending', 'approved')`,
+              lt(overtimeRequestsTable.date, dateLimit)
             )
-          );
-  
+          )
+          .returning({ id: overtimeRequestsTable.id }); // เพิ่มเพื่อให้ count ได้แม่นยำ
+
         return { 
-            expiredRawCount: expiredRaw.length, 
-            expiredRequestCount: expiredRequests.length 
+            expiredRawCount: expiredRaw.length || 0, 
+            expiredRequestCount: expiredRequests.length || 0
         };
       });
     } catch (error) {
-      console.error("Cleanup Error:", error);
+      console.error("🚨 Cleanup Status Error:", error);
+      throw error; 
     }
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "overtime_requests" ADD COLUMN "reason" text NOT NULL;

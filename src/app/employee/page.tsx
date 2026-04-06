@@ -119,7 +119,8 @@ export default async function Page() {
       id: overtimeRequestsTable.id,
       overtimeByRequest: overtimeRequestsTable.overtimeByRequest,
       status: overtimeRequestsTable.status,
-      remarks: overtimeRequestsTable.remarks,
+      remark: overtimeRequestsTable.remarks, // ✅ เปลี่ยน Alias เป็น remark ให้ตรงกับที่ใช้
+      reason: overtimeRequestsTable.reason, // ✅ เพิ่ม: ดึงเหตุผลที่พนักงานกรอก
       createdAt: overtimeRequestsTable.createdAt,
       approverFirst: otApprover.firstName,
       approverLast: otApprover.lastName,
@@ -213,7 +214,8 @@ export default async function Page() {
     createdAt: ot.createdAt,
     overtimeByRequest: ot.overtimeByRequest,
     status: ot.status,
-    remarks: ot.remarks,
+    remark: ot.remark, // ✅ ส่งหมายเหตุแอดมิน (remarks เดิม)
+    reason: ot.reason, // ✅ ส่งเหตุผลพนักงาน (reason ใหม่)
     approverName: ot.approverFirst
       ? `${ot.approverFirst} ${ot.approverLast || ""}`.trim()
       : "-",

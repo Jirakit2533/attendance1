@@ -500,8 +500,8 @@ export async function createPersonalOTAction(payload: {
       // บันทึกเป็น JSONB Array ตาม Schema ($type<string[]>)
       requestedWorkers: [user.id], 
       
-      // รายละเอียดเพิ่มเติม (ปรับให้เหลือแค่เหตุผล เพราะมีฟิลด์เวลาแยกแล้ว)
-      remarks: payload.reason, 
+      // ✨ แก้ไขจุดเดียว: เปลี่ยนจากบันทึกใน remarks ไปเป็น reason ตาม Schema ใหม่
+      reason: payload.reason, 
       
       // สถานะเริ่มต้นตาม Enum ใน Schema
       status: "pending",

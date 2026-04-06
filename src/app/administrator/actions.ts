@@ -11,13 +11,12 @@ import {
   positionsTable,
   departmentsTable,
   shiftsTable,
+  overtimeRequestsTable,
 } from "@/db/schema";
 import { eq, and, desc, isNull, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
-
-// ✅ Import ตัวจัดการ Upload (ปรับให้ตรงกับ lib ของคุณ)
 import { uploadToDrive, deleteFromDrive } from "@/lib/uploadthing-server";
 
 /* ==========================================================================
@@ -894,5 +893,43 @@ export async function logoutAction() {
     } catch (error) {
       console.error("Direct Reset Password Error:", error);
       return { success: false, error: "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล" };
+    }
+  }
+
+  /* ==========================================================================
+   ADMIN UPDATE OVERTIME STATUS
+   ========================================================================== */
+   export async function updateOvertimeStatusAction(
+    id: string, // แก้เป็น string เพราะใน DB เป็น uuid
+    status: "pending" | "approved" | "rejected",
+    remark?: string
+  ) {
+    try {
+      if (!id) return { success: false, error: "ID is required" };
+  
+      // เตรียมข้อมูลที่จะอัปเดต
+      const updateData: any = {
+        status: status,
+        remarks: remark ?? null, // ใน Schema มึงใช้ชื่อ 'remarks' (มี s)
+      };
+  
+      // ใส่ Logic เก็บ Timestamp ตามสถานะ (ถ้ามึงต้องการ)
+      if (status === "approved") {
+        updateData.approvedAt = new Date();
+      } else if (status === "rejected") {
+        updateData.rejectedAt = new Date();
+      }
+  
+      await db
+        .update(overtimeRequestsTable)
+        .set(updateData)
+        .where(eq(overtimeRequestsTable.id, id));
+  
+      revalidatePath("/administrator"); // ปรับ path ให้ตรงกับที่มึงใช้งาน
+      
+      return { success: true, message: "อัปเดตสถานะ OT เรียบร้อย" };
+    } catch (error) {
+      console.error("Update OT Error:", error);
+      return { success: false, error: "ไม่สามารถเชื่อมต่อฐานข้อมูลได้" };
     }
   }

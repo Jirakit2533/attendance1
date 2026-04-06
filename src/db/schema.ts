@@ -3,8 +3,9 @@ import { relations, sql } from "drizzle-orm";
 
 
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
-export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected"]);
+export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected", "expired"]);
 export const workingStatusEnum = pgEnum("working_status", ["normal", "extra"]);
+export const otStatusEnum = pgEnum("ot_status", ["pending", "approved", "rejected", "expired"]);
 
 export const superAdminTable = pgTable("super_admins", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -100,11 +101,11 @@ export const overtimeTable = pgTable("overtime", {
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
   shiftId: uuid("shift_id").references(() => shiftsTable.id),
   attendanceId: uuid("attendance_id").references(() => attendanceTable.id).unique(), // เชื่อมกับบันทึกเวลาวันนั้น
-  status: varchar("status", { length: 20 }).default("pending"), // 'pending', 'approved', 'rejected'
+  status: otStatusEnum("status").default("pending").notNull(), // สถานะ OT: pending, approved, rejected
   date: date("date").notNull(),
   overtimeBefore: integer("overtime_before").notNull().default(0),
   overtimeAfter: integer("overtime_after").notNull().default(0),
-  overtimeApproved: integer("overtime_approved").notNull().default(0),
+  overtimeApproved: integer("overtime_approved").notNull().default(0), 
   overtimeRejected: integer("overtime_rejected").notNull().default(0),
   otRoundingOption: varchar("ot_rounding_option", { length: 30 }).notNull(),
 });
@@ -122,15 +123,16 @@ export const overtimeRequestsTable = pgTable("overtime_requests", {
   timeEnd: time("time_end").notNull(),
   date: date("date").notNull(),
   requestedWorkers: jsonb("requested_workers").$type<string[]>().default([]),
+  reason: text("reason").notNull(),
   remarks: text("remarks"),
   status: leaveStatusEnum("status").default("pending").notNull(),
+  approvedAt: timestamp("approved_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
   approvedBy: uuid("approved_by").references(() => usersTable.id),
-  approvedAt: timestamp("approved_at"),
+  rejectedAt: timestamp("rejected_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
   rejectedBy: uuid("rejected_by").references(() => usersTable.id),
-  rejectedAt: timestamp("rejected_at"),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
   createdBy: uuid("created_by").references(() => usersTable.id),
-  deletedAt: timestamp("deleted_at"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
   deletedBy: uuid("deleted_by").references(() => usersTable.id),
 })
 

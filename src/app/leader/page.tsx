@@ -10,10 +10,13 @@ import {
   departmentsTable,
   shiftsTable,
   companyTable,
+  overtimeRequestsTable, // ✅ เพิ่ม: นำเข้าตาราง OT
 } from "@/db/schema";
 import { eq, desc, and, ne, isNull, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import LeaderClientPage from "./leaderClientPage";
+import { revalidatePath } from "next/cache";
+import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +45,9 @@ export default async function LeaderPage() {
   // สร้าง Alias สำหรับตาราง User และ Position เพื่อใช้ดึงข้อมูลผู้อนุมัติ
   const approverUser = alias(usersTable, "approverUser");
   const approverPosition = alias(positionsTable, "approverPosition");
+  const otApproverUser = alias(usersTable, "otApproverUser"); // ✅ เพิ่ม Alias สำหรับผู้อนุมัติ OT
+  const otEmployeePosition = alias(positionsTable, "otEmployeePosition"); // ✅ เพิ่ม Alias สำหรับตำแหน่งของคนขอ OT
+  const otApproverPosition = alias(positionsTable, "otApproverPosition"); // ✅ เพิ่ม Alias สำหรับตำแหน่งของผู้อนุมัติ OT
 
   // 1. ดึง Profile ของ Leader พร้อมข้อมูลบริษัท
   const userExists = await db
@@ -103,6 +109,8 @@ export default async function LeaderPage() {
       allLeaveRequests,
       teamAttendanceRaw,
       myLeaveRequestsRaw,
+      teamOTRequestsRaw, // ✅ ข้อมูล OT ของทีม
+      myOTRequestsRaw,   // ✅ ข้อมูล OT ของตัวเอง
     ] = await Promise.all([
       // 2. ดึงประวัติเข้างานของตัวเอง
       db
@@ -247,6 +255,63 @@ export default async function LeaderPage() {
         .where(eq(leaveTable.user_id, user.id))
         .orderBy(desc(leaveTable.id))
         .limit(30),
+
+      // ✅ 7. ดึงข้อมูล OT ของทีม (แก้ไข: ใช้ teamFilter เพื่อให้แสดงผลเหมือนคำขอลางาน)
+      currentDept
+        ? db
+            .select({
+              id: overtimeRequestsTable.id,
+              userId: overtimeRequestsTable.userId,
+              firstName: usersTable.firstName,
+              lastName: usersTable.lastName,
+              avatarUrl: usersTable.avatarUrl,
+              userName: overtimeRequestsTable.userName, 
+              positionName: otEmployeePosition.name,
+              overtimeByRequest: overtimeRequestsTable.overtimeByRequest,
+              timeStart: overtimeRequestsTable.timeStart,
+              timeEnd: overtimeRequestsTable.timeEnd,
+              date: overtimeRequestsTable.date,
+              reason: overtimeRequestsTable.reason,
+              remarks: overtimeRequestsTable.remarks,
+              status: overtimeRequestsTable.status,
+              createdAt: overtimeRequestsTable.createdAt,
+              approverFirst: otApproverUser.firstName,
+              approverLast: otApproverUser.lastName,
+              approverPosition: otApproverPosition.name,
+            })
+            .from(overtimeRequestsTable)
+            .innerJoin(usersTable, eq(overtimeRequestsTable.userId, usersTable.id))
+            .leftJoin(otEmployeePosition, eq(usersTable.positionId, otEmployeePosition.id))
+            .leftJoin(otApproverUser, or(eq(overtimeRequestsTable.approvedBy, otApproverUser.id), eq(overtimeRequestsTable.rejectedBy, otApproverUser.id)))
+            .leftJoin(otApproverPosition, eq(otApproverUser.positionId, otApproverPosition.id))
+            .where(teamFilter) // ✅ เปลี่ยนมาใช้ teamFilter เพื่อให้ logic เหมือนลางานเป๊ะ
+            .orderBy(desc(overtimeRequestsTable.createdAt))
+            .limit(50)
+        : Promise.resolve([]),
+
+      // ✅ 8. ดึงข้อมูล OT ของตัวเอง
+      db
+        .select({
+          id: overtimeRequestsTable.id,
+          userName: overtimeRequestsTable.userName,
+          overtimeByRequest: overtimeRequestsTable.overtimeByRequest,
+          timeStart: overtimeRequestsTable.timeStart,
+          timeEnd: overtimeRequestsTable.timeEnd,
+          date: overtimeRequestsTable.date,
+          reason: overtimeRequestsTable.reason,
+          remarks: overtimeRequestsTable.remarks,
+          status: overtimeRequestsTable.status,
+          createdAt: overtimeRequestsTable.createdAt,
+          approverFirst: otApproverUser.firstName,
+          approverLast: otApproverUser.lastName,
+          approverPosition: otApproverPosition.name,
+        })
+        .from(overtimeRequestsTable)
+        .leftJoin(otApproverUser, or(eq(overtimeRequestsTable.approvedBy, otApproverUser.id), eq(overtimeRequestsTable.rejectedBy, otApproverUser.id)))
+        .leftJoin(otApproverPosition, eq(otApproverUser.positionId, otApproverPosition.id))
+        .where(eq(overtimeRequestsTable.userId, user.id))
+        .orderBy(desc(overtimeRequestsTable.createdAt))
+        .limit(30),
     ]);
 
     // 6. จัดเตรียมข้อมูล (Mapping)
@@ -316,6 +381,31 @@ export default async function LeaderPage() {
         approverFirst: l.approverFirst,
         approverLast: l.approverLast,
         approverPosition: l.approverPosition || "admin/HR",
+      })),
+      // ✅ Mapping ข้อมูล OT ของทีม (เพิ่ม requestDate จาก createdAt)
+      initialOT: (teamOTRequestsRaw || []).map((ot) => ({
+        ...ot,
+        employeeName: `${ot.firstName || ""} ${ot.lastName || ""}`.trim() || "ไม่ระบุชื่อ",
+        positionName: ot.positionName || "พนักงาน",
+        avatarUrl: ot.avatarUrl,
+        projectTag: ot.userName,
+        date: ot.date, 
+        createdAt: formatThaiDate(ot.createdAt),
+        requestDate: formatThaiDate(ot.createdAt), // ✅ ใช้สำหรับแสดง "วันที่ขอ OT"
+        remark: ot.remarks, 
+        approverName: ot.approverFirst ? `${ot.approverFirst} ${ot.approverLast || ""}`.trim() : "-",
+        approverPosition: ot.approverPosition || "หัวหน้างาน",
+      })),
+      // ✅ Mapping ข้อมูล OT ของตัวเอง (เพิ่ม requestDate จาก createdAt)
+      myOT: (myOTRequestsRaw || []).map((ot) => ({
+        ...ot,
+        projectTag: ot.userName,
+        date: ot.date, 
+        createdAt: formatThaiDate(ot.createdAt),
+        requestDate: formatThaiDate(ot.createdAt), // ✅ ใช้สำหรับแสดง "วันที่ขอ OT"
+        remark: ot.remarks, 
+        approverName: ot.approverFirst ? `${ot.approverFirst} ${ot.approverLast || ""}`.trim() : "-",
+        approverPosition: ot.approverPosition || "แอดมิน/HR",
       })),
     };
 

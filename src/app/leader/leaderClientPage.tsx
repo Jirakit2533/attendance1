@@ -11,8 +11,9 @@ import {
   updateLeaveStatusAction,
   changePasswordAction,
   createPersonalOTAction,
+  updateOTStatusAction,
 } from "./actions";
-
+import { toast } from "react-hot-toast";
 import { OffsiteCheckOutConfirm } from "@/app/component/modal/OffsiteCheckOutConfirm";
 
 /* ---------------- COMPONENTS ---------------- */
@@ -82,8 +83,7 @@ const OffsiteConfirmPopup = ({
         </h3>
         <p className="text-gray-600 mb-6 text-sm">
           คุณไม่ได้อยู่ในรัศมีของไซต์งาน{" "}
-          <span className="font-semibold text-blue-600"></span>{" "}
-          <br />
+          <span className="font-semibold text-blue-600"></span> <br />
           ต้องการยืนยันการบันทึกข้อมูลหรือไม่?
         </p>
       </div>
@@ -115,6 +115,7 @@ export default function LeaderClientPage({
   myLeaves = [],
   companyData,
   initialOT = [],
+  myOT,
 }: any) {
   const router = useRouter();
 
@@ -282,25 +283,49 @@ export default function LeaderClientPage({
       };
     });
   };
-
+  const teamOT = useMemo(
+    () =>
+      (initialOT || []).filter(
+        (ot: any) => ot.userId !== userProfile.id && ot.user_id !== userProfile.id
+      ),
+    [initialOT, userProfile.id]
+  );
   // กรองข้อมูล OT ตามชื่อพนักงาน หรือ โปรเจกต์
-  const filteredOT = (initialAttendance || []).filter((ot: any) => {
+  const filteredOT = useMemo(() => {
     const searchTerm = searchOT.toLowerCase();
-    return (
-      ot.employeeName?.toLowerCase().includes(searchTerm) ||
-      ot.projectTag?.toLowerCase().includes(searchTerm) ||
-      ot.reason?.toLowerCase().includes(searchTerm)
+    return teamOT.filter(
+      (ot: any) =>
+        ot.employeeName?.toLowerCase().includes(searchTerm) ||
+        ot.projectTag?.toLowerCase().includes(searchTerm) ||
+        ot.reason?.toLowerCase().includes(searchTerm)
     );
-  });
-
-  const handleApproveOT = (id: string) => {
-    console.log("Approve OT:", id);
+  }, [teamOT, searchOT]);
+  const handleApproveOT = async (id: string) => {
+    try {
+      await updateOTStatusAction(Number(id), "approved");
+      toast.success("อนุมัติ OT เรียบร้อยแล้ว");
+    } catch (error) {
+      toast.error("เกิดข้อผิดพลาดในการอนุมัติ");
+    }
   };
-  const handleRejectOT = (id: string) => {
-    console.log("Reject OT:", id);
+  
+  const handleRejectOT = async (id: string) => {
+    try {
+      // คุณอาจจะดึงค่า remark จาก State มาส่งไปด้วยก็ได้
+      await updateOTStatusAction(Number(id), "rejected");
+      toast.error("ปฏิเสธคำขอ OT แล้ว");
+    } catch (error) {
+      toast.error("เกิดข้อผิดพลาด");
+    }
   };
-  const resetOTStatus = (id: string) => {
-    console.log("Reset OT status:", id);
+  
+  const resetOTStatus = async (id: string) => {
+    try {
+      await updateOTStatusAction(Number(id), "pending");
+      toast.secondary("รีเซ็ตสถานะเป็นรออนุมัติ");
+    } catch (error) {
+      toast.error("เกิดข้อผิดพลาด");
+    }
   };
 
   /* ---------------- LEAVE LOGIC ---------------- */
@@ -1255,17 +1280,17 @@ export default function LeaderClientPage({
                       l.status === "approved" || l.status === "อนุมัติแล้ว"
                         ? "bg-green-50 text-green-600 border-green-100"
                         : l.status === "rejected" || l.status === "ปฏิเสธ"
-                        ? "bg-red-50 text-red-600 border-red-100"
-                        : "bg-amber-50 text-amber-600 border-amber-100"
+                          ? "bg-red-50 text-red-600 border-red-100"
+                          : "bg-amber-50 text-amber-600 border-amber-100"
                     }`}
                                 >
                                   {l.status === "pending"
                                     ? "รออนุมัติ"
                                     : l.status === "approved"
-                                    ? "อนุมัติแล้ว"
-                                    : l.status === "rejected"
-                                    ? "ปฏิเสธ"
-                                    : l.status}
+                                      ? "อนุมัติแล้ว"
+                                      : l.status === "rejected"
+                                        ? "ปฏิเสธ"
+                                        : l.status}
                                 </span>
                               </td>
                               <td className="p-4 sm:p-6 hidden lg:table-cell">
@@ -1435,7 +1460,7 @@ export default function LeaderClientPage({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {overtimeRequests.length === 0 ? (
+                      {myOT.length === 0 ? (
                         <tr>
                           <td
                             colSpan={6}
@@ -1445,7 +1470,7 @@ export default function LeaderClientPage({
                           </td>
                         </tr>
                       ) : (
-                        overtimeRequests.map((ot: any) => {
+                        myOT.map((ot: any) => {
                           return (
                             <tr
                               key={ot.id}
@@ -1454,13 +1479,11 @@ export default function LeaderClientPage({
                               {/* 1. วันที่สร้างคำขอ (createdAt) */}
                               <td className="px-4 py-2 text-sm text-gray-600 text-center">
                                 {ot.createdAt
-                                  ? new Date(ot.createdAt).toLocaleDateString(
-                                      "th-TH"
-                                    )
+                                  ? ot.createdAt.split(" ")[0]
                                   : "-"}
                               </td>
 
-                              {/* 2. วันที่ทำ OT และ ช่วงเวลา (date, timeStart, timeEnd) */}
+                              {/* 2. วันที่ทำ OT และ ช่วงเวลา */}
                               <td className="p-4 sm:p-6">
                                 <div className="flex flex-col gap-1">
                                   <div className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-black text-[10px] w-fit uppercase">
@@ -1479,40 +1502,49 @@ export default function LeaderClientPage({
                               {/* 3. จำนวนชั่วโมง (overtimeByRequest) */}
                               <td className="p-4 sm:p-6 text-center">
                                 <span className="bg-orange-500 text-white px-2.5 py-1 rounded-full font-black text-[10px] sm:text-xs shadow-sm shadow-orange-200 whitespace-nowrap">
-                                  {ot.overtimeByRequest} ชม.
+                                  {ot.overtimeByRequest} นาที
                                 </span>
                               </td>
 
-                              {/* 4. เหตุผล (remarks) */}
+                              {/* 4. เหตุผล และ หมายเหตุระบบ */}
                               <td className="p-4 sm:p-6 hidden md:table-cell">
-                                <span className="text-xs text-gray-400 italic line-clamp-2">
-                                  {ot.remarks || "ไม่ได้ระบุเหตุผล"}
-                                </span>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs text-gray-700 font-bold line-clamp-1">
+                                    {ot.reason || "ไม่ระบุเหตุผล"}
+                                  </span>
+                                  {ot.remarks && (
+                                    <span className="text-[10px] text-gray-400 italic line-clamp-1">
+                                      หมายเหตุ: {ot.remarks}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
 
                               {/* 5. สถานะ (status) */}
                               <td className="p-4 sm:p-6 text-center">
                                 <span
                                   className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-tighter shadow-sm border whitespace-nowrap
-                    ${
-                      ot.status === "approved"
-                        ? "bg-green-50 text-green-600 border-green-100"
-                        : ot.status === "rejected"
-                        ? "bg-red-50 text-red-600 border-red-100"
-                        : "bg-amber-50 text-amber-600 border-amber-100"
-                    }`}
+            ${
+              ot.status === "approved"
+                ? "bg-green-50 text-green-600 border-green-100"
+                : ot.status === "rejected"
+                  ? "bg-red-50 text-red-600 border-red-100"
+                  : "bg-amber-50 text-amber-600 border-amber-100"
+            }`}
                                 >
                                   {ot.status === "pending"
                                     ? "รออนุมัติ"
                                     : ot.status === "approved"
-                                    ? "อนุมัติแล้ว"
-                                    : "ปฏิเสธ"}
+                                      ? "อนุมัติแล้ว"
+                                      : "ปฏิเสธ"}
                                 </span>
                               </td>
 
-                              {/* 6. ผู้จัดการคำขอ (อ้างอิงจากข้อมูลที่ Join มา) */}
+                              {/* 6. ผู้จัดการคำขอ */}
                               <td className="p-4 sm:p-6 text-center">
-                                {ot.status !== "pending" && ot.approverName ? (
+                                {ot.status !== "pending" &&
+                                ot.approverName &&
+                                ot.approverName !== "-" ? (
                                   <div className="inline-flex flex-col items-center">
                                     <span className="text-[11px] sm:text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
                                       {ot.approverName}
@@ -1925,15 +1957,15 @@ export default function LeaderClientPage({
                                         l.status === "pending"
                                           ? "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
                                           : l.status === "approved"
-                                          ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
-                                          : "bg-rose-100 text-rose-700 ring-1 ring-rose-200"
+                                            ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
+                                            : "bg-rose-100 text-rose-700 ring-1 ring-rose-200"
                                       }`}
                                     >
                                       {l.status === "pending"
                                         ? "• รออนุมัติ"
                                         : l.status === "approved"
-                                        ? "✓ อนุมัติแล้ว"
-                                        : "✕ ปฏิเสธ"}
+                                          ? "✓ อนุมัติแล้ว"
+                                          : "✕ ปฏิเสธ"}
                                     </span>
                                   </td>
                                   <td className="py-5 px-6">
@@ -1986,10 +2018,10 @@ export default function LeaderClientPage({
                                         }`}
                                         value={
                                           l.status === "pending"
-                                            ? leaveRemarks[l.id] ??
+                                            ? (leaveRemarks[l.id] ??
                                               l.remark ??
-                                              ""
-                                            : l.remark ?? "-"
+                                              "")
+                                            : (l.remark ?? "-")
                                         }
                                         onChange={(e) =>
                                           handleRemarkChange(
@@ -2133,6 +2165,7 @@ export default function LeaderClientPage({
                   </div>
                 </Section>
               </div>
+
               {/* {ตารางคำขอ OT พนักงาน} */}
               <div className="print:hidden mt-12">
                 <Section title="คำขอทำ OT พนักงาน">
@@ -2156,13 +2189,16 @@ export default function LeaderClientPage({
                               พนักงาน
                             </th>
                             <th className="py-6 px-4 text-center border-b border-slate-100 w-[180px]">
+                              วันที่ขอ OT
+                            </th>
+                            <th className="py-6 px-4 text-center border-b border-slate-100 w-[180px]">
                               วันที่ทำ OT
                             </th>
                             <th className="py-6 px-4 text-center border-b border-slate-100 w-[200px]">
                               ช่วงเวลา
                             </th>
                             <th className="py-6 px-4 text-center border-b border-slate-100 w-[120px]">
-                              รวมชั่วโมง
+                              จำนวน (นาที)
                             </th>
                             <th className="py-6 px-4 text-left border-b border-slate-100 w-[250px]">
                               งานที่ทำ & เหตุผล
@@ -2184,7 +2220,6 @@ export default function LeaderClientPage({
                         <tbody className="divide-y divide-slate-50">
                           {filteredOT.length > 0 ? (
                             filteredOT.map((ot) => {
-                              // Logic คำนวณชั่วโมง (สมมติว่าเป็นการลบกันของ Time String)
                               return (
                                 <tr
                                   key={ot.id}
@@ -2209,22 +2244,28 @@ export default function LeaderClientPage({
                                           {ot.employeeName}
                                         </div>
                                         <div className="text-indigo-500 font-mono text-[10px] font-bold italic truncate">
-                                          @{ot.positionName}
+                                          @{ot.positionName || "พนักงาน"}
                                         </div>
                                       </div>
                                     </div>
                                   </td>
                                   <td className="px-4 py-2 text-center font-bold text-slate-600">
-                                    {ot.workDate}
+                                    {/* แก้กลับมาใช้ ot.date เพื่อแสดงวันที่ทำ OT จริงที่ Map มาจาก Server */}
+                                    {ot.requestDate || "-"}
+                                  </td>
+                                  <td className="px-4 py-2 text-center font-bold text-slate-600">
+                                    {/* แก้กลับมาใช้ ot.date เพื่อแสดงวันที่ทำ OT จริงที่ Map มาจาก Server */}
+                                    {ot.date || "-"}
                                   </td>
                                   <td className="py-5 px-4 text-center">
                                     <div className="inline-block bg-slate-100 text-slate-700 px-3 py-1 rounded-lg font-black text-[11px] mb-1">
-                                      {ot.startTime} - {ot.endTime}
+                                      {ot.timeStart?.slice(0, 5)} -{" "}
+                                      {ot.timeEnd?.slice(0, 5)}
                                     </div>
                                   </td>
                                   <td className="py-5 px-4 text-center">
                                     <span className="bg-indigo-600 text-white px-3 py-1 rounded-full font-black text-xs shadow-sm shadow-indigo-200">
-                                      {ot.totalHours} ชม.
+                                      {ot.overtimeByRequest} น.
                                     </span>
                                   </td>
                                   <td className="py-5 px-4">
@@ -2243,15 +2284,15 @@ export default function LeaderClientPage({
                                         ot.status === "pending"
                                           ? "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
                                           : ot.status === "approved"
-                                          ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
-                                          : "bg-rose-100 text-rose-700 ring-1 ring-rose-200"
+                                            ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
+                                            : "bg-rose-100 text-rose-700 ring-1 ring-rose-200"
                                       }`}
                                     >
                                       {ot.status === "pending"
                                         ? "• รออนุมัติ"
                                         : ot.status === "approved"
-                                        ? "✓ อนุมัติแล้ว"
-                                        : "✕ ปฏิเสธ"}
+                                          ? "✓ อนุมัติแล้ว"
+                                          : "✕ ปฏิเสธ"}
                                     </span>
                                   </td>
                                   <td className="py-5 px-6">
@@ -2291,10 +2332,21 @@ export default function LeaderClientPage({
                                       placeholder="หมายเหตุ..."
                                       className={`border rounded-xl px-3 py-1.5 text-xs w-full outline-none transition-all ${
                                         ot.status !== "pending"
-                                          ? "bg-gray-50 text-gray-700 border-gray-200"
+                                          ? "bg-gray-50 text-gray-700 border-gray-200 cursor-not-allowed"
                                           : "bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
                                       }`}
                                       value={ot.remark || ""}
+                                      onChange={(e) => {
+                                        if (
+                                          typeof handleRemarkChange ===
+                                          "function"
+                                        ) {
+                                          handleRemarkChange(
+                                            ot.id,
+                                            e.target.value
+                                          );
+                                        }
+                                      }}
                                       readOnly={ot.status !== "pending"}
                                     />
                                   </td>
@@ -2302,10 +2354,11 @@ export default function LeaderClientPage({
                                     {ot.status !== "pending" ? (
                                       <div className="inline-flex flex-col items-center">
                                         <span className="text-[13px] font-bold text-gray-900">
-                                          {ot.approverName}
+                                          {ot.approverName || "-"}
                                         </span>
                                         <span className="text-[9px] text-indigo-500 font-black uppercase tracking-widest">
-                                          {ot.approverPosition}
+                                          {ot.approverPosition ||
+                                            "Manager/Leader"}
                                         </span>
                                       </div>
                                     ) : (

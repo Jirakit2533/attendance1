@@ -1,0 +1,1 @@
+ALTER TABLE "overtime" RENAME COLUMN "ot_status" TO "status";

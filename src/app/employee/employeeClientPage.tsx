@@ -64,8 +64,7 @@ const OffsiteConfirmPopup = ({
         </h3>
         <p className="text-gray-600 mb-6 text-sm">
           คุณไม่ได้อยู่ในรัศมีของไซต์งาน{" "}
-          <span className="font-semibold text-blue-600"></span>{" "}
-          <br />
+          <span className="font-semibold text-blue-600"></span> <br />
           ต้องการยืนยันการบันทึกข้อมูลหรือไม่?
         </p>
       </div>
@@ -112,7 +111,7 @@ export default function EmployeeClientPage({
 
   const [records, setRecords] = useState<any[]>(initialRecords);
   const [leaves, setLeaves] = useState<any[]>(initialLeaves);
-  
+
   // ✅ ต้องประกาศ State นี้เพื่อให้ UI ที่บรรทัด 1088 ใช้งานได้ และไม่ขึ้น undefined
   const [overtimeRequests, setOvertimeRequests] = useState<any[]>(initialOT);
 
@@ -159,7 +158,7 @@ export default function EmployeeClientPage({
   const [showOldPw, setShowOldPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
-  
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -167,7 +166,6 @@ export default function EmployeeClientPage({
   const [otError, setOtError] = useState("");
   const [otSuccess, setOtSuccess] = useState(false);
   const [isProcessingOT, setIsProcessingOT] = useState(false);
-
 
   const [otData, setOtData] = useState({
     date: "",
@@ -596,7 +594,6 @@ export default function EmployeeClientPage({
             reason: "",
           });
         }, 2500);
-
       } else {
         setOtError(res.error || res.message || "เกิดข้อผิดพลาด");
       }
@@ -1173,16 +1170,16 @@ export default function EmployeeClientPage({
                             {ot.approverName || "-"}
                           </div>
 
-                          {/* Remarks - ในที่นี้คือข้อมูลสรุปวันที่/เวลาที่เก็บใน remarks */}
+                          {/* บันทึกระบบ (จากฝั่ง Admin/Leader) */}
                           <div className="text-[12px] font-bold text-gray-400 leading-relaxed truncate">
                             <span className="text-indigo-600 mr-2 font-black">
                               บันทึกระบบ:
                             </span>
-                            {ot.remarks || "-"}
+                            {ot.remark || "-"}
                           </div>
                         </div>
 
-                        {/* Reason Box */}
+                        {/* Reason Box (เหตุผลที่พนักงานกรอก) */}
                         <div className="mt-4 bg-gray-50 p-5 rounded-2xl border border-gray-100 text-sm text-gray-600 font-medium italic">
                           <span className="font-bold not-italic text-gray-900 block mb-1">
                             เหตุผลที่ขอ:
@@ -1611,7 +1608,9 @@ export default function EmployeeClientPage({
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div
             className="absolute inset-0"
-            onClick={() => !isProcessingOT && !otSuccess && setShowOTModal(false)}
+            onClick={() =>
+              !isProcessingOT && !otSuccess && setShowOTModal(false)
+            }
           ></div>
 
           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-300 relative z-10">
@@ -1774,7 +1773,7 @@ export default function EmployeeClientPage({
           </div>
         </div>
       )}
-      
+
       {/* 📸 MODAL CAMERA */}
       {showCamera && (
         <div className="fixed inset-0 bg-slate-900/98 flex flex-col items-center justify-center z-[999] p-6 backdrop-blur-2xl">

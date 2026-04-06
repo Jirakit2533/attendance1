@@ -9,11 +9,13 @@ import {
   positionsTable,
   departmentsTable,
   shiftsTable,
+  overtimeRequestsTable,
 } from "@/db/schema";
 import { getAdminContext } from "./actions";
 import { desc, eq, and, or, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { sql } from "drizzle-orm";
 import AdminClientPage from "./adminClientPage";
 
 export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
@@ -46,6 +48,7 @@ export default async function AdminDashboardPage() {
       departmentsData,
       defaultShiftData,
       companyInfoData,
+      rawOvertime, // เพิ่ม OT เข้ามาในชุด Parallel เพื่อ Performance
     ] = await Promise.all([
       // --- พนักงาน: ดึงผ่าน companyId แทน createdBy ---
       db
@@ -71,7 +74,7 @@ export default async function AdminDashboardPage() {
         .where(
           and(
             or(eq(usersTable.role, "employee"), eq(usersTable.role, "leader")),
-            eq(usersTable.companyId, companyId || ""), // เปลี่ยนมาใช้ Company ดึงพนักงานทั้งหมด
+            eq(usersTable.companyId, companyId || ""),
             isNull(usersTable.deletedAt)
           )
         )
@@ -107,7 +110,7 @@ export default async function AdminDashboardPage() {
         .leftJoin(shiftsTable, eq(attendanceTable.shift_id, shiftsTable.id))
         .where(
           and(
-            eq(usersTable.companyId, companyId || ""), // ดึง Attendance ของทุกคนในบริษัท
+            eq(usersTable.companyId, companyId || ""),
             isNull(usersTable.deletedAt)
           )
         )
@@ -134,7 +137,7 @@ export default async function AdminDashboardPage() {
         .leftJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
         .where(
           and(
-            eq(usersTable.companyId, companyId || ""), // ดึง Leave ของทุกคนในบริษัท
+            eq(usersTable.companyId, companyId || ""),
             isNull(usersTable.deletedAt)
           )
         )
@@ -173,12 +176,41 @@ export default async function AdminDashboardPage() {
         .from(companyTable)
         .where(eq(companyTable.id, companyId || ""))
         .limit(1),
+
+      // --- OT Requests: ดึงข้อมูลและ Join ข้อมูลพนักงาน ---
+      db
+        .select({
+          id: overtimeRequestsTable.id,
+          userId: overtimeRequestsTable.userId,
+          userName: overtimeRequestsTable.userName,
+          employeeName: sql<string>`concat(${usersTable.firstName}, ' ', ${usersTable.lastName})`,
+          avatarUrl: usersTable.avatarUrl,
+          requestDate: overtimeRequestsTable.createdAt,
+          workingDate: overtimeRequestsTable.date,
+          timeStart: overtimeRequestsTable.timeStart,
+          timeEnd: overtimeRequestsTable.timeEnd,
+          overtimeByRequest: overtimeRequestsTable.overtimeByRequest,
+          reason: overtimeRequestsTable.reason, // ดึงจาก field reason
+          status: overtimeRequestsTable.status,
+          remarks: overtimeRequestsTable.remarks, // ดึงจาก field remarks
+        })
+        .from(overtimeRequestsTable)
+        .leftJoin(usersTable, eq(overtimeRequestsTable.userId, usersTable.id))
+        .where(
+          and(
+            eq(overtimeRequestsTable.companyId, companyId || ""),
+            isNull(overtimeRequestsTable.deletedAt)
+          )
+        )
+        .orderBy(desc(overtimeRequestsTable.createdAt)),
     ]);
 
     // 4. Mapping ข้อมูล
     const employees = (rawEmployees || []).map((emp) => {
       const isUuid = emp?.userName && emp.userName.length > 30;
-      const finalUserName = isUuid ? emp.firstName?.toLowerCase() : emp?.userName || "user";
+      const finalUserName = isUuid
+        ? emp.firstName?.toLowerCase()
+        : emp?.userName || "user";
 
       return {
         id: String(emp?.id || ""),
@@ -231,6 +263,22 @@ export default async function AdminDashboardPage() {
       };
     });
 
+    const overtimeRequests = (rawOvertime || []).map((ot) => ({
+      id: String(ot.id || ""),
+      userId: String(ot.userId || ""),
+      userName: String(ot.userName || ""),
+      employeeName: String(ot.employeeName || "ไม่ระบุชื่อ"),
+      avatarUrl: ot.avatarUrl || null,
+      requestDate: ot.requestDate ? String(ot.requestDate) : null,
+      workingDate: ot.workingDate ? String(ot.workingDate) : null,
+      timeStart: ot.timeStart || "",
+      timeEnd: ot.timeEnd || "",
+      totalHours: String(ot.overtimeByRequest || "0"),
+      reason: String(ot.reason || ""),
+      status: String(ot.status || "pending"),
+      remark: String(ot.remarks || ""), // Mapping จาก remarks เข้าตัวแปร remark
+    }));
+
     const sites = (sitesData || []).map((s) => ({
       id: String(s?.id || ""),
       name: String(s?.name || ""),
@@ -272,22 +320,34 @@ export default async function AdminDashboardPage() {
       admin: adminProfile,
       sites: sites,
       hasMultiSiteActive: sites.some((s) => s.name === "ทุกไซต์"),
-      positions: (positionsData || []).map((p) => ({ id: String(p?.id || ""), name: String(p?.name || "") })),
-      departments: (departmentsData || []).map((d) => ({ id: String(d?.id || ""), name: String(d?.name || "") })),
+      positions: (positionsData || []).map((p) => ({
+        id: String(p?.id || ""),
+        name: String(p?.name || ""),
+      })),
+      departments: (departmentsData || []).map((d) => ({
+        id: String(d?.id || ""),
+        name: String(d?.name || ""),
+      })),
       standardTime: {
         startTime: defaultShiftData?.[0]?.startTime || "08:00",
         endTime: defaultShiftData?.[0]?.endTime || "17:00",
       },
       initialCompanyData: companyInfoData?.[0] || null,
+      initialOvertimeRequests: overtimeRequests,
     };
 
     const safeProps = JSON.parse(
-      JSON.stringify(rawProps, (key, value) => (value === undefined ? null : value))
+      JSON.stringify(rawProps, (key, value) =>
+        value === undefined ? null : value
+      )
     );
 
     return <AdminClientPage {...safeProps} />;
   } catch (error: any) {
-    if (error.message === "NEXT_REDIRECT" || error.digest?.includes("NEXT_REDIRECT")) {
+    if (
+      error.message === "NEXT_REDIRECT" ||
+      error.digest?.includes("NEXT_REDIRECT")
+    ) {
       throw error;
     }
     console.error("Critical Dashboard Error:", error);

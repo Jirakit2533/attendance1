@@ -470,91 +470,145 @@ export async function createPersonalOTAction(payload: {
       throw new Error("ไม่พบรหัสพนักงาน (Missing User ID)");
     }
 
-    // 1. ดึงข้อมูลพนักงานจาก usersTable (ตาม Schema ของคุณ)
+    // 1. ดึงข้อมูลพนักงานจาก usersTable
     const user = await db.query.usersTable.findFirst({
       where: eq(usersTable.id, payload.userId),
-      columns: {
+      columns: { 
         id: true,
         firstName: true,
         lastName: true,
-        companyId: true,
-        departmentId: true,
-        site_id: true,
+        companyId: true, 
+        departmentId: true, 
+        site_id: true, 
       },
     });
 
-    // หาก Query แล้วได้ค่าว่าง (user เป็น undefined)
+    // หาก Query แล้วได้ค่าว่าง
     if (!user) {
       throw new Error(`ไม่พบข้อมูลพนักงานในระบบ (ID: ${payload.userId})`);
     }
 
-    // 2. ดึงข้อมูล shiftId ล่าสุดจาก shiftsTable เนื่องจากใน usersTable ไม่มีฟิลด์นี้
+    // 2. ดึงข้อมูล shiftId ล่าสุดจาก shiftsTable
     const latestShift = await db.query.shiftsTable.findFirst({
       where: eq(shiftsTable.userId, user.id),
       orderBy: (shifts, { desc }) => [desc(shifts.createdAt)],
     });
 
-    // 3. คำนวณชั่วโมงเป็นนาที (Integer) ตามที่ DB ต้องการ (overtimeByRequest)
+    // 3. คำนวณชั่วโมงเป็นนาที (Integer) สำหรับ overtimeByRequest
     const [startH, startM] = payload.startTime.split(":").map(Number);
     const [endH, endM] = payload.endTime.split(":").map(Number);
-
+    
     const startDate = new Date(0, 0, 0, startH, startM);
     const endDate = new Date(0, 0, 0, endH, endM);
-
+    
     let diffMs = endDate.getTime() - startDate.getTime();
     if (diffMs < 0) diffMs += 24 * 60 * 60 * 1000; // กรณีทำข้ามคืน
-
+    
     const totalMinutes = Math.round(diffMs / (1000 * 60));
 
-    // 4. บันทึกลงตาราง overtime_requests ตาม Schema เป๊ะๆ (ห้ามลบ/ห้ามลด)
+    // 4. บันทึกลงตาราง overtime_requests ตาม Schema (ห้ามลบ/ห้ามลด)
     const newRequest = await db.insert(overtimeRequestsTable).values({
-      // id: UUID จะ defaultRandom() เองตาม Schema
+      // id: จะถูกสร้างอัตโนมัติด้วย defaultRandom()
       userId: user.id,
       userName: `${user.firstName} ${user.lastName}`,
-
-      // บันทึก IDs สังกัดที่ดึงมาจาก DB (ต้องตรงกับ Foreign Key Constraints)
+      
+      // บันทึก IDs สังกัด
       companyId: user.companyId,
       departmentId: user.departmentId,
-      siteId: user.site_id, // ใช้ค่าจาก site_id ของ usersTable
-      shiftId: latestShift?.id || null, // ใช้ id จาก shiftsTable (ถ้าไม่มีจะเป็น null)
-
-      // ฟิลด์บังคับใน Schema (Update ใหม่)
-      overtimeByRequest: totalMinutes,
-      timeStart: payload.startTime, // ✨ บันทึกเข้า timeStart (notNull)
-      timeEnd: payload.endTime,     // ✨ บันทึกเข้า timeEnd (notNull)
-      date: payload.date,           // ✨ บันทึกเข้า date (notNull)
-
-      // บันทึกเป็น JSONB Array ตาม Schema ($type<string[]>)
-      requestedWorkers: [user.id],
-
-      // รายละเอียดเพิ่มเติม (ปรับให้เหลือแค่เหตุผล เพราะมีฟิลด์เวลาแยกแล้ว)
-      remarks: payload.reason,
-
-      // สถานะเริ่มต้นตาม Enum ใน Schema
+      siteId: user.site_id, 
+      shiftId: latestShift?.id || null,
+      
+      // ฟิลด์บังคับ (Not Null) ตาม Schema
+      overtimeByRequest: totalMinutes, 
+      timeStart: payload.startTime,
+      timeEnd: payload.endTime,
+      date: payload.date, 
+      
+      // บันทึกเป็น JSONB Array
+      requestedWorkers: [user.id], 
+      
+      // เหตุผลการขอ OT (Not Null)
+      reason: payload.reason || "ไม่มีระบุเหตุผล", 
+      
+      // สถานะเริ่มต้น
       status: "pending",
-
+      
       // ร่องรอยการสร้าง
       createdBy: user.id,
-      createdAt: new Date(), // จะถูกเขียนทับด้วย timezone('UTC', now()) ใน DB
+      createdAt: new Date(),
     }).returning();
 
-    // 5. Update Cache เพื่อให้หน้าประวัติโชว์ข้อมูลใหม่ทันที
+    // 5. Update Cache เพื่อให้ข้อมูลเป็นปัจจุบัน
     revalidatePath("/dashboard/ot-status");
     revalidatePath("/employee");
     revalidatePath("/leader");
 
-    return {
-      success: true,
-      message: "ส่งคำขอ OT รายบุคคลเรียบร้อยแล้ว",
-      data: newRequest[0]
+    return { 
+      success: true, 
+      message: "ส่งคำขอ OT เรียบร้อยแล้ว", 
+      data: newRequest[0] 
     };
 
   } catch (error: any) {
     console.error("PERSONAL_OT_ERROR_DETAIL:", error);
-    // ส่งข้อความ Error ที่ละเอียดขึ้นเพื่อให้แก้ไขได้ตรงจุด
-    return {
-      success: false,
+    return { 
+      success: false, 
       error: "ส่งคำขอ OT ล้มเหลว: " + (error.message || "Database Constraint Error")
+    };
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* LEADER OT ACTIONS (จัดการอนุมัติ/ปฏิเสธ OT)                                     */
+/* -------------------------------------------------------------------------- */
+
+export async function updateOTStatusAction(
+  otId: string, 
+  status: "approved" | "rejected" | "pending",
+  remark?: string
+) {
+  try {
+    // 1. ตรวจสอบสิทธิ์ Leader เบื้องต้น
+    const leader = await getCurrentUser();
+    if (!leader || leader.role !== "leader") {
+      throw new Error("คุณไม่มีสิทธิ์ในการดำเนินการนี้");
+    }
+
+    // 2. อัปเดตข้อมูลลงตาราง overtime_requests
+    // หมายเหตุ: ใช้การ update ตาม id ที่ส่งมาจาก UI
+    const updatedRequest = await db
+      .update(overtimeRequestsTable)
+      .set({
+        status: status,
+        remarks: remark || null, // บันทึกหมายเหตุถ้ามีการส่งมา
+        approvedBy: status === "approved" ? leader.id : null,
+        rejectedBy: status === "rejected" ? leader.id : null,
+        // หากต้องการเก็บร่องรอยว่าใครแก้สถานะล่าสุด (ถ้าใน schema มีฟิลด์ updatedBy)
+        // updatedBy: leader.id, 
+        updatedAt: new Date(),
+      })
+      .where(eq(overtimeRequestsTable.id, otId))
+      .returning();
+
+    if (updatedRequest.length === 0) {
+      throw new Error("ไม่พบรายการ OT ที่ต้องการอัปเดต");
+    }
+
+    // 3. Update Cache เพื่อให้หน้าจอทุกฝั่งเห็นข้อมูลล่าสุด
+    revalidatePath("/leader");
+    revalidatePath("/employee");
+    revalidatePath("/dashboard/ot-status");
+
+    return { 
+      success: true, 
+      message: status === "approved" ? "อนุมัติเรียบร้อย" : "ปฏิเสธคำขอเรียบร้อย" 
+    };
+
+  } catch (error: any) {
+    console.error("UPDATE_OT_STATUS_ERROR:", error);
+    return { 
+      success: false, 
+      error: error.message || "เกิดข้อผิดพลาดในการอัปเดตสถานะ" 
     };
   }
 }
