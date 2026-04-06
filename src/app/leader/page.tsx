@@ -48,9 +48,11 @@ export default async function LeaderPage() {
   // สร้าง Alias สำหรับตาราง User และ Position เพื่อใช้ดึงข้อมูลผู้อนุมัติ
   const approverUser = alias(usersTable, "approverUser");
   const approverPosition = alias(positionsTable, "approverPosition");
-  const otApproverUser = alias(usersTable, "otApproverUser"); // ✅ เพิ่ม Alias สำหรับผู้อนุมัติ OT
-  const otEmployeePosition = alias(positionsTable, "otEmployeePosition"); // ✅ เพิ่ม Alias สำหรับตำแหน่งของคนขอ OT
-  const otApproverPosition = alias(positionsTable, "otApproverPosition"); // ✅ เพิ่ม Alias สำหรับตำแหน่งของผู้อนุมัติ OT
+  
+  // ✅ สร้าง Alias แยกเฉพาะสำหรับ OT เพื่อป้องกันการ Join ทับซ้อนกับระบบลา
+  const otApproverUser = alias(usersTable, "otApproverUser"); 
+  const otEmployeePosition = alias(positionsTable, "otEmployeePosition");
+  const otApproverPosition = alias(positionsTable, "otApproverPosition");
 
   // 1. ดึง Profile ของ Leader พร้อมข้อมูลบริษัท
   const userExists = await db
@@ -259,7 +261,7 @@ export default async function LeaderPage() {
         .orderBy(desc(leaveTable.id))
         .limit(30),
 
-      // ✅ 7. ดึงข้อมูล OT ของทีม (แก้ไข: ใช้ teamFilter เพื่อให้แสดงผลเหมือนคำขอลางาน)
+      // ✅ 7. ดึงข้อมูล OT ของทีม (Join ข้อมูลผู้อนุมัติแยกต่างหาก)
       currentDept
         ? db
             .select({
@@ -287,12 +289,12 @@ export default async function LeaderPage() {
             .leftJoin(otEmployeePosition, eq(usersTable.positionId, otEmployeePosition.id))
             .leftJoin(otApproverUser, or(eq(overtimeRequestsTable.approvedBy, otApproverUser.id), eq(overtimeRequestsTable.rejectedBy, otApproverUser.id)))
             .leftJoin(otApproverPosition, eq(otApproverUser.positionId, otApproverPosition.id))
-            .where(teamFilter) // ✅ เปลี่ยนมาใช้ teamFilter เพื่อให้ logic เหมือนลางานเป๊ะ
+            .where(teamFilter)
             .orderBy(desc(overtimeRequestsTable.createdAt))
             .limit(50)
         : Promise.resolve([]),
 
-      // ✅ 8. ดึงข้อมูล OT ของตัวเอง
+      // ✅ 8. ดึงข้อมูล OT ของตัวเอง (Join ข้อมูลผู้อนุมัติแยกต่างหาก)
       db
         .select({
           id: overtimeRequestsTable.id,
@@ -385,7 +387,7 @@ export default async function LeaderPage() {
         approverLast: l.approverLast,
         approverPosition: l.approverPosition || "admin/HR",
       })),
-      // ✅ Mapping ข้อมูล OT ของทีม (เพิ่ม requestDate จาก createdAt)
+      // ✅ Mapping ข้อมูล OT ของทีม
       initialOT: (teamOTRequestsRaw || []).map((ot) => ({
         ...ot,
         employeeName: `${ot.firstName || ""} ${ot.lastName || ""}`.trim() || "ไม่ระบุชื่อ",
@@ -394,19 +396,23 @@ export default async function LeaderPage() {
         projectTag: ot.userName,
         date: ot.date, 
         createdAt: formatThaiDate(ot.createdAt),
-        requestDate: formatThaiDate(ot.createdAt), // ✅ ใช้สำหรับแสดง "วันที่ขอ OT"
+        requestDate: formatThaiDate(ot.createdAt), 
         remark: ot.remarks, 
+        approverFirst: ot.approverFirst, // ✅ เพิ่มให้ UI เช็คเงื่อนไข
+        approverLast: ot.approverLast,   // ✅ เพิ่มให้ UI เช็คเงื่อนไข
         approverName: ot.approverFirst ? `${ot.approverFirst} ${ot.approverLast || ""}`.trim() : "-",
         approverPosition: ot.approverPosition || "หัวหน้างาน",
       })),
-      // ✅ Mapping ข้อมูล OT ของตัวเอง (เพิ่ม requestDate จาก createdAt)
+      // ✅ Mapping ข้อมูล OT ของตัวเอง
       myOT: (myOTRequestsRaw || []).map((ot) => ({
         ...ot,
         projectTag: ot.userName,
         date: ot.date, 
         createdAt: formatThaiDate(ot.createdAt),
-        requestDate: formatThaiDate(ot.createdAt), // ✅ ใช้สำหรับแสดง "วันที่ขอ OT"
+        requestDate: formatThaiDate(ot.createdAt), 
         remark: ot.remarks, 
+        approverFirst: ot.approverFirst, // ✅ เพิ่มให้ UI เช็คเงื่อนไข
+        approverLast: ot.approverLast,   // ✅ เพิ่มให้ UI เช็คเงื่อนไข
         approverName: ot.approverFirst ? `${ot.approverFirst} ${ot.approverLast || ""}`.trim() : "-",
         approverPosition: ot.approverPosition || "แอดมิน/HR",
       })),
