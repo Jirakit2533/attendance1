@@ -7,6 +7,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 10; // เพิ่มประกันเวลาให้รันได้นานสูงสุด 60 วินาที
 
 export async function GET(request: Request) {
   try {
@@ -31,18 +32,15 @@ export async function GET(request: Request) {
     let autoExecutedCount = 0;
 
     for (const rawOT of pendingOTs) {
-      // 4. หา request ที่ match (user + วันเดียวกันแบบ timezone ไทย)
+      // 4. หา request ที่ match (user + วันเดียวกัน)
+      // ปรับการเช็ควันที่ให้เทียบตรงๆ เพื่อความแม่นยำสูงที่สุดและลดปัญหา Timezone
       const requests = await db
         .select()
         .from(overtimeRequestsTable)
         .where(
           and(
             eq(overtimeRequestsTable.userId, rawOT.userId!),
-            sql`
-              DATE(${overtimeRequestsTable.date} AT TIME ZONE 'Asia/Bangkok')
-              =
-              DATE(${rawOT.date} AT TIME ZONE 'Asia/Bangkok')
-            `,
+            eq(overtimeRequestsTable.date, rawOT.date!),
             eq(overtimeRequestsTable.status, "approved")
           )
         );

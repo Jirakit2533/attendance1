@@ -260,7 +260,8 @@ export default function EmployeeClientPage({
   const todayStatus = useMemo(() => {
     const now = new Date();
     const todayStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "UTC",
+      // แก้ตรงนี้จาก UTC เป็น Asia/Bangkok
+      timeZone: "Asia/Bangkok", 
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -269,12 +270,10 @@ export default function EmployeeClientPage({
     const todayRecord = records.find((r: any) => r.date === todayStr);
 
     return {
-      // เช็คว่ามีค่า checkIn และไม่ใช่ค่าว่าง/ขีด
       hasCheckedIn:
         !!todayRecord?.checkIn &&
         todayRecord.checkIn !== "-" &&
         todayRecord.checkIn !== null,
-      // เช็คว่ามีค่า checkOut และไม่ใช่ค่าว่าง/ขีด
       hasCheckedOut:
         !!todayRecord?.checkOut &&
         todayRecord.checkOut !== "-" &&

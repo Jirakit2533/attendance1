@@ -505,8 +505,9 @@ export default function LeaderClientPage({
 
   const todayStatus = useMemo(() => {
     const now = new Date();
+    // 1. แก้ TimeZone เป็น Asia/Bangkok เพื่อให้วันที่ตรงกับเวลาไทยจริงๆ
     const todayStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "UTC",
+      timeZone: "Asia/Bangkok",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -514,14 +515,18 @@ export default function LeaderClientPage({
 
     const todayRecord = records.find((r: any) => r.date === todayStr);
 
-    // ตัดช่องว่างออกก่อนเช็ค (กรณี DB คืนค่าเป็น "  ")
+    // ตัดช่องว่างออกก่อนเช็ค เพื่อความแม่นยำ
+    const checkInValue = todayRecord?.checkIn?.toString().trim();
     const checkOutValue = todayRecord?.checkOut?.toString().trim();
 
     return {
-      hasCheckedIn: !!todayRecord?.checkIn,
-      // เช็คว่ามีค่า และค่าต้องไม่เท่ากับ "-" และไม่ว่างเปล่า
+      // 2. ปรับการเช็ค hasCheckedIn ให้เข้มงวดเหมือน checkOut (กันค่า "-" หรือค่าว่าง)
+      hasCheckedIn: 
+        !!checkInValue && checkInValue !== "-" && checkInValue !== "",
+      
       hasCheckedOut:
         !!checkOutValue && checkOutValue !== "-" && checkOutValue !== "",
+      
       record: todayRecord,
     };
   }, [records]);
