@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db/db";
-import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable, departmentsTable, companyTable, overtimeRequestsTable} from "@/db/schema";
+import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable, departmentsTable, companyTable, overtimeRequestsTable } from "@/db/schema";
 import { eq, and, sql, isNull, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { uploadToDrive } from "@/lib/uploadthing-server";
@@ -16,7 +16,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
   try {
     const now = new Date();
     const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false });
-    
+
     const nowH = now.getHours();
     let lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
     if (nowH >= 0 && nowH < 5) {
@@ -35,10 +35,21 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       throw new Error("ข้อมูลพิกัดไม่ใช่ตัวเลขที่ถูกต้อง");
     }
 
+    // 🚩 ดักพนักงานที่ยังไม่ลงชื่อออก ห้ามเข้าซ้อน
+    const existingActive = await db
+      .select()
+      .from(attendanceTable)
+      .where(and(eq(attendanceTable.user_id, userId), isNull(attendanceTable.checkOut)))
+      .limit(1);
+
+    if (existingActive.length > 0) {
+      throw new Error("คุณมีรายการลงชื่อเข้างานที่ยังไม่ได้ออก กรุณาลงชื่อออกก่อนเริ่มรอบใหม่");
+    }
+
     const [userData, tempShift] = await Promise.all([
       db.select({
         id: usersTable.id,
-        name: usersTable.firstName, 
+        name: usersTable.firstName,
         companyId: usersTable.companyId,
         departmentId: usersTable.departmentId,
         siteId: usersTable.site_id,
@@ -63,27 +74,27 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-    const [companyData] = await db.select({ 
-      otRoundingOption: companyTable.otRoundingOption 
+    const [companyData] = await db.select({
+      otRoundingOption: companyTable.otRoundingOption
     }).from(companyTable).where(eq(companyTable.id, user.companyId || "")).limit(1);
-    
+
     const companyRounding = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
 
     // 🚩 ตรวจสอบพิกัดด้วย Logic รัศมี 20 เมตร และประเภทพนักงาน
     const validatedSite = await validateAndGetSite(
-      lat.toString(), 
-      lon.toString(), 
-      user.companyId || "", 
+      lat.toString(),
+      lon.toString(),
+      user.companyId || "",
       user.siteId || ""
     );
 
     // ถ้าเป็นกลุ่มทุกไซต์ แต่อยู่นอกเขต และยังไม่ได้กดยืนยัน (แสดง Pop-up)
     if (validatedSite.OffsiteCheckInConfirm && !isConfirmed) {
-      return { 
-        success: false, 
-        offsite: true, 
+      return {
+        success: false,
+        offsite: true,
         siteName: validatedSite.name,
-        OffsiteCheckOutConfirm: true 
+        OffsiteCheckOutConfirm: true
       };
     }
 
@@ -114,6 +125,9 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       if (endMin < startMin) endMin += 1440;
       const adjustedNowMin = (nowMin < startMin && endMin > 1440) ? nowMin + 1440 : nowMin;
       if (adjustedNowMin > endMin) currentWorkingStatus = "extra";
+    } else {
+      // 💡 ถ้าไม่มีตารางกะ (วันหยุด/ไม่มีกะ) แต่ถูกเรียกมา ให้ถือว่าเป็น Extra ทันที
+      currentWorkingStatus = "extra";
     }
 
     const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
@@ -124,8 +138,8 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       user_id: userId,
       department_id: user.departmentId,
       site_id: validatedSite.id,
-      siteInNameSnapshot: validatedSite.name || "", 
-      siteCoordinatesSnapshot: validatedSite.coordinates || "", 
+      siteInNameSnapshot: validatedSite.name || "",
+      siteCoordinatesSnapshot: validatedSite.coordinates || "",
       shift_id: activeShiftId,
       temp_shift_id: activeTempShiftId,
       shiftStartTimeSnapshot: activeStartTime,
@@ -143,7 +157,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       lateMinutes: currentWorkingStatus === "normal" && activeStartTime ? (() => {
         let nowM = toMin(currentTimeStr);
         let startM = toMin(activeStartTime);
-        if (nowM < 300 && startM > 1000) nowM += 1440; 
+        if (nowM < 300 && startM > 1000) nowM += 1440;
         const diff = nowM - startM;
         return diff > 0 ? diff : 0;
       })() : 0,
@@ -152,7 +166,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     if (insertedAttendance) {
       const otResult = calculateOvertime({
         checkIn: currentTimeStr,
-        checkOut: currentTimeStr, 
+        checkOut: currentTimeStr,
         shiftStart: activeStartTime,
         shiftEnd: activeEndTime,
         roundingMode: companyRounding,
@@ -173,9 +187,9 @@ export async function checkInAction(userId: string, base64Image: string, locatio
 
     revalidatePath("/employee");
     revalidatePath("/leader");
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       siteName: validatedSite.name,
       isOffsiteIn: finalIsOffsiteIn
     };
@@ -202,7 +216,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
     const lastCheckIn = await db
       .select({
         attendance: attendanceTable,
-        userName: usersTable.firstName, 
+        userName: usersTable.firstName,
         companyId: usersTable.companyId,
       })
       .from(attendanceTable)
@@ -219,10 +233,10 @@ export async function checkOutAction(userId: string, base64Image: string, locati
     const currentRecord = row.attendance;
     if (!currentRecord) throw new Error("ข้อมูลการลงเวลาไม่ถูกต้อง");
 
-    const [companyData] = await db.select({ 
-      otRoundingOption: companyTable.otRoundingOption 
+    const [companyData] = await db.select({
+      otRoundingOption: companyTable.otRoundingOption
     }).from(companyTable).where(eq(companyTable.id, row.companyId || "")).limit(1);
-    
+
     const roundingMode = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
     const userName = row.userName || "Unknown";
     const companyId = row.companyId || "";
@@ -236,7 +250,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
         success: false,
         offsite: true,
         siteName: locationValidation.siteOutName,
-        OffsiteCheckOutConfirm: true 
+        OffsiteCheckOutConfirm: true
       };
     }
 
@@ -249,7 +263,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
       otResult = calculateOvertime({
         checkIn: currentRecord.checkIn || "00:00",
         checkOut: currentTimeStr,
-        shiftStart: currentRecord.checkIn, 
+        shiftStart: currentRecord.checkIn,
         shiftEnd: currentRecord.checkIn,
         roundingMode: roundingMode,
       });
@@ -270,7 +284,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
       const [currH, currM] = currentTimeStr.split(':').map(Number);
       const [endH, endM] = (activeEndTime || "00:00").split(':').map(Number);
       const [inH, inM] = (currentRecord.checkIn || "00:00").split(':').map(Number);
-      
+
       let currentTotalMinutes = currH * 60 + currM;
       let endTotalMinutes = endH * 60 + endM;
       const checkInTotalMinutes = inH * 60 + inM;
@@ -315,7 +329,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
         status: "pending"
       }).onConflictDoUpdate({
         target: [overtimeTable.attendanceId],
-        set: { 
+        set: {
           overtimeBefore: otResult.beforeMinutes,
           overtimeAfter: otResult.afterMinutes,
           overtimeCollected: otResult.totalMinutes,
@@ -331,7 +345,7 @@ export async function checkOutAction(userId: string, base64Image: string, locati
       success: true,
       offsite: isOffsiteOutValue === "1",
       siteName: locationValidation.siteOutName || currentRecord.siteInNameSnapshot || "",
-      otTotal: otResult.totalMinutes 
+      otTotal: otResult.totalMinutes
     };
   } catch (error: any) {
     console.error("Check-out error:", error);
@@ -446,13 +460,13 @@ export async function createPersonalOTAction(payload: {
     // 1. ดึงข้อมูลพนักงานจาก usersTable (ตาม Schema ของคุณ)
     const user = await db.query.usersTable.findFirst({
       where: eq(usersTable.id, payload.userId),
-      columns: { 
+      columns: {
         id: true,
         firstName: true,
         lastName: true,
-        companyId: true, 
-        departmentId: true, 
-        site_id: true, 
+        companyId: true,
+        departmentId: true,
+        site_id: true,
       },
     });
 
@@ -470,13 +484,13 @@ export async function createPersonalOTAction(payload: {
     // 3. คำนวณชั่วโมงเป็นนาที (Integer) ตามที่ DB ต้องการ (overtimeByRequest)
     const [startH, startM] = payload.startTime.split(":").map(Number);
     const [endH, endM] = payload.endTime.split(":").map(Number);
-    
+
     const startDate = new Date(0, 0, 0, startH, startM);
     const endDate = new Date(0, 0, 0, endH, endM);
-    
+
     let diffMs = endDate.getTime() - startDate.getTime();
     if (diffMs < 0) diffMs += 24 * 60 * 60 * 1000; // กรณีทำข้ามคืน
-    
+
     const totalMinutes = Math.round(diffMs / (1000 * 60));
 
     // 4. บันทึกลงตาราง overtime_requests ตาม Schema เป๊ะๆ (ห้ามลบ/ห้ามลด)
@@ -484,28 +498,28 @@ export async function createPersonalOTAction(payload: {
       // id: UUID จะ defaultRandom() เองตาม Schema
       userId: user.id,
       userName: `${user.firstName} ${user.lastName}`,
-      
+
       // บันทึก IDs สังกัดที่ดึงมาจาก DB (ต้องตรงกับ Foreign Key Constraints)
       companyId: user.companyId,
       departmentId: user.departmentId,
       siteId: user.site_id, // ใช้ค่าจาก site_id ของ usersTable
       shiftId: latestShift?.id || null, // ใช้ id จาก shiftsTable (ถ้าไม่มีจะเป็น null)
-      
+
       // ฟิลด์บังคับใน Schema (Update ใหม่)
-      overtimeByRequest: totalMinutes, 
+      overtimeByRequest: totalMinutes,
       timeStart: payload.startTime, // ✨ บันทึกเข้า timeStart (notNull)
       timeEnd: payload.endTime,     // ✨ บันทึกเข้า timeEnd (notNull)
       date: payload.date,           // ✨ บันทึกเข้า date (notNull)
-      
+
       // บันทึกเป็น JSONB Array ตาม Schema ($type<string[]>)
-      requestedWorkers: [user.id], 
-      
+      requestedWorkers: [user.id],
+
       // ✨ แก้ไขจุดเดียว: เปลี่ยนจากบันทึกใน remarks ไปเป็น reason ตาม Schema ใหม่
-      reason: payload.reason, 
-      
+      reason: payload.reason,
+
       // สถานะเริ่มต้นตาม Enum ใน Schema
       status: "pending",
-      
+
       // ร่องรอยการสร้าง
       createdBy: user.id,
       createdAt: new Date(), // จะถูกเขียนทับด้วย timezone('UTC', now()) ใน DB
@@ -516,17 +530,17 @@ export async function createPersonalOTAction(payload: {
     revalidatePath("/employee");
     revalidatePath("/leader");
 
-    return { 
-      success: true, 
-      message: "ส่งคำขอ OT รายบุคคลเรียบร้อยแล้ว", 
-      data: newRequest[0] 
+    return {
+      success: true,
+      message: "ส่งคำขอ OT รายบุคคลเรียบร้อยแล้ว",
+      data: newRequest[0]
     };
 
   } catch (error: any) {
     console.error("PERSONAL_OT_ERROR_DETAIL:", error);
     // ส่งข้อความ Error ที่ละเอียดขึ้นเพื่อให้แก้ไขได้ตรงจุด
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: "ส่งคำขอ OT ล้มเหลว: " + (error.message || "Database Constraint Error")
     };
   }

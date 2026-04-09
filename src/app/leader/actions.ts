@@ -11,8 +11,9 @@ import bcrypt from "bcryptjs";
 
 /**------------------------------------------------------------------
  * 1. บันทึกเวลาเข้า-ออก (Check-in / Check-out) พร้อมตรวจสอบสาย/ออกก่อน
+ * ลอจิกเนียนกริ๊บ: รองรับกะดึก, ดักเข้าซ้อน, Snapshot ข้อมูล, และคำนวณ OT แม่นยำ
  --------------------------------------------------------------------*/
-export async function saveAttendanceAction(data: {
+ export async function saveAttendanceAction(data: {
   userId: string;
   type: "IN" | "OUT";
   image: string;
@@ -30,6 +31,7 @@ export async function saveAttendanceAction(data: {
     });
 
     const nowH = now.getHours();
+    // 🚩 ลอจิกกะดึก: ถ้าเข้างานช่วง 00:00 - 05:00 ให้ถอย lookupDate ไป 1 วันเพื่อหาตารางงานที่ถูกต้อง
     let lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
     if (data.type === "IN" && nowH >= 0 && nowH < 5) {
       const yesterday = new Date(now);
@@ -72,10 +74,24 @@ export async function saveAttendanceAction(data: {
     let finalSiteId = data.siteId;
     let isOffsiteIn = "0";
 
+    /* -------------------------------------------------------------------------- */
+    /* CHECK-IN LOGIC (ขาเข้า)                                                     */
+    /* -------------------------------------------------------------------------- */
     if (data.type === "IN") {
+      // 🚩 ดักพนักงานที่ยังไม่ลงชื่อออก ห้ามเข้าซ้อนเด็ดขาด (เหมือนชุดที่ 1)
+      const existingActive = await db
+        .select()
+        .from(attendanceTable)
+        .where(and(eq(attendanceTable.user_id, data.userId), isNull(attendanceTable.checkOut)))
+        .limit(1);
+
+      if (existingActive.length > 0) {
+        throw new Error("คุณมีรายการลงชื่อเข้างานที่ยังไม่ได้ออก กรุณาลงชื่อออกก่อนเริ่มรอบใหม่");
+      }
+
       const [uLat, uLon] = data.location.split(',').map(Number);
 
-      // 🚩 แก้ไข: ใช้ user.site_id จาก DB เพื่อความแม่นยำสำหรับพนักงานประจำไซต์
+      // 🚩 ตรวจสอบพิกัดและไซต์ (อิงจาก user.site_id จาก DB)
       const validated = await validateAndGetSite(
         uLat.toString(),
         uLon.toString(),
@@ -88,7 +104,7 @@ export async function saveAttendanceAction(data: {
       finalSiteId = validated.id;
       isOffsiteIn = validated.isOffsiteIn || "0";
 
-      // 🚩 ดักรอคำยืนยันหากเป็นกลุ่มทุกไซต์ที่อยู่นอกพื้นที่
+      // 🚩 ดักคำยืนยันหากอยู่นอกพื้นที่ (Offsite Pop-up)
       if (validated.OffsiteCheckInConfirm && !data.isConfirmed) {
         return {
           success: false,
@@ -98,19 +114,14 @@ export async function saveAttendanceAction(data: {
           OffsiteCheckOutConfirm: true
         };
       }
-    } else if (data.siteId) {
-      const [site] = await db.select().from(sitesTable).where(eq(sitesTable.id, data.siteId)).limit(1);
-      currentSiteName = site?.name || "";
-      currentSiteCoords = site?.coordinates || "";
-    }
 
-    let deptNameSnapshot = "";
-    if (data.departmentId) {
-      const [dept] = await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, data.departmentId)).limit(1);
-      deptNameSnapshot = dept?.name || "";
-    }
+      let deptNameSnapshot = "";
+      if (data.departmentId) {
+        const [dept] = await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, data.departmentId)).limit(1);
+        deptNameSnapshot = dept?.name || "";
+      }
 
-    if (data.type === "IN") {
+      // 🚩 คำนวณสถานะการทำงาน (Normal หรือ Extra)
       let currentWorkingStatus: "normal" | "extra" = "normal";
       if (activeEndTime && activeStartTime) {
         let nowM = toMin(currentTimeStr);
@@ -121,11 +132,13 @@ export async function saveAttendanceAction(data: {
         const adjNowM = (nowM < startM && endM > 1440) ? nowM + 1440 : nowM;
 
         if (adjNowM > endM) currentWorkingStatus = "extra";
+      } else {
+        currentWorkingStatus = "extra"; // ไม่มีกะถือเป็น OT ทันที
       }
 
+      // 🚩 คำนวณความสาย (isLate)
       let isLate = 0;
       let lateMinutes = 0;
-
       if (currentWorkingStatus === "normal" && activeStartTime) {
         let nowM = toMin(currentTimeStr);
         let startM = toMin(activeStartTime);
@@ -188,8 +201,10 @@ export async function saveAttendanceAction(data: {
       revalidatePath("/employee");
       return { success: true, siteName: currentSiteName, offsite: isOffsiteIn === "1" };
 
+    /* -------------------------------------------------------------------------- */
+    /* CHECK-OUT LOGIC (ขาออก)                                                    */
+    /* -------------------------------------------------------------------------- */
     } else {
-      // --- ขาออก (Check-out) ---
       let isEarlyExit = 0;
       let earlyExitMinutes = 0;
 
@@ -207,7 +222,7 @@ export async function saveAttendanceAction(data: {
       const currentRecord = lastCheckIn[0];
       const [uLatOut, uLonOut] = data.location.split(',').map(Number);
 
-      // 🚩 แก้ไข: ส่ง user.site_id จาก DB เข้าไปเพื่อให้ validateCheckOutLocation ตรวจสอบพิกัดได้ถูกต้อง
+      // 🚩 ตรวจสอบพิกัดขาออก (ห้ามประจำไซต์เช็คเอาท์นอกพื้นที่)
       const locationValidation = await validateCheckOutLocation(
         data.userId,
         uLatOut,
@@ -248,6 +263,7 @@ export async function saveAttendanceAction(data: {
           roundingMode: companyRounding,
         });
 
+        // 🚩 ลอจิกออกงานก่อนเวลา (Early Exit) แบบแม่นยำดักเคสข้ามคืน
         if (finalEndTime) {
           let currentTotalMinutes = toMin(currentTimeStr);
           let endTotalMinutes = toMin(finalEndTime);

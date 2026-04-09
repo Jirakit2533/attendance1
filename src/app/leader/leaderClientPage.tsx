@@ -503,31 +503,60 @@ export default function LeaderClientPage({
     );
   }, [teamAttendance, searchAtt]);
 
+  // ✅ คำนวณสถานะปุ่มจากข้อมูลปัจจุบัน (รองรับ Timezone ไทย)d
+
   const todayStatus = useMemo(() => {
     const now = new Date();
-    // 1. แก้ TimeZone เป็น Asia/Bangkok เพื่อให้วันที่ตรงกับเวลาไทยจริงๆ
     const todayStr = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Asia/Bangkok",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
     }).format(now);
-
+  
+    // 1. หา Record ที่ "ค้างอยู่" (มีการ Check-in แต่ยังไม่มี Check-out) - ไม่สนว่าจะเป็นวันไหน
+    const pendingRecord = records.find(
+      (r: any) =>
+        !!r.checkIn && 
+        r.checkIn !== "-" && 
+        (!r.checkOut || r.checkOut === "-")
+    );
+  
+    // 2. หา Record ของ "วันนี้" (todayStr) ที่มีการบันทึกครบถ้วนแล้ว (เอาไว้เช็คกรณีจบงานในวันเดียว)
     const todayRecord = records.find((r: any) => r.date === todayStr);
-
-    // ตัดช่องว่างออกก่อนเช็ค เพื่อความแม่นยำ
-    const checkInValue = todayRecord?.checkIn?.toString().trim();
-    const checkOutValue = todayRecord?.checkOut?.toString().trim();
-
+  
+    // --- การตัดสินใจ (Priority Logic) ---
+  
+    // เคสที่ 1: ถ้ามีงานค้างอยู่ (ไม่ว่าจะค้างมาจากเมื่อวาน หรือเพิ่งเข้างานวันนี้)
+    // ปุ่มต้องเป็น "ลงชื่อเลิกงาน" เท่านั้น
+    if (pendingRecord) {
+      return {
+        hasCheckedIn: true,
+        hasCheckedOut: false,
+        record: pendingRecord,
+        status: "PENDING_CHECKOUT" 
+      };
+    }
+  
+    // เคสที่ 2: ถ้าไม่มีงานค้างแล้ว และ "วันนี้" มีการ Check-out ไปแล้ว
+    // ปุ่มจะขึ้นว่า "บันทึกเวลาครบแล้ว" (เฉพาะกรณีเลิกงานในวันเดียวกัน)
+    if (todayRecord && todayRecord.checkOut && todayRecord.checkOut !== "-") {
+      return {
+        hasCheckedIn: true,
+        hasCheckedOut: true,
+        record: todayRecord,
+        status: "COMPLETED_TODAY"
+      };
+    }
+  
+    // เคสที่ 3: ไม่มีงานค้าง และยังไม่ได้เริ่มงานของวันนี้ 
+    // หรือเพิ่งเลิกงานกะข้ามคืนมาสดๆ ร้อนๆ (ทำให้วันนี้กลายเป็นว่าง)
+    // ปุ่มจะขึ้นว่า "ลงชื่อเข้าทำงาน"
     return {
-      // 2. ปรับการเช็ค hasCheckedIn ให้เข้มงวดเหมือน checkOut (กันค่า "-" หรือค่าว่าง)1
-      hasCheckedIn: 
-        !!checkInValue && checkInValue !== "-" && checkInValue !== "",
-      
-      hasCheckedOut:
-        !!checkOutValue && checkOutValue !== "-" && checkOutValue !== "",
-      
-      record: todayRecord,
+      hasCheckedIn: false,
+      hasCheckedOut: false,
+      record: null,
+      status: "READY_TO_CHECKIN"
     };
   }, [records]);
   /* ---------------- LEADER ACTIONS ---------------- */
