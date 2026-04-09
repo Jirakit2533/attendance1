@@ -99,7 +99,7 @@ export async function loginAction(formData: FormData) {
     return { success: false, message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
   } catch (err) {
     console.error("Login Error:", err);
-    return { success: false, message: "เกิดข้อผิดพลาดในการเชื่อมต่อระบบ" };
+    return { success: false, message: "เกิดข้อผิดพลาดในการเชื่อมต่อ กรูณาตรวจสอบอินเตอร์เน็ต" };
   }
 }
 

@@ -49,7 +49,7 @@ export default function LoginPage() {
           setIsProcessing(false);
         }
       } catch (err) {
-        setError("เกิดข้อผิดพลาดในการเชื่อมต่อระบบ");
+        setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรูณาตรวจสอบอินเตอร์เน็ต");
         setIsProcessing(false);
       }
     });
