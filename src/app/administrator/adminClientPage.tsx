@@ -2598,11 +2598,11 @@ export default function AdminClientPage({
                                     <td className="py-4 px-6 text-center">
                                       <div className="flex justify-center">
                                         {l?.fileUrl?.trim() ? (
-                                          <div
-                                            className="relative w-10 h-10 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
-                                            onClick={() =>
-                                              setPreviewImage(l.fileUrl)
-                                            }
+                                          <a
+                                            href={l.fileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="relative w-10 h-10 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all block"
                                           >
                                             <Image
                                               src={l.fileUrl}
@@ -2611,7 +2611,7 @@ export default function AdminClientPage({
                                               className="object-cover"
                                               unoptimized={true}
                                             />
-                                          </div>
+                                          </a>
                                         ) : (
                                           <span className="text-slate-400 text-sm font-bold">
                                             -
