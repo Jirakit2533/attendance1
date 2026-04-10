@@ -108,7 +108,7 @@ export default function AdminClientPage({
   currentAdminId,
 }: AdminClientPageProps) {
   // --- STATE MANAGEMENT ---
-  console.log("Check Data:", initialOvertimeRequests);
+
   const [employees, setEmployees] = useState(initialEmployees || []);
   const [attendance, setAttendance] = useState(initialAttendance || []);
   const [leaves, setLeaves] = useState(initialLeaves || []);
