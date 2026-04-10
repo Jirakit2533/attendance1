@@ -3174,7 +3174,7 @@ export default function AdminClientPage({
                                     {/* 7. สถานะ */}
                                     <td className="py-4 px-6 text-center">
                                       <span
-                                        className={`px-4 py-2 rounded-full text-[10px] font-black uppercase shadow-sm border ${
+                                        className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${
                                           l.status === "pending"
                                             ? "bg-orange-100 text-orange-600 border-orange-200"
                                             : l.status === "approved"
