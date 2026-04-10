@@ -361,6 +361,8 @@ export async function createLeaveRequest(data: {
   type: string;
   start: string;
   end: string;
+  startTime?: string | null; // เพิ่มรองรับเวลาเริ่มต้น
+  endTime?: string | null;   // เพิ่มรองรับเวลาสิ้นสุด
   reason: string;
   base64File?: string;
   fileName?: string;
@@ -372,6 +374,31 @@ export async function createLeaveRequest(data: {
     });
 
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
+
+    // --- 💡 Logic การคำนวณ Total Hours ---
+    let totalHoursResult = 0;
+
+    if (data.type === "ลาเป็นชั่วโมง" && data.startTime && data.endTime) {
+      // กรณีลาเป็นชั่วโมง: คำนวณส่วนต่างชั่วโมงจากเวลาเริ่มต้น-สิ้นสุด
+      const startDateTime = new Date(`${data.start}T${data.startTime}`);
+      const endDateTime = new Date(`${data.end}T${data.endTime}`);
+      
+      const diffMs = endDateTime.getTime() - startDateTime.getTime();
+      totalHoursResult = Math.floor(diffMs / (1000 * 60 * 60)); // ใส่ตัวเลขชั่วโมงเข้าไปเลย
+    } else {
+      // กรณีลาปกติ: คำนวณจำนวนวัน (สิ้นสุด - เริ่มต้น + 1) แล้วคูณด้วย 24
+      const start = new Date(data.start);
+      const end = new Date(data.end);
+      
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      
+      totalHoursResult = diffDays * 24; // จำนวนวันคูณ 24
+    }
+
+    // ป้องกันค่าที่ผิดพลาด
+    if (totalHoursResult <= 0) throw new Error("ช่วงเวลาการลาไม่ถูกต้อง");
+    // --------------------------------------------------
 
     let fileUrl = null;
     let fileId = null;
@@ -391,6 +418,9 @@ export async function createLeaveRequest(data: {
       type: data.type,
       startDate: data.start,
       endDate: data.end,
+      startTime: data.startTime || null, // บันทึกเวลาเริ่มต้น
+      endTime: data.endTime || null,     // บันทึกเวลาสิ้นสุด
+      totalHours: totalHoursResult,      // ✅ บันทึกค่าชั่วโมงที่คำนวณได้
       reason: data.reason,
       status: "pending",
       fileUrl: fileUrl,

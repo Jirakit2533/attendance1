@@ -161,6 +161,8 @@ export default function LeaderClientPage({
   const [leaveType, setLeaveType] = useState("");
   const [leaveStart, setLeaveStart] = useState("");
   const [leaveEnd, setLeaveEnd] = useState("");
+  const [leaveStartTime, setLeaveStartTime] = useState<string>("");
+  const [leaveEndTime, setLeaveEndTime] = useState<string>("");
   const [leaveReason, setLeaveReason] = useState("");
   const [leaveError, setLeaveError] = useState("");
   const [leaveFile, setLeaveFile] = useState<File | null>(null);
@@ -217,6 +219,33 @@ export default function LeaderClientPage({
     const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
     // หารด้วยจำนวนมิลลิวินาทีในหนึ่งวัน และ +1 เพื่อให้นับวันแรกด้วย
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  const calculateTotalHours = (
+    startDate: string,
+    endDate: string,
+    startTime: string,
+    endTime: string
+  ): number => {
+    if (!startDate || !endDate || !startTime || !endTime) return 0;
+
+    // สร้าง Object Date โดยรวมวันที่และเวลาเข้าด้วยกัน (Format ISO: YYYY-MM-DDTHH:mm:ss)
+    const start = new Date(`${startDate}T${startTime}:00`);
+    const end = new Date(`${endDate}T${endTime}:00`);
+
+    // ป้องกันกรณี End 00:00 (วันถัดไป)
+    if (endTime === "00:00") {
+      end.setDate(end.getDate() + 1);
+    }
+
+    // คำนวณส่วนต่างเป็นมิลลิวินาที
+    const diffInMs = end.getTime() - start.getTime();
+
+    // แปลงเป็นชั่วโมง
+    const diffInHours = diffInMs / (1000 * 60 * 60);
+
+    // คืนค่าเป็นทศนิยม 1 ตำแหน่ง ถ้าค่าติดลบคืน 0
+    return diffInHours > 0 ? parseFloat(diffInHours.toFixed(1)) : 0;
   };
 
   // ตรวจสอบว่าวันที่เลือกถูกต้องตามกฎธุรกิจหรือไม่
@@ -381,15 +410,31 @@ export default function LeaderClientPage({
   /* ---------------- LEAVE LOGIC ---------------- */
 
   const submitLeave = async () => {
-    if (!leaveType || !leaveStart || !leaveEnd || !leaveReason) {
+    // 1. ตรวจสอบข้อมูลพื้นฐาน (เพิ่มเงื่อนไขเช็คเวลาถ้าเป็นลาเป็นชั่วโมง)
+    if (
+      !leaveType ||
+      !leaveStart ||
+      !leaveEnd ||
+      !leaveReason ||
+      (leaveType === "ลาเป็นชั่วโมง" && (!leaveStartTime || !leaveEndTime))
+    ) {
       setLeaveError("⚠️ กรุณากรอกข้อมูลให้ครบถ้วน");
       return;
     }
 
+    // 2. ตรวจสอบความถูกต้องของวันที่
     const dateCheck = validateLeaveDates(leaveStart, leaveEnd);
     if (!dateCheck.isValid) {
       setLeaveError(dateCheck.error);
       return;
+    }
+
+    // 3. ตรวจสอบเงื่อนไขเวลา (เฉพาะกรณีลาเป็นชั่วโมงและเป็นวันเดียวกัน)
+    if (leaveType === "ลาเป็นชั่วโมง" && leaveStart === leaveEnd) {
+      if (leaveStartTime >= leaveEndTime) {
+        setLeaveError("⚠️ เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด");
+        return;
+      }
     }
 
     setIsProcessing(true);
@@ -409,14 +454,14 @@ export default function LeaderClientPage({
         }
       }
 
-      // เรียก Action
+      // 4. เรียก Action พร้อมส่งค่าเวลาเพิ่มเข้าไป
       const res = await createLeaveRequestAction({
         userId: userProfile.id,
-        // 💡 ข้อแนะนำ: ถึงแม้จะส่งตรงนี้ไป แต่ผมแนะนำให้ใช้ Server Action
-        // เวอร์ชั่นที่ผมแก้ให้ก่อนหน้าที่ดึงจาก DB โดยตรงจะชัวร์กว่าครับ
         type: leaveType,
         startDate: leaveStart,
         endDate: leaveEnd,
+        startTime: leaveType === "ลาเป็นชั่วโมง" ? leaveStartTime : null, // ✅ ส่งเวลาเริ่มต้น
+        endTime: leaveType === "ลาเป็นชั่วโมง" ? leaveEndTime : null, // ✅ ส่งเวลาสิ้นสุด
         reason: leaveReason,
         fileUrl: fileUrl,
         fileId: fileId, // ✅ ส่งไปให้ครบ
@@ -432,6 +477,8 @@ export default function LeaderClientPage({
           setLeaveType("");
           setLeaveStart("");
           setLeaveEnd("");
+          setLeaveStartTime(""); // ✅ ล้างค่าเวลา
+          setLeaveEndTime(""); // ✅ ล้างค่าเวลา
           setLeaveReason("");
           setLeaveFile(null);
           setLeaveFilePreview(null);
@@ -513,20 +560,18 @@ export default function LeaderClientPage({
       month: "2-digit",
       day: "2-digit",
     }).format(now);
-  
+
     // 1. หา Record ที่ "ค้างอยู่" (มีการ Check-in แต่ยังไม่มี Check-out) - ไม่สนว่าจะเป็นวันไหน
     const pendingRecord = records.find(
       (r: any) =>
-        !!r.checkIn && 
-        r.checkIn !== "-" && 
-        (!r.checkOut || r.checkOut === "-")
+        !!r.checkIn && r.checkIn !== "-" && (!r.checkOut || r.checkOut === "-")
     );
-  
+
     // 2. หา Record ของ "วันนี้" (todayStr) ที่มีการบันทึกครบถ้วนแล้ว (เอาไว้เช็คกรณีจบงานในวันเดียว)
     const todayRecord = records.find((r: any) => r.date === todayStr);
-  
+
     // --- การตัดสินใจ (Priority Logic) ---
-  
+
     // เคสที่ 1: ถ้ามีงานค้างอยู่ (ไม่ว่าจะค้างมาจากเมื่อวาน หรือเพิ่งเข้างานวันนี้)
     // ปุ่มต้องเป็น "ลงชื่อเลิกงาน" เท่านั้น
     if (pendingRecord) {
@@ -534,10 +579,10 @@ export default function LeaderClientPage({
         hasCheckedIn: true,
         hasCheckedOut: false,
         record: pendingRecord,
-        status: "PENDING_CHECKOUT" 
+        status: "PENDING_CHECKOUT",
       };
     }
-  
+
     // เคสที่ 2: ถ้าไม่มีงานค้างแล้ว และ "วันนี้" มีการ Check-out ไปแล้ว
     // ปุ่มจะขึ้นว่า "บันทึกเวลาครบแล้ว" (เฉพาะกรณีเลิกงานในวันเดียวกัน)
     if (todayRecord && todayRecord.checkOut && todayRecord.checkOut !== "-") {
@@ -545,18 +590,18 @@ export default function LeaderClientPage({
         hasCheckedIn: true,
         hasCheckedOut: true,
         record: todayRecord,
-        status: "COMPLETED_TODAY"
+        status: "COMPLETED_TODAY",
       };
     }
-  
-    // เคสที่ 3: ไม่มีงานค้าง และยังไม่ได้เริ่มงานของวันนี้ 
+
+    // เคสที่ 3: ไม่มีงานค้าง และยังไม่ได้เริ่มงานของวันนี้
     // หรือเพิ่งเลิกงานกะข้ามคืนมาสดๆ ร้อนๆ (ทำให้วันนี้กลายเป็นว่าง)
     // ปุ่มจะขึ้นว่า "ลงชื่อเข้าทำงาน"
     return {
       hasCheckedIn: false,
       hasCheckedOut: false,
       record: null,
-      status: "READY_TO_CHECKIN"
+      status: "READY_TO_CHECKIN",
     };
   }, [records]);
   /* ---------------- LEADER ACTIONS ---------------- */
@@ -1105,7 +1150,16 @@ export default function LeaderClientPage({
                             >
                               {/* วันที่ */}
                               <td className="p-4 font-bold text-gray-800 whitespace-nowrap">
-                                {r.date || "-"}
+                                {r.date
+                                  ? new Date(r.date).toLocaleDateString(
+                                      "th-TH",
+                                      {
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                      }
+                                    )
+                                  : "-"}
                               </td>
 
                               {/* รอบเข้างาน */}
@@ -1251,7 +1305,7 @@ export default function LeaderClientPage({
                 <div className="flex items-center gap-3 mb-6 sm:mb-8">
                   <div className="w-1.5 h-6 sm:w-2 sm:h-8 bg-amber-400 rounded-full"></div>
                   <h2 className="font-black text-gray-900 text-lg sm:text-xl tracking-tighter uppercase">
-                    คำขออนุมัติ ลางานของฉัน
+                    คำขอลางานของฉัน
                   </h2>
                 </div>
                 <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -1260,9 +1314,11 @@ export default function LeaderClientPage({
                       <tr>
                         <th className="p-4 sm:p-6 text-center">ขอเมื่อ</th>
                         <th className="p-4 sm:p-6 text-left">
-                          ประเภท / วันที่
+                          วันที่ / ประเภท
                         </th>
-                        <th className="p-4 sm:p-6 text-center">จำนวนวัน</th>
+                        <th className="p-4 sm:p-6 text-center">
+                          จำนวนวัน/ชั่วโมง
+                        </th>
                         <th className="p-4 sm:p-6 text-left hidden md:table-cell">
                           เอกสาร & เหตุผล
                         </th>
@@ -1286,45 +1342,120 @@ export default function LeaderClientPage({
                           </td>
                         </tr>
                       ) : (
-                        myLeaves.map((l: any) => {
-                          const start = new Date(l.startDate || l.start_date);
-                          const end = new Date(l.endDate || l.end_date);
-                          const diffTime = Math.abs(
-                            end.getTime() - start.getTime()
-                          );
-                          const diffDays =
-                            Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                        [...myLeaves].map((l: any) => {
+                          // ✅ โลจิกคำนวณ: ถ้ามี totalHours และน้อยกว่า 24 ชม. ให้แสดงเป็นชั่วโมง
+                          const totalHours = Number(l.totalHours || 0);
+                          const isHourly = totalHours > 0 && totalHours < 24;
+
+                          // คำนวณวันกรณีไม่มี totalHours ส่งมา (Fallback)
+                          const startDateVal =
+                            l.startDate || l.start_date || l.start;
+                          const endDateVal = l.endDate || l.end_date || l.end;
+
+                          const start = new Date(startDateVal);
+                          const end = new Date(endDateVal);
+
+                          let diffDays = 0;
+                          if (startDateVal && endDateVal) {
+                            const diffTime = Math.abs(
+                              end.getTime() - start.getTime()
+                            );
+                            diffDays =
+                              Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                          }
+
+                          // ฟอร์แมตวันที่สำหรับการแสดงผล ว/ด/ป
+                          const formatDate = (dateStr: string) => {
+                            if (!dateStr) return "-";
+                            const d = new Date(dateStr);
+                            if (isNaN(d.getTime())) return "-";
+                            const day = String(d.getDate()).padStart(2, "0");
+                            const month = String(d.getMonth() + 1).padStart(
+                              2,
+                              "0"
+                            );
+                            const year = d.getFullYear();
+                            return `${day}/${month}/${year}`;
+                          };
 
                           return (
                             <tr
                               key={l.id}
                               className="hover:bg-amber-50/10 transition-colors"
                             >
-                              <td className="px-4 py-2 text-sm text-gray-600">
-                                {l.createdAt || "-"}
+                              <td className="p-4 sm:p-6 text-center">
+                                <div className="flex flex-col items-center justify-center">
+                                  <span className="text-[11px] font-black text-gray-900">
+                                    {l.createdAt}
+                                  </span>
+                                </div>
                               </td>
                               <td className="p-4 sm:p-6">
                                 <div className="flex flex-col gap-1">
-                                  <div className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-black text-[10px] w-fit uppercase">
-                                    {l.type}
-                                  </div>
-                                  <div className="text-[10px] sm:text-[11px] text-gray-500 font-bold">
-                                    {l.startDate || l.start_date}
+                                  <div className="text-[11px] sm:text-[13px] text-gray-900 font-black">
+                                    {formatDate(startDateVal)}
                                     <span className="text-gray-300 mx-1">
                                       →
                                     </span>
-                                    {l.endDate || l.end_date}
+                                    {formatDate(endDateVal)}
                                   </div>
-                                  {/* แสดงเหตุผลในมือถือใต้ประเภท */}
+                                  <div className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-black text-[10px] w-fit uppercase">
+                                    {l.type}
+                                  </div>
+                                  {isHourly && l.startTime && l.endTime && (
+                                    <div className="text-[11px] text-amber-600 font-black flex items-center gap-1">
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="10"
+                                        height="10"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="3"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
+                                        <circle cx="12" cy="12" r="10" />
+                                        <polyline points="12 6 12 12 16 14" />
+                                      </svg>
+                                      {l.startTime.slice(0, 5)} -{" "}
+                                      {l.endTime.slice(0, 5)}
+                                    </div>
+                                  )}
                                   <span className="text-[10px] text-gray-400 italic line-clamp-1 md:hidden">
                                     {l.reason}
                                   </span>
                                 </div>
                               </td>
                               <td className="p-4 sm:p-6 text-center">
-                                <span className="bg-orange-500 text-white px-2.5 py-1 rounded-full font-black text-[10px] sm:text-xs shadow-sm shadow-orange-200 whitespace-nowrap">
-                                  {isNaN(diffDays) ? "-" : `${diffDays} วัน`}
-                                </span>
+                                {(() => {
+                                  // 1. เตรียมเงื่อนไข
+                                  const hours = Number(totalHours);
+                                  const isHalfDay =
+                                    isHourly && (hours === 4 || hours === 4.5);
+
+                                  // 2. กำหนดสี (Badge Color)
+                                  const badgeClass = isHalfDay
+                                    ? "bg-purple-600 text-white shadow-purple-200" // สีสำหรับครึ่งวัน (แยกให้ชัดเจน)
+                                    : isHourly
+                                      ? "bg-blue-500 text-white shadow-blue-200"
+                                      : "bg-orange-500 text-white shadow-orange-200";
+
+                                  // 3. กำหนดข้อความที่จะแสดง
+                                  const displayText = isHalfDay
+                                    ? "ครึ่งวัน"
+                                    : isHourly
+                                      ? `${totalHours} ชั่วโมง`
+                                      : `${isNaN(diffDays) || diffDays <= 0 ? "-" : diffDays} วัน`;
+
+                                  return (
+                                    <span
+                                      className={`px-2.5 py-1 rounded-full font-black text-[10px] sm:text-xs shadow-sm whitespace-nowrap ${badgeClass}`}
+                                    >
+                                      {displayText}
+                                    </span>
+                                  );
+                                })()}
                               </td>
                               <td className="p-4 sm:p-6 hidden md:table-cell">
                                 <div className="flex flex-col gap-1">
@@ -1359,20 +1490,23 @@ export default function LeaderClientPage({
                               </td>
                               <td className="p-4 sm:p-6 text-center">
                                 <span
-                                  className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-tighter shadow-sm border whitespace-nowrap
-                    ${
-                      l.status === "approved" || l.status === "อนุมัติแล้ว"
-                        ? "bg-green-50 text-green-600 border-green-100"
-                        : l.status === "rejected" || l.status === "ปฏิเสธ"
-                          ? "bg-red-50 text-red-600 border-red-100"
-                          : "bg-amber-50 text-amber-600 border-amber-100"
-                    }`}
+                                  className={`px-2.5 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-tighter shadow-sm border whitespace-nowrap
+                  ${
+                    l.status === "approved" || l.status === "อนุมัติแล้ว"
+                      ? "bg-green-50 text-green-600 border-green-100"
+                      : l.status === "rejected" || l.status === "ปฏิเสธ"
+                        ? "bg-red-50 text-red-600 border-red-100"
+                        : "bg-amber-50 text-amber-600 border-amber-100"
+                  }`}
                                 >
-                                  {l.status === "pending"
+                                  {l.status === "pending" ||
+                                  l.status === "รออนุมัติ"
                                     ? "รออนุมัติ"
-                                    : l.status === "approved"
+                                    : l.status === "approved" ||
+                                        l.status === "อนุมัติแล้ว"
                                       ? "อนุมัติแล้ว"
-                                      : l.status === "rejected"
+                                      : l.status === "rejected" ||
+                                          l.status === "ปฏิเสธ"
                                         ? "ปฏิเสธ"
                                         : l.status}
                                 </span>
@@ -1476,7 +1610,7 @@ export default function LeaderClientPage({
                                                   </svg>
                                                 </button>
                                               </div>
-                                              <p className="text-xs text-gray-700 leading-relaxed break-words font-medium">
+                                              <p className="text-xs text-gray-700 leading-relaxed break-words font-medium text-left">
                                                 {l.remark}
                                               </p>
                                               <div className="absolute -bottom-1 right-3 w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45"></div>
@@ -1491,15 +1625,16 @@ export default function LeaderClientPage({
                                 </div>
                               </td>
                               <td className="p-4 sm:p-6 text-center">
-                                {l.status !== "pending" && l.approverFirst ? (
+                                {l.status !== "pending" &&
+                                l.status !== "รออนุมัติ" &&
+                                (l.approverFirst || l.approverName) ? (
                                   <div className="inline-flex flex-col items-center">
                                     <span className="text-[11px] sm:text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
-                                      {`${l.approverFirst} ${
-                                        l.approverLast || ""
-                                      }`.trim()}
+                                      {l.approverName ||
+                                        `${l.approverFirst} ${l.approverLast || ""}`.trim()}
                                     </span>
                                     <span className="text-[8px] sm:text-[9px] text-indigo-500 font-black uppercase tracking-widest mt-0.5">
-                                      {l.approverPosition}
+                                      {l.approverPosition || "-"}
                                     </span>
                                   </div>
                                 ) : (
@@ -1570,8 +1705,17 @@ export default function LeaderClientPage({
                               {/* 2. วันที่ทำ OT และ ช่วงเวลา */}
                               <td className="p-4 sm:p-6">
                                 <div className="flex flex-col gap-1">
-                                  <div className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-black text-[10px] w-fit uppercase">
-                                    {ot.date}
+                                  <div className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-black text-[13px] w-fit uppercase">
+                                    {ot.date
+                                      ? new Date(ot.date).toLocaleDateString(
+                                          "th-TH",
+                                          {
+                                            day: "2-digit",
+                                            month: "2-digit",
+                                            year: "numeric",
+                                          }
+                                        )
+                                      : "-"}
                                   </div>
                                   <div className="text-[10px] sm:text-[11px] text-gray-500 font-bold">
                                     {ot.timeStart?.slice(0, 5)} น.
@@ -1933,11 +2077,11 @@ export default function LeaderClientPage({
                             <th className="py-6 px-4 text-center border-b border-slate-100 w-[180px]">
                               ขอเมื่อ
                             </th>
-                            <th className="py-6 px-4 text-center border-b border-slate-100 w-[180px]">
-                              ประเภท & ระยะเวลา
+                            <th className="py-6 px-4 text-center border-b border-slate-100 w-[200px]">
+                              วันที่ / ประเภท
                             </th>
-                            <th className="py-6 px-4 text-center border-b border-slate-100 w-[100px]">
-                              จำนวนวัน
+                            <th className="py-6 px-4 text-center border-b border-slate-100 w-[120px]">
+                              จำนวนวัน/ชั่วโมง
                             </th>
                             <th className="py-6 px-4 text-left border-b border-slate-100 w-[220px]">
                               เอกสาร & เหตุผล
@@ -1996,24 +2140,87 @@ export default function LeaderClientPage({
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="px-4 py-2 text-sm text-gray-600">
+                                  <td className="px-4 py-2 text-sm text-gray-600 text-center">
                                     {l.createdAt || "-"}
                                   </td>
-                                  <td className="py-5 px-4 text-center">
-                                    <div className="inline-block bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg font-black text-[11px] mb-1">
-                                      {l.type}
-                                    </div>
-                                    <div className="text-slate-400 text-[10px] font-bold uppercase tracking-tighter">
-                                      {l.startDate} → {l.endDate}
+
+                                  {/* แก้ไขคอลัมน์ วันที่ / ประเภท ให้เหมือนต้นแบบ */}
+                                  <td className="py-5 px-4">
+                                    <div className="flex flex-col items-center justify-center gap-1.5">
+                                      <div className="bg-indigo-600 text-white px-3 py-1 rounded-lg font-black text-[10px] tracking-wider shadow-sm shadow-indigo-100 uppercase">
+                                        {l.type}
+                                      </div>
+                                      <div className="flex items-center gap-2 text-slate-500 font-bold text-[11px] bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
+                                        <span className="text-slate-700">
+                                          {new Date(
+                                            l.startDate
+                                          ).toLocaleDateString("th-TH", {
+                                            day: "2-digit",
+                                            month: "short",
+                                            year: "2-digit",
+                                          })}
+                                        </span>
+                                        <span className="text-indigo-300">
+                                          →
+                                        </span>
+                                        <span className="text-slate-700">
+                                          {new Date(
+                                            l.endDate
+                                          ).toLocaleDateString("th-TH", {
+                                            day: "2-digit",
+                                            month: "short",
+                                            year: "2-digit",
+                                          })}
+                                        </span>
+                                      </div>
                                     </div>
                                   </td>
+
+                                  {/* แก้ไขคอลัมน์ จำนวนวัน/ชั่วโมง ให้เหมือนต้นแบบ */}
                                   <td className="py-5 px-4 text-center">
-                                    <span className="bg-orange-500 text-white px-3 py-1 rounded-full font-black text-xs shadow-sm shadow-orange-200">
-                                      {isNaN(diffDays)
-                                        ? "-"
-                                        : `${diffDays} วัน`}
-                                    </span>
+                                    <div className="inline-flex flex-col items-center justify-center bg-slate-50/50 rounded-2xl px-4 py-2 border border-dashed border-slate-200">
+                                      {(() => {
+                                        const totalHrs =
+                                          Number(l.totalHours) || 0;
+
+                                        // 1. เช็คเงื่อนไข "ครึ่งวัน"
+                                        const isHalfDay =
+                                          totalHrs === 4 || totalHrs === 4.5;
+
+                                        // 2. เช็คหน่วยวัน
+                                        const isDayUnit = totalHrs >= 24;
+
+                                        // กรณีครึ่งวัน: แสดงคำเดียว ไม่มีหน่วยด้านล่าง
+                                        if (isHalfDay) {
+                                          return (
+                                            <span className="text-purple-600 font-black text-md leading-none tracking-tighter">
+                                              ครึ่งวัน
+                                            </span>
+                                          );
+                                        }
+
+                                        // 3. กรณีปกติ (ชั่วโมง หรือ วัน): แสดงค่าตัวเลขพร้อมหน่วย
+                                        const displayValue = isDayUnit
+                                          ? (totalHrs / 24).toLocaleString(
+                                              undefined,
+                                              { maximumFractionDigits: 1 }
+                                            )
+                                          : totalHrs;
+
+                                        return (
+                                          <>
+                                            <span className="text-indigo-600 font-black text-xl leading-none tracking-tighter">
+                                              {displayValue}
+                                            </span>
+                                            <span className="text-slate-400 font-black text-[9px] uppercase tracking-widest mt-1 italic">
+                                              {isDayUnit ? "วัน" : "ชั่วโมง"}
+                                            </span>
+                                          </>
+                                        );
+                                      })()}
+                                    </div>
                                   </td>
+
                                   <td className="py-5 px-4">
                                     <div className="flex items-start gap-3">
                                       {l.fileUrl && (
@@ -2216,9 +2423,7 @@ export default function LeaderClientPage({
                                     l.approverFirst ? (
                                       <div className="inline-flex flex-col items-center">
                                         <span className="text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
-                                          {`${l.approverFirst} ${
-                                            l.approverLast || ""
-                                          }`.trim()}
+                                          {`${l.approverFirst} ${l.approverLast || ""}`.trim()}
                                         </span>
                                         <span className="text-[9px] text-indigo-500 font-black uppercase tracking-widest mt-0.5 whitespace-nowrap">
                                           {l.approverPosition}
@@ -2236,7 +2441,7 @@ export default function LeaderClientPage({
                           ) : (
                             <tr>
                               <td
-                                colSpan={8}
+                                colSpan={9}
                                 className="py-24 text-center text-slate-300 italic font-black tracking-widest"
                               >
                                 NO LEAVE REQUESTS FOUND
@@ -2249,7 +2454,6 @@ export default function LeaderClientPage({
                   </div>
                 </Section>
               </div>
-
               {/* {ตารางคำขอ OT พนักงาน} */}
               <div className="print:hidden mt-12">
                 <Section title="คำขอทำ OT พนักงาน">
@@ -2582,6 +2786,7 @@ export default function LeaderClientPage({
         {/* 📝 LEAVE FORM SECTION */}
         {showLeaveForm && (
           <div className="max-w-2xl mx-auto py-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
+            {/* Header Section */}
             <div className="text-center mb-12">
               <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-2">
                 ยื่นเรื่อง <span className="text-indigo-600">ลางาน</span>
@@ -2590,8 +2795,9 @@ export default function LeaderClientPage({
             </div>
 
             {leaveSuccess ? (
+              /* Success State */
               <div className="p-12 bg-green-50 border border-green-100 text-green-700 rounded-[3rem] text-center space-y-4 shadow-xl">
-                <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-4xl">
+                <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-4xl shadow-lg animate-bounce">
                   ✓
                 </div>
                 <p className="font-black text-2xl tracking-tighter uppercase">
@@ -2599,60 +2805,80 @@ export default function LeaderClientPage({
                 </p>
               </div>
             ) : (
+              /* Form State */
               <div className="space-y-6 bg-gray-50/50 p-6 sm:p-10 rounded-[2rem] sm:rounded-[3rem] border border-gray-100 shadow-inner relative">
-                {/* 🔥 แจ้งเตือนข้อผิดพลาด */}
+                {/* 🔥 Error Notification */}
                 {leaveError && (
                   <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[11px] font-black uppercase animate-shake">
-                    {leaveError}
+                    <span className="mr-2">⚠️</span> {leaveError}
                   </div>
                 )}
 
-                {/* 1. ประเภทการลา */}
+                {/* 1. Leave Type Selection */}
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
                     ประเภทการลา
                   </label>
                   <select
-                    className="w-full bg-white p-5 rounded-[1.5rem] font-black text-gray-700 outline-none shadow-sm border-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-white p-5 rounded-[1.5rem] font-black text-gray-700 outline-none shadow-sm border-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
                     value={leaveType}
-                    onChange={(e) => setLeaveType(e.target.value)}
+                    onChange={(e) => {
+                      setLeaveType(e.target.value);
+                      setLeaveError("");
+                    }}
                   >
                     <option value="">โปรดระบุ</option>
                     <option value="ลาป่วย">ลาป่วย</option>
                     <option value="ลากิจ">ลากิจ</option>
                     <option value="ลาพักร้อน">ลาพักร้อน</option>
+                    <option value="ลาเป็นชั่วโมง">ลาเป็นชั่วโมง</option>
                   </select>
                 </div>
 
-                {/* 2. ส่วนวันที่ พร้อมระบบตรวจสอบความถูกต้อง */}
+                {/* 2. Date Selection & Leave Days/Hours Counter */}
                 <div className="relative space-y-4">
-                  {calculateLeaveDays(leaveStart, leaveEnd) > 0 &&
-                    validateLeaveDates(leaveStart, leaveEnd).isValid && (
-                      <div className="flex flex-col items-center justify-center py-4 animate-in zoom-in duration-300">
-                        <div className="bg-indigo-600 px-8 py-3 rounded-[2rem] shadow-xl flex items-center gap-3">
-                          <span className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">
-                            ระยะเวลา
+                  {/* Badge แสดงระยะเวลา (Logic ตามต้นแบบ) */}
+                  {((leaveType !== "ลาเป็นชั่วโมง" &&
+                    calculateLeaveDays(leaveStart, leaveEnd) > 0 &&
+                    validateLeaveDates(leaveStart, leaveEnd).isValid) ||
+                    (leaveType === "ลาเป็นชั่วโมง" &&
+                      leaveStartTime &&
+                      leaveEndTime &&
+                      (leaveStart !== leaveEnd ||
+                        leaveEndTime > leaveStartTime))) && (
+                    <div className="flex flex-col items-center justify-center py-4 animate-in zoom-in duration-300">
+                      <div className="bg-indigo-600 px-8 py-3 rounded-[2rem] shadow-[0_10px_25px_-5px_rgba(79,70,229,0.4)] flex items-center gap-3">
+                        <span className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">
+                          ระยะเวลา
+                        </span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-black text-white leading-none">
+                            {leaveType === "ลาเป็นชั่วโมง"
+                              ? calculateTotalHours(
+                                  leaveStart,
+                                  leaveEnd,
+                                  leaveStartTime,
+                                  leaveEndTime
+                                )
+                              : calculateLeaveDays(leaveStart, leaveEnd)}
                           </span>
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-3xl font-black text-white leading-none">
-                              {calculateLeaveDays(leaveStart, leaveEnd)}
-                            </span>
-                            <span className="text-sm font-bold text-white uppercase">
-                              วัน
-                            </span>
-                          </div>
+                          <span className="text-sm font-bold text-white uppercase">
+                            {leaveType === "ลาเป็นชั่วโมง" ? "ชั่วโมง" : "วัน"}
+                          </span>
                         </div>
-                        <div className="h-4 w-0.5 bg-gradient-to-b from-indigo-600 to-transparent opacity-20"></div>
                       </div>
-                    )}
+                      <div className="h-4 w-0.5 bg-gradient-to-b from-indigo-600 to-transparent opacity-20"></div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
-                    {/* วันเริ่มต้น */}
+                    {/* Start Date */}
                     <div className="space-y-2 group">
                       <label
                         className={`text-[10px] font-black uppercase ml-4 transition-colors ${
-                          !validateLeaveDates(leaveStart, leaveEnd).isValid &&
-                          leaveStart
+                          leaveError?.includes("เริ่มต้น") ||
+                          (leaveStart &&
+                            !validateLeaveDates(leaveStart, leaveEnd).isValid)
                             ? "text-red-500"
                             : "text-gray-400 group-focus-within:text-indigo-500"
                         }`}
@@ -2661,22 +2887,26 @@ export default function LeaderClientPage({
                       </label>
                       <input
                         type="date"
-                        className={`w-full bg-white p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all ${
-                          !validateLeaveDates(leaveStart, leaveEnd).isValid &&
-                          leaveStart
-                            ? "border-red-200"
-                            : "border-transparent focus:border-indigo-500"
+                        className={`w-full bg-white p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none ${
+                          leaveError?.includes("เริ่มต้น")
+                            ? "border-red-200 bg-red-50/50"
+                            : "border-transparent focus:border-indigo-500 text-gray-700"
                         }`}
                         value={leaveStart}
-                        onChange={(e) => setLeaveStart(e.target.value)}
+                        onChange={(e) => {
+                          setLeaveStart(e.target.value);
+                          setLeaveError("");
+                        }}
                       />
                     </div>
-                    {/* วันสิ้นสุด */}
+
+                    {/* End Date */}
                     <div className="space-y-2 group">
                       <label
                         className={`text-[10px] font-black uppercase ml-4 transition-colors ${
-                          !validateLeaveDates(leaveStart, leaveEnd).isValid &&
-                          leaveEnd
+                          leaveError?.includes("สิ้นสุด") ||
+                          (leaveEnd &&
+                            !validateLeaveDates(leaveStart, leaveEnd).isValid)
                             ? "text-red-500"
                             : "text-gray-400 group-focus-within:text-indigo-500"
                         }`}
@@ -2685,33 +2915,153 @@ export default function LeaderClientPage({
                       </label>
                       <input
                         type="date"
-                        className={`w-full bg-white p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all ${
-                          !validateLeaveDates(leaveStart, leaveEnd).isValid &&
-                          leaveEnd
-                            ? "border-red-200"
-                            : "border-transparent focus:border-indigo-500"
+                        className={`w-full bg-white p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none ${
+                          leaveError?.includes("สิ้นสุด")
+                            ? "border-red-200 bg-red-50/50"
+                            : "border-transparent focus:border-indigo-500 text-gray-700"
                         }`}
                         value={leaveEnd}
-                        onChange={(e) => setLeaveEnd(e.target.value)}
+                        onChange={(e) => {
+                          setLeaveEnd(e.target.value);
+                          setLeaveError("");
+                        }}
                       />
                     </div>
                   </div>
+
+                  {/* ส่วนเลือกเวลาสำหรับ ลาเป็นชั่วโมง (Logic ตามต้นแบบเป๊ะ) */}
+                  {leaveType === "ลาเป็นชั่วโมง" && (
+                    <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-4 duration-300">
+                      <div className="space-y-2 group">
+                        <label
+                          className={`text-[10px] font-black uppercase ml-4 ${!leaveStart ? "text-red-500" : "text-gray-400"}`}
+                        >
+                          เวลาเริ่มต้น (24H)
+                        </label>
+                        <select
+                          className={`w-full p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${
+                            !leaveStart
+                              ? "border-red-200 bg-red-50 text-red-600"
+                              : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
+                          }`}
+                          value={leaveStartTime}
+                          onChange={(e) => {
+                            if (!leaveStart || !leaveEnd) {
+                              setLeaveError(
+                                "กรุณาเลือกวันที่เริ่มต้นและสิ้นสุดก่อนเลือกเวลา"
+                              );
+                              return;
+                            }
+                            const newStart = e.target.value;
+                            setLeaveStartTime(newStart);
+                            if (
+                              leaveStart === leaveEnd &&
+                              leaveEndTime &&
+                              leaveEndTime !== "00:00" &&
+                              newStart >= leaveEndTime
+                            ) {
+                              setLeaveError(
+                                "วันเดียวกัน เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด"
+                              );
+                            } else {
+                              setLeaveError("");
+                            }
+                          }}
+                        >
+                          <option value="">
+                            {!leaveStart ? "ระบุวันก่อน" : "เลือกเวลา"}
+                          </option>
+                          {Array.from({ length: 24 }).map((_, h) =>
+                            [0, 30].map((m) => {
+                              const t = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+                              return (
+                                <option key={`start-${t}`} value={t}>
+                                  {t}
+                                </option>
+                              );
+                            })
+                          )}
+                        </select>
+                      </div>
+                      <div className="space-y-2 group">
+                        <label
+                          className={`text-[10px] font-black uppercase ml-4 ${!leaveEnd ? "text-red-500" : "text-gray-400"}`}
+                        >
+                          เวลาสิ้นสุด (24H)
+                        </label>
+                        <select
+                          className={`w-full p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${
+                            !leaveEnd ||
+                            (leaveStart === leaveEnd &&
+                              leaveEndTime &&
+                              leaveEndTime !== "00:00" &&
+                              leaveStartTime >= leaveEndTime)
+                              ? "border-red-200 bg-red-50 text-red-600"
+                              : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
+                          }`}
+                          value={leaveEndTime}
+                          onChange={(e) => {
+                            if (!leaveStart || !leaveEnd) {
+                              setLeaveError(
+                                "กรุณาเลือกวันที่เริ่มต้นและสิ้นสุดก่อนเลือกเวลา"
+                              );
+                              return;
+                            }
+                            const newEnd = e.target.value;
+                            setLeaveEndTime(newEnd);
+                            if (
+                              leaveStart === leaveEnd &&
+                              leaveStartTime &&
+                              newEnd !== "00:00" &&
+                              newEnd <= leaveStartTime
+                            ) {
+                              setLeaveError(
+                                "วันเดียวกัน เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น"
+                              );
+                            } else {
+                              setLeaveError("");
+                            }
+                          }}
+                        >
+                          <option value="">
+                            {!leaveEnd ? "ระบุวันก่อน" : "เลือกเวลา"}
+                          </option>
+                          {Array.from({ length: 24 }).map((_, h) =>
+                            [0, 30].map((m) => {
+                              const t = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+                              if (t === "00:00") return null;
+                              return (
+                                <option key={`end-${t}`} value={t}>
+                                  {t}
+                                </option>
+                              );
+                            })
+                          )}
+                          <option value="00:00">24:00</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* 3. ระบุเหตุผล */}
+                {/* 3. Reason Textarea */}
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
                     ระบุเหตุผล
                   </label>
                   <textarea
-                    className="w-full bg-white p-5 rounded-[1.5rem] font-medium min-h-[140px] outline-none shadow-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-white p-5 rounded-[1.5rem] font-medium min-h-[140px] outline-none shadow-sm focus:ring-2 focus:ring-indigo-500 transition-all border-none resize-none"
                     placeholder="เขียนเหตุผลประกอบการลาที่นี่..."
                     value={leaveReason}
-                    onChange={(e) => setLeaveReason(e.target.value)}
+                    onChange={(e) => {
+                      setLeaveReason(e.target.value);
+                      if (leaveError === "กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง")
+                        setLeaveError("");
+                    }}
                   />
                 </div>
 
-                {/* 4. อัปโหลดและบีบอัดรูปภาพ */}
+                {/* 4. Image Upload & Compression */}
                 <div className="space-y-3 mt-4">
                   <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
                     เอกสารประกอบ (ถ้ามี)
@@ -2747,19 +3097,24 @@ export default function LeaderClientPage({
                     />
                     <label
                       htmlFor="leave-file-upload"
-                      className="flex flex-col items-center justify-center w-full bg-white border-2 border-dashed border-gray-200 p-8 rounded-[1.5rem] cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-all group shadow-sm"
+                      className="flex flex-col items-center justify-center w-full bg-white border-2 border-dashed border-gray-200 p-8 rounded-[1.5rem] cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-all group shadow-sm active:scale-[0.98]"
                     >
                       {leaveFilePreview ? (
-                        <div className="relative w-full h-32 flex justify-center">
+                        <div className="relative w-full h-32 flex justify-center animate-in zoom-in">
                           <img
                             src={leaveFilePreview}
                             alt="Preview"
                             className="h-full object-contain rounded-lg shadow-md"
                           />
+                          <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                            <p className="text-white text-[10px] font-black uppercase">
+                              เปลี่ยนรูปภาพ
+                            </p>
+                          </div>
                         </div>
                       ) : (
                         <div className="text-center">
-                          <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-gray-400 group-hover:text-indigo-600 transition-all">
+                          <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-gray-400 group-hover:text-indigo-600 group-hover:scale-110 transition-all">
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
                               className="h-6 w-6"
@@ -2784,14 +3139,31 @@ export default function LeaderClientPage({
                   </div>
                 </div>
 
-                {/* 5. ปุ่มแอคชั่น */}
+                {/* 5. Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
                   <button
                     onClick={submitLeave}
-                    disabled={isProcessing}
-                    className="flex-[2] bg-indigo-600 text-white font-black py-6 rounded-[1.5rem] shadow-xl active:scale-95 hover:bg-indigo-700 transition-all uppercase tracking-tighter disabled:opacity-50"
+                    disabled={
+                      isProcessing ||
+                      !!leaveError ||
+                      !leaveStart ||
+                      !leaveEnd ||
+                      (leaveType === "ลาเป็นชั่วโมง" &&
+                        (!leaveStartTime ||
+                          !leaveEndTime ||
+                          (leaveStart === leaveEnd &&
+                            leaveStartTime >= leaveEndTime)))
+                    }
+                    className="flex-[2] bg-indigo-600 text-white font-black py-6 rounded-[1.5rem] shadow-xl active:scale-95 hover:bg-indigo-700 transition-all uppercase tracking-tighter disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed"
                   >
-                    {isProcessing ? "กำลังประมวลผล..." : "ยืนยันการลา"}
+                    {isProcessing ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        กำลังประมวลผล...
+                      </span>
+                    ) : (
+                      "ยืนยันการลา"
+                    )}
                   </button>
                   <button
                     onClick={() => {
@@ -2801,7 +3173,7 @@ export default function LeaderClientPage({
                       setLeaveError("");
                     }}
                     disabled={isProcessing}
-                    className="flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black py-6 rounded-[1.5rem] uppercase hover:bg-gray-50 transition-all disabled:opacity-30"
+                    className="flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black py-6 rounded-[1.5rem] uppercase hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-30"
                   >
                     ยกเลิก
                   </button>

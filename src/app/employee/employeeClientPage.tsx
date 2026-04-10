@@ -159,6 +159,9 @@ export default function EmployeeClientPage({
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
 
+  const [leaveStartTime, setLeaveStartTime] = useState<string>("");
+  const [leaveEndTime, setLeaveEndTime] = useState<string>("");
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -175,20 +178,34 @@ export default function EmployeeClientPage({
     reason: "",
   });
 
-  const calculateOTHours = (startStr: string, endStr: string) => {
-    const [startH, startM] = startStr.split(":").map(Number);
-    const [endH, endM] = endStr.split(":").map(Number);
-
-    const startDate = new Date(0, 0, 0, startH, startM);
-    const endDate = new Date(0, 0, 0, endH, endM);
-
-    let diff = endDate.getTime() - startDate.getTime();
-    if (diff < 0) diff += 24 * 60 * 60 * 1000; // รองรับเคสข้ามคืน
-
-    return (diff / (1000 * 60 * 60)).toFixed(1);
-  };
-
   /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
+
+  const calculateTotalHours = (
+    startDate: string,
+    endDate: string,
+    startTime: string,
+    endTime: string
+  ): number => {
+    if (!startDate || !endDate || !startTime || !endTime) return 0;
+
+    // สร้าง Object Date โดยรวมวันที่และเวลาเข้าด้วยกัน (Format ISO: YYYY-MM-DDTHH:mm:ss)
+    const start = new Date(`${startDate}T${startTime}:00`);
+    const end = new Date(`${endDate}T${endTime}:00`);
+
+    // ป้องกันกรณี End 00:00 (วันถัดไป)
+    if (endTime === "00:00") {
+      end.setDate(end.getDate() + 1);
+    }
+
+    // คำนวณส่วนต่างเป็นมิลลิวินาที
+    const diffInMs = end.getTime() - start.getTime();
+
+    // แปลงเป็นชั่วโมง
+    const diffInHours = diffInMs / (1000 * 60 * 60);
+
+    // คืนค่าเป็นทศนิยม 1 ตำแหน่ง ถ้าค่าติดลบคืน 0
+    return diffInHours > 0 ? parseFloat(diffInHours.toFixed(1)) : 0;
+  };
 
   const calculateLeaveDays = (start: string, end: string): number => {
     if (!start || !end) return 0;
@@ -264,20 +281,18 @@ export default function EmployeeClientPage({
       month: "2-digit",
       day: "2-digit",
     }).format(now);
-  
+
     // 1. หา Record ที่ "ค้างอยู่" (มีการ Check-in แต่ยังไม่มี Check-out) - ไม่สนว่าจะเป็นวันไหน
     const pendingRecord = records.find(
       (r: any) =>
-        !!r.checkIn && 
-        r.checkIn !== "-" && 
-        (!r.checkOut || r.checkOut === "-")
+        !!r.checkIn && r.checkIn !== "-" && (!r.checkOut || r.checkOut === "-")
     );
-  
+
     // 2. หา Record ของ "วันนี้" (todayStr) ที่มีการบันทึกครบถ้วนแล้ว (เอาไว้เช็คกรณีจบงานในวันเดียว)
     const todayRecord = records.find((r: any) => r.date === todayStr);
-  
+
     // --- การตัดสินใจ (Priority Logic) ---
-  
+
     // เคสที่ 1: ถ้ามีงานค้างอยู่ (ไม่ว่าจะค้างมาจากเมื่อวาน หรือเพิ่งเข้างานวันนี้)
     // ปุ่มต้องเป็น "ลงชื่อเลิกงาน" เท่านั้น
     if (pendingRecord) {
@@ -285,10 +300,10 @@ export default function EmployeeClientPage({
         hasCheckedIn: true,
         hasCheckedOut: false,
         record: pendingRecord,
-        status: "PENDING_CHECKOUT" 
+        status: "PENDING_CHECKOUT",
       };
     }
-  
+
     // เคสที่ 2: ถ้าไม่มีงานค้างแล้ว และ "วันนี้" มีการ Check-out ไปแล้ว
     // ปุ่มจะขึ้นว่า "บันทึกเวลาครบแล้ว" (เฉพาะกรณีเลิกงานในวันเดียวกัน)
     if (todayRecord && todayRecord.checkOut && todayRecord.checkOut !== "-") {
@@ -296,23 +311,21 @@ export default function EmployeeClientPage({
         hasCheckedIn: true,
         hasCheckedOut: true,
         record: todayRecord,
-        status: "COMPLETED_TODAY"
+        status: "COMPLETED_TODAY",
       };
     }
-  
-    // เคสที่ 3: ไม่มีงานค้าง และยังไม่ได้เริ่มงานของวันนี้ 
+
+    // เคสที่ 3: ไม่มีงานค้าง และยังไม่ได้เริ่มงานของวันนี้
     // หรือเพิ่งเลิกงานกะข้ามคืนมาสดๆ ร้อนๆ (ทำให้วันนี้กลายเป็นว่าง)
     // ปุ่มจะขึ้นว่า "ลงชื่อเข้าทำงาน"
     return {
       hasCheckedIn: false,
       hasCheckedOut: false,
       record: null,
-      status: "READY_TO_CHECKIN"
+      status: "READY_TO_CHECKIN",
     };
   }, [records]);
 
-
-  
   /* ---------------- CAMERA LOGIC ---------------- */
   const startCamera = async () => {
     try {
@@ -531,6 +544,12 @@ export default function EmployeeClientPage({
       return;
     }
 
+    // 🔥 เช็คเพิ่ม: ถ้าลาเป็นชั่วโมง ต้องเลือกเวลาด้วย
+    if (leaveType === "ลาเป็นชั่วโมง" && (!leaveStartTime || !leaveEndTime)) {
+      setLeaveError("กรุณาระบุเวลาเริ่มต้นและสิ้นสุด");
+      return;
+    }
+
     // 2. เรียกใช้ Logic Validation ที่คุณเขียนไว้ (แทรกตรงนี้)
     const validation = validateLeaveDates(leaveStart, leaveEnd);
     if (!validation.isValid) {
@@ -546,8 +565,11 @@ export default function EmployeeClientPage({
         type: leaveType,
         start: leaveStart,
         end: leaveEnd,
+        // 🔥 เพิ่ม 2 บรรทัดนี้
+        startTime: leaveType === "ลาเป็นชั่วโมง" ? leaveStartTime : null,
+        endTime: leaveType === "ลาเป็นชั่วโมง" ? leaveEndTime : null,
         reason: leaveReason,
-        base64File: leaveFileBase64 || undefined, // ส่งไฟล์รูปภาพ (ถ้ามี)
+        base64File: leaveFileBase64 || undefined,
         fileName: leaveFileName,
       });
 
@@ -1073,10 +1095,33 @@ export default function EmployeeClientPage({
                               ขอเมื่อ : {l.requestDate}
                             </div>
                             <p className="font-black text-indigo-900 text-lg uppercase tracking-tight">
-                              {l.type}
-                            </p>
+  {l.type}
+  {/* ✅ แสดงจำนวน: 4 หรือ 4.5 เป็นครึ่งวัน | น้อยกว่า 24 เป็นชั่วโมง | ตั้งแต่ 24 ขึ้นไป หารเป็นวัน */}
+  <span className="ml-2 text-sm text-indigo-500">
+    (
+    {(() => {
+      const hours = Number(l.totalHours) || 0;
+      if (hours === 4 || hours === 4.5) {
+        return "ครึ่งวัน";
+      }
+      return hours < 24
+        ? `${hours} ชั่วโมง`
+        : `${(hours / 24).toFixed(1).replace(".0", "")} วัน`;
+    })()}
+    )
+  </span>
+</p>
+
                             <p className="text-xs font-bold text-black-500 mt-1">
-                              ตั้งแต่ {l.start} ถึง {l.end}
+                              ตั้งแต่ {l.start}{" "}
+                              {l.type === "ลาเป็นชั่วโมง" &&
+                                l.startTime &&
+                                `เวลา ${l.startTime}`}
+                              <br />
+                              ถึง {l.end}{" "}
+                              {l.type === "ลาเป็นชั่วโมง" &&
+                                l.endTime &&
+                                `เวลา ${l.endTime}`}
                             </p>
                           </div>
                           <span
@@ -1084,8 +1129,8 @@ export default function EmployeeClientPage({
                               l.status === "อนุมัติแล้ว"
                                 ? "bg-green-50 text-green-600 border-green-100"
                                 : l.status === "ปฏิเสธ"
-                                ? "bg-red-50 text-red-600 border-red-100"
-                                : "bg-amber-50 text-amber-600 border-amber-100"
+                                  ? "bg-red-50 text-red-600 border-red-100"
+                                  : "bg-amber-50 text-amber-600 border-amber-100"
                             }`}
                           >
                             {l.status}
@@ -1170,15 +1215,15 @@ export default function EmployeeClientPage({
                               ot.status === "approved"
                                 ? "bg-green-50 text-green-600 border-green-100"
                                 : ot.status === "rejected"
-                                ? "bg-red-50 text-red-600 border-red-100"
-                                : "bg-amber-50 text-amber-600 border-amber-100"
+                                  ? "bg-red-50 text-red-600 border-red-100"
+                                  : "bg-amber-50 text-amber-600 border-amber-100"
                             }`}
                           >
                             {ot.status === "approved"
                               ? "อนุมัติแล้ว"
                               : ot.status === "rejected"
-                              ? "ปฏิเสธ"
-                              : "รออนุมัติ"}
+                                ? "ปฏิเสธ"
+                                : "รออนุมัติ"}
                           </span>
                         </div>
 
@@ -1226,243 +1271,397 @@ export default function EmployeeClientPage({
 
           {/* 📝 LEAVE FORM SECTION */}
           {showLeaveForm && (
-            <div className="max-w-2xl mx-auto py-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
-              <div className="text-center mb-12">
-                <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-2">
-                  ยื่นเรื่อง <span className="text-indigo-600">ลางาน</span>
-                </h2>
-                <div className="w-12 h-1.5 bg-indigo-600 mx-auto rounded-full"></div>
-              </div>
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300 overflow-y-auto">
+              {/* Overlay สำหรับคลิกปิด */}
+              <div
+                className="absolute inset-0"
+                onClick={() =>
+                  !isProcessing && !leaveSuccess && setShowLeaveForm(false)
+                }
+              ></div>
 
-              {leaveSuccess ? (
-                <div className="p-12 bg-green-50 border border-green-100 text-green-700 rounded-[3rem] text-center space-y-4 shadow-xl">
-                  <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-4xl">
-                    ✓
+              {/* Modal Container */}
+              <div className="bg-white w-full max-w-2xl rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-300 relative z-10 my-auto">
+                <div className="p-5 sm:p-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                  <div className="text-center mb-8 sm:mb-12">
+                    <h2 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tighter uppercase mb-2">
+                      ยื่นเรื่อง <span className="text-indigo-600">ลางาน</span>
+                    </h2>
+                    <div className="w-12 h-1.5 bg-indigo-600 mx-auto rounded-full"></div>
                   </div>
-                  <p className="font-black text-2xl tracking-tighter uppercase">
-                    ส่งคำขอลาสำเร็จ
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-6 bg-gray-50/50 p-6 sm:p-10 rounded-[2rem] sm:rounded-[3rem] border border-gray-100 shadow-inner relative">
-                  {/* 🔥 แจ้งเตือนข้อผิดพลาด - แสดงเมื่อมี error และล้างออกเมื่อมีการแก้ไขวันที่ */}
-                  {leaveError && (
-                    <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[11px] font-black uppercase animate-in slide-in-from-top-2">
-                      <span className="mr-2">⚠️</span> {leaveError}
+
+                  {leaveSuccess ? (
+                    <div className="p-8 sm:p-12 bg-green-50 border border-green-100 text-green-700 rounded-[2.5rem] sm:rounded-[3rem] text-center space-y-4 shadow-xl">
+                      <div className="w-16 h-16 sm:w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-3xl sm:text-4xl">
+                        ✓
+                      </div>
+                      <p className="font-black text-xl sm:text-2xl tracking-tighter uppercase">
+                        ส่งคำขอลาสำเร็จ
+                      </p>
                     </div>
-                  )}
-
-                  {/* 1. ประเภทการลา */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
-                      ประเภทการลา
-                    </label>
-                    <select
-                      className="w-full bg-white p-5 rounded-[1.5rem] font-black text-gray-700 outline-none shadow-sm border-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer hover:bg-gray-50"
-                      value={leaveType}
-                      onChange={(e) => {
-                        setLeaveType(e.target.value);
-                        setLeaveError(""); // ล้าง error เมื่อเปลี่ยนประเภท
-                      }}
-                    >
-                      <option value="">โปรดระบุ</option>
-                      <option value="ลาป่วย">ลาป่วย</option>
-                      <option value="ลากิจ">ลากิจ</option>
-                      <option value="ลาพักร้อน">ลาพักร้อน</option>
-                    </select>
-                  </div>
-
-                  {/* 2. ส่วนวันที่ พร้อมระบบตรวจสอบความถูกต้อง */}
-                  <div className="relative space-y-4">
-                    {/* 🗓️ บล็อกแสดงผลจำนวนวัน (แสดงเฉพาะเมื่อวันที่ถูกต้องตาม Logic) */}
-                    {totalDays > 0 &&
-                      validateLeaveDates(leaveStart, leaveEnd).isValid && (
-                        <div className="flex flex-col items-center justify-center py-4 animate-in zoom-in duration-300">
-                          <div className="bg-indigo-600 px-8 py-3 rounded-[2rem] shadow-[0_10px_25px_-5px_rgba(79,70,229,0.4)] flex items-center gap-3">
-                            <span className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">
-                              ระยะเวลา
-                            </span>
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-3xl font-black text-white leading-none">
-                                {totalDays}
-                              </span>
-                              <span className="text-sm font-bold text-white uppercase">
-                                วัน
-                              </span>
-                            </div>
-                          </div>
-                          <div className="h-4 w-0.5 bg-gradient-to-b from-indigo-600 to-transparent opacity-20"></div>
+                  ) : (
+                    <div className="space-y-5 sm:space-y-6 bg-gray-50/50 p-5 sm:p-10 rounded-[2rem] sm:rounded-[3rem] border border-gray-100 shadow-inner relative">
+                      {/* 🔥 แจ้งเตือนข้อผิดพลาด */}
+                      {leaveError && (
+                        <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[11px] font-black uppercase animate-in slide-in-from-top-2">
+                          <span className="mr-2">⚠️</span> {leaveError}
                         </div>
                       )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
-                      {/* วันเริ่มต้น */}
-                      <div className="space-y-2 group">
-                        <label
-                          className={`text-[10px] font-black uppercase ml-4 transition-colors ${
-                            leaveError?.includes("เริ่มต้น") ||
-                            (leaveStart &&
-                              !validateLeaveDates(leaveStart, leaveEnd).isValid)
-                              ? "text-red-500"
-                              : "text-gray-400 group-focus-within:text-indigo-500"
-                          }`}
-                        >
-                          เริ่มต้น
+                      {/* 1. ประเภทการลา */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                          ประเภทการลา
                         </label>
-                        <div className="relative">
-                          <input
-                            type="date"
-                            className={`w-full p-5 rounded-[1.8rem] font-black text-gray-700 outline-none shadow-sm border-2 transition-all appearance-none ${
-                              leaveError?.includes("เริ่มต้น")
-                                ? "border-red-200 bg-red-50/50"
-                                : "bg-white border-transparent focus:border-indigo-500"
-                            }`}
-                            value={leaveStart}
-                            onChange={(e) => {
-                              setLeaveStart(e.target.value);
-                              setLeaveError(""); // ล้าง error ทันทีเพื่อให้สีแดงหายไป
-                            }}
-                          />
-                        </div>
+                        <select
+                          className="w-full bg-white p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.5rem] font-black text-gray-700 outline-none shadow-sm border-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer hover:bg-gray-50"
+                          value={leaveType}
+                          onChange={(e) => {
+                            setLeaveType(e.target.value);
+                            setLeaveError("");
+                          }}
+                        >
+                          <option value="">โปรดระบุ</option>
+                          <option value="ลาป่วย">ลาป่วย</option>
+                          <option value="ลากิจ">ลากิจ</option>
+                          <option value="ลาพักร้อน">ลาพักร้อน</option>
+                          <option value="ลาเป็นชั่วโมง">ลาเป็นชั่วโมง</option>
+                        </select>
                       </div>
 
-                      {/* วันสิ้นสุด */}
-                      <div className="space-y-2 group">
-                        <label
-                          className={`text-[10px] font-black uppercase ml-4 transition-colors ${
-                            leaveError?.includes("สิ้นสุด") ||
-                            (leaveEnd &&
-                              !validateLeaveDates(leaveStart, leaveEnd).isValid)
-                              ? "text-red-500"
-                              : "text-gray-400 group-focus-within:text-indigo-500"
-                          }`}
-                        >
-                          สิ้นสุด
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="date"
-                            className={`w-full p-5 rounded-[1.8rem] font-black text-gray-700 outline-none shadow-sm border-2 transition-all appearance-none ${
-                              leaveError?.includes("สิ้นสุด")
-                                ? "border-red-200 bg-red-50/50"
-                                : "bg-white border-transparent focus:border-indigo-500"
-                            }`}
-                            value={leaveEnd}
-                            onChange={(e) => {
-                              setLeaveEnd(e.target.value);
-                              setLeaveError(""); // ล้าง error ทันทีเพื่อให้สีแดงหายไป
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3. ระบุเหตุผล */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
-                      ระบุเหตุผล
-                    </label>
-                    <textarea
-                      className="w-full bg-white p-5 rounded-[1.5rem] font-medium min-h-[120px] outline-none shadow-sm focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-gray-300"
-                      placeholder="เขียนเหตุผลประกอบการลาที่นี่..."
-                      value={leaveReason}
-                      onChange={(e) => {
-                        setLeaveReason(e.target.value);
-                        if (leaveError === "กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง")
-                          setLeaveError("");
-                      }}
-                    />
-                  </div>
-
-                  {/* 4. อัปโหลดและบีบอัดรูปภาพ */}
-                  <div className="space-y-3 mt-4">
-                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
-                      เอกสารประกอบ (ไม่เกิน 1MB)
-                    </label>
-                    <div className="relative group">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="hidden"
-                        id="leave-file-upload"
-                        disabled={isProcessing}
-                      />
-                      <label
-                        htmlFor="leave-file-upload"
-                        className="flex flex-col items-center justify-center w-full bg-white border-2 border-dashed border-gray-200 p-6 rounded-[1.5rem] cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-all group shadow-sm active:scale-[0.98]"
-                      >
-                        {leaveFilePreview ? (
-                          <div className="relative w-full h-32 flex justify-center">
-                            <img
-                              src={leaveFilePreview}
-                              alt="Preview"
-                              className="h-full object-contain rounded-xl shadow-md"
-                            />
-                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-all">
-                              <span className="text-white text-[10px] font-black uppercase">
-                                เปลี่ยนรูป
+                      {/* 2. ส่วนวันที่ */}
+                      <div className="relative space-y-4">
+                        {/* Badge แสดงระยะเวลา (รองรับทั้ง "วัน" และ "ชั่วโมง") */}
+                        {((leaveType !== "ลาเป็นชั่วโมง" &&
+                          totalDays > 0 &&
+                          validateLeaveDates(leaveStart, leaveEnd).isValid) ||
+                          (leaveType === "ลาเป็นชั่วโมง" &&
+                            leaveStartTime &&
+                            leaveEndTime &&
+                            (leaveStart !== leaveEnd ||
+                              leaveEndTime > leaveStartTime))) && (
+                          <div className="flex flex-col items-center justify-center py-2 sm:py-4 animate-in zoom-in duration-300">
+                            <div className="bg-indigo-600 px-6 py-2 sm:px-8 sm:py-3 rounded-[2rem] shadow-[0_10px_25px_-5px_rgba(79,70,229,0.4)] flex items-center gap-3">
+                              <span className="text-[9px] sm:text-[10px] font-black text-indigo-100 uppercase tracking-widest">
+                                ระยะเวลา
                               </span>
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-2xl sm:text-3xl font-black text-white leading-none">
+                                  {leaveType === "ลาเป็นชั่วโมง"
+                                    ? calculateTotalHours(
+                                        leaveStart, // วันที่เริ่ม
+                                        leaveEnd, // วันที่สิ้นสุด
+                                        leaveStartTime, // เวลาเริ่ม
+                                        leaveEndTime // เวลาสิ้นสุด
+                                      )
+                                    : totalDays}
+                                </span>
+                                <span className="text-xs sm:text-sm font-bold text-white uppercase">
+                                  {leaveType === "ลาเป็นชั่วโมง"
+                                    ? "ชั่วโมง"
+                                    : "วัน"}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <div className="w-10 h-10 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-2 text-gray-400 group-hover:text-indigo-600 group-hover:rotate-12 transition-all duration-300">
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-5 w-5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={3}
-                                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                />
-                              </svg>
-                            </div>
-                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-tighter">
-                              คลิกเพื่อแนบหลักฐาน
-                            </p>
+                            <div className="h-3 w-0.5 bg-gradient-to-b from-indigo-600 to-transparent opacity-20"></div>
                           </div>
                         )}
-                      </label>
-                    </div>
-                  </div>
 
-                  {/* 5. ปุ่มแอคชั่น */}
-                  <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                    <button
-                      onClick={submitLeave}
-                      disabled={
-                        isProcessing || !!leaveError || !leaveStart || !leaveEnd
-                      }
-                      className="flex-[2] bg-indigo-600 text-white font-black py-6 rounded-[1.5rem] shadow-xl active:scale-95 hover:bg-indigo-700 transition-all uppercase tracking-tighter disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {isProcessing ? (
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      ) : (
-                        "ยืนยันการลา"
-                      )}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowLeaveForm(false);
-                        setLeaveFilePreview(null);
-                        setLeaveFileBase64(null);
-                        setLeaveError("");
-                      }}
-                      disabled={isProcessing}
-                      className="flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black py-6 rounded-[1.5rem] uppercase hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-30"
-                    >
-                      ยกเลิก
-                    </button>
-                  </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                          <div className="space-y-2 group">
+                            <label
+                              className={`text-[10px] font-black uppercase ml-4 transition-colors ${
+                                leaveError?.includes("เริ่มต้น") ||
+                                (leaveStart &&
+                                  !validateLeaveDates(leaveStart, leaveEnd)
+                                    .isValid)
+                                  ? "text-red-500"
+                                  : "text-gray-400 group-focus-within:text-indigo-500"
+                              }`}
+                            >
+                              เริ่มต้น
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="date"
+                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black text-gray-700 outline-none shadow-sm border-2 transition-all appearance-none ${
+                                  leaveError?.includes("เริ่มต้น")
+                                    ? "border-red-200 bg-red-50/50"
+                                    : "bg-white border-transparent focus:border-indigo-500"
+                                }`}
+                                value={leaveStart}
+                                onChange={(e) => {
+                                  setLeaveStart(e.target.value);
+                                  setLeaveError("");
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 group">
+                            <label
+                              className={`text-[10px] font-black uppercase ml-4 transition-colors ${
+                                leaveError?.includes("สิ้นสุด") ||
+                                (leaveEnd &&
+                                  !validateLeaveDates(leaveStart, leaveEnd)
+                                    .isValid)
+                                  ? "text-red-500"
+                                  : "text-gray-400 group-focus-within:text-indigo-500"
+                              }`}
+                            >
+                              สิ้นสุด
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="date"
+                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black text-gray-700 outline-none shadow-sm border-2 transition-all appearance-none ${
+                                  leaveError?.includes("สิ้นสุด")
+                                    ? "border-red-200 bg-red-50/50"
+                                    : "bg-white border-transparent focus:border-indigo-500"
+                                }`}
+                                value={leaveEnd}
+                                onChange={(e) => {
+                                  setLeaveEnd(e.target.value);
+                                  setLeaveError("");
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ส่วนเลือกเวลา: เพิ่มการเช็คให้เลือกวันก่อน */}
+                        {leaveType === "ลาเป็นชั่วโมง" && (
+                          <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-4 duration-300">
+                            <div className="space-y-2 group">
+                              <label
+                                className={`text-[10px] font-black uppercase ml-4 ${!leaveStart ? "text-red-500" : "text-gray-400"}`}
+                              >
+                                เวลาเริ่มต้น (24H)
+                              </label>
+                              <select
+                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${
+                                  !leaveStart
+                                    ? "border-red-200 bg-red-50 text-red-600"
+                                    : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
+                                }`}
+                                value={leaveStartTime}
+                                onChange={(e) => {
+                                  if (!leaveStart || !leaveEnd) {
+                                    setLeaveError(
+                                      "กรุณาเลือกวันที่เริ่มต้นและสิ้นสุดก่อนเลือกเวลา"
+                                    );
+                                    return;
+                                  }
+                                  const newStart = e.target.value;
+                                  setLeaveStartTime(newStart);
+                                  if (
+                                    leaveStart === leaveEnd &&
+                                    leaveEndTime &&
+                                    leaveEndTime !== "00:00" &&
+                                    newStart >= leaveEndTime
+                                  ) {
+                                    setLeaveError(
+                                      "วันเดียวกัน เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด"
+                                    );
+                                  } else {
+                                    setLeaveError("");
+                                  }
+                                }}
+                              >
+                                <option value="">
+                                  {!leaveStart ? "ระบุวันก่อน" : "เลือกเวลา"}
+                                </option>
+                                {Array.from({ length: 24 }).map((_, h) =>
+                                  [0, 30].map((m) => {
+                                    const t = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+                                    return (
+                                      <option key={`start-${t}`} value={t}>
+                                        {t}
+                                      </option>
+                                    );
+                                  })
+                                )}
+                              </select>
+                            </div>
+                            <div className="space-y-2 group">
+                              <label
+                                className={`text-[10px] font-black uppercase ml-4 ${!leaveEnd ? "text-red-500" : "text-gray-400"}`}
+                              >
+                                เวลาสิ้นสุด (24H)
+                              </label>
+                              <select
+                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${
+                                  !leaveEnd ||
+                                  (leaveStart === leaveEnd &&
+                                    leaveEndTime &&
+                                    leaveEndTime !== "00:00" &&
+                                    leaveStartTime >= leaveEndTime)
+                                    ? "border-red-200 bg-red-50 text-red-600"
+                                    : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
+                                }`}
+                                value={leaveEndTime}
+                                onChange={(e) => {
+                                  if (!leaveStart || !leaveEnd) {
+                                    setLeaveError(
+                                      "กรุณาเลือกวันที่เริ่มต้นและสิ้นสุดก่อนเลือกเวลา"
+                                    );
+                                    return;
+                                  }
+                                  const newEnd = e.target.value;
+                                  setLeaveEndTime(newEnd);
+                                  if (
+                                    leaveStart === leaveEnd &&
+                                    leaveStartTime &&
+                                    newEnd !== "00:00" &&
+                                    newEnd <= leaveStartTime
+                                  ) {
+                                    setLeaveError(
+                                      "วันเดียวกัน เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น"
+                                    );
+                                  } else {
+                                    setLeaveError("");
+                                  }
+                                }}
+                              >
+                                <option value="">
+                                  {!leaveEnd ? "ระบุวันก่อน" : "เลือกเวลา"}
+                                </option>
+                                {/* เริ่มแสดงตั้งแต่ 00:30 เป็นต้นไป เพื่อไม่ให้ซ้ำกับ 00:00 ที่อยู่ท้ายสุด */}
+                                {Array.from({ length: 24 }).map((_, h) =>
+                                  [0, 30].map((m) => {
+                                    const t = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+                                    if (t === "00:00") return null; // ข้าม 00:00 ใน loop ไป
+                                    return (
+                                      <option key={`end-${t}`} value={t}>
+                                        {t}
+                                      </option>
+                                    );
+                                  })
+                                )}
+                                <option value="00:00">24:00</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 3. ระบุเหตุผล */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                          ระบุเหตุผล
+                        </label>
+                        <textarea
+                          className="w-full bg-white p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.5rem] font-medium min-h-[100px] sm:min-h-[120px] outline-none shadow-sm focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-gray-300"
+                          placeholder="เขียนเหตุผลประกอบการลาที่นี่..."
+                          value={leaveReason}
+                          onChange={(e) => {
+                            setLeaveReason(e.target.value);
+                            if (
+                              leaveError === "กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง"
+                            )
+                              setLeaveError("");
+                          }}
+                        />
+                      </div>
+
+                      {/* 4. อัปโหลดรูปภาพ */}
+                      <div className="space-y-2 mt-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                          เอกสารประกอบ (ไม่เกิน 1MB)
+                        </label>
+                        <div className="relative group">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="hidden"
+                            id="leave-file-upload"
+                            disabled={isProcessing}
+                          />
+                          <label
+                            htmlFor="leave-file-upload"
+                            className="flex flex-col items-center justify-center w-full bg-white border-2 border-dashed border-gray-200 p-4 sm:p-6 rounded-[1.2rem] sm:rounded-[1.5rem] cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-all group shadow-sm active:scale-[0.98]"
+                          >
+                            {leaveFilePreview ? (
+                              <div className="relative w-full h-24 sm:h-32 flex justify-center">
+                                <img
+                                  src={leaveFilePreview}
+                                  alt="Preview"
+                                  className="h-full object-contain rounded-xl shadow-md"
+                                />
+                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-all">
+                                  <span className="text-white text-[9px] font-black uppercase">
+                                    เปลี่ยนรูป
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center">
+                                <div className="w-8 h-8 sm:w-10 h-10 bg-gray-100 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-2 text-gray-400 group-hover:text-indigo-600 transition-all duration-300">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-4 w-4 sm:h-5 w-5"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={3}
+                                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                    />
+                                  </svg>
+                                </div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">
+                                  คลิกเพื่อแนบหลักฐาน
+                                </p>
+                              </div>
+                            )}
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* 5. ปุ่มแอคชั่น */}
+                      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2">
+                        <button
+                          onClick={submitLeave}
+                          disabled={
+                            isProcessing ||
+                            !!leaveError ||
+                            !leaveStart ||
+                            !leaveEnd ||
+                            (leaveType === "ลาเป็นชั่วโมง" &&
+                              (!leaveStartTime ||
+                                !leaveEndTime ||
+                                (leaveStart === leaveEnd &&
+                                  leaveStartTime >= leaveEndTime)))
+                          }
+                          className="order-1 sm:order-2 flex-[2] bg-indigo-600 text-white font-black py-4 sm:py-6 rounded-[1.2rem] sm:rounded-[1.5rem] shadow-xl active:scale-95 hover:bg-indigo-700 transition-all uppercase tracking-tighter disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          {isProcessing ? (
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          ) : (
+                            "ยืนยันการลา"
+                          )}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowLeaveForm(false);
+                            setLeaveFilePreview(null);
+                            setLeaveFileBase64(null);
+                            setLeaveError("");
+                          }}
+                          disabled={isProcessing}
+                          className="order-2 sm:order-1 flex-1 bg-white border-2 border-gray-200 text-gray-400 font-black py-4 sm:py-6 rounded-[1.2rem] sm:rounded-[1.5rem] uppercase hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-30"
+                        >
+                          ยกเลิก
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>

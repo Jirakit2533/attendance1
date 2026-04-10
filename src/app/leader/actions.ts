@@ -344,6 +344,8 @@ export async function createLeaveRequestAction(data: {
   type: string;
   startDate: string;
   endDate: string;
+  startTime?: string | null; // ✅ เพิ่มรองรับเวลาเริ่มต้น
+  endTime?: string | null;   // ✅ เพิ่มรองรับเวลาสิ้นสุด
   reason: string;
   fileUrl?: string;
   fileId?: string;
@@ -362,6 +364,37 @@ export async function createLeaveRequestAction(data: {
       return { success: false, error: "ไม่พบข้อมูลพนักงานในระบบ" };
     }
 
+    // --- 💡 Logic การคำนวณ Total Hours ---
+    let totalHoursResult = 0;
+
+    if (data.type === "ลาเป็นชั่วโมง" && data.startTime && data.endTime) {
+      const startDateTime = new Date(`${data.startDate}T${data.startTime}`);
+      const endDateTime = new Date(`${data.endDate}T${data.endTime}`);
+      
+      const diffMs = endDateTime.getTime() - startDateTime.getTime();
+      
+      // หารออกมาเป็นชั่วโมง (จะได้ทศนิยมมาด้วย เช่น 1.5)
+      const hours = diffMs / (1000 * 60 * 60);
+      
+      // ใช้ Number() ครอบเพื่อให้แน่ใจว่าเป็นตัวเลข และปัดเศษทศนิยมให้เหลือ 2 ตำแหน่ง
+      totalHoursResult = Number(hours.toFixed(2)); 
+    } else {
+      // กรณีลาปกติ: คำนวณจากจำนวนวัน (วันที่สิ้นสุด - วันที่เริ่มต้น + 1 วัน) แล้วคูณ 24
+      const start = new Date(data.startDate);
+      const end = new Date(data.endDate);
+      
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      
+      totalHoursResult = diffDays * 24; // จำนวนวันคูณ 24
+    }
+
+    // ตรวจสอบความถูกต้องของเวลา
+    if (totalHoursResult < 0.00) {
+      return { success: false, error: "ช่วงเวลาการลาไม่ถูกต้อง" };
+    }
+    // --------------------------------------------------
+
     await db.insert(leaveTable).values({
       user_id: data.userId,
       department_id: user.departmentId,
@@ -369,6 +402,9 @@ export async function createLeaveRequestAction(data: {
       type: data.type,
       startDate: data.startDate,
       endDate: data.endDate,
+      startTime: data.startTime || null, // ✅ บันทึกเวลาเริ่มต้น (ถ้ามี)
+      endTime: data.endTime || null,     // ✅ บันทึกเวลาสิ้นสุด (ถ้ามี)
+      totalHours: totalHoursResult,      // ✅ บันทึกค่าที่คำนวณได้เป็นชั่วโมง (Integer)
       reason: data.reason,
       status: "pending",
       fileUrl: data.fileUrl || null,
@@ -384,7 +420,6 @@ export async function createLeaveRequestAction(data: {
     return { success: false, error: "ส่งคำขอลาไม่สำเร็จ: " + error.message };
   }
 }
-
 /**
  * 3. อัปเดตสถานะการลา (แก้ไข Error Type Mismatch)
  */

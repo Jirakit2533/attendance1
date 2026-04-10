@@ -90,6 +90,9 @@ export default async function Page() {
       type: leaveTable.type,
       startDate: leaveTable.startDate,
       endDate: leaveTable.endDate,
+      startTime: leaveTable.startTime, // ✅ เพิ่มดึงเวลาเริ่มต้น
+      endTime: leaveTable.endTime,     // ✅ เพิ่มดึงเวลาสิ้นสุด
+      totalHours: leaveTable.totalHours, // ✅ เพิ่มดึงจำนวนชั่วโมงรวม
       remark: leaveTable.remark,
       reason: leaveTable.reason,
       status: leaveTable.status,
@@ -189,10 +192,12 @@ export default async function Page() {
       type: l.type,
       start: l.startDate,
       end: l.endDate,
+      startTime: l.startTime, // ✅ ส่งเวลาเริ่มต้นไป UI
+      endTime: l.endTime,     // ✅ ส่งเวลาสิ้นสุดไป UI
+      totalHours: l.totalHours || 0, // ✅ ส่งค่าตัวเลขชั่วโมง/นาทีไปคำนวณที่ UI
       remark: l.remark,
       reason: l.reason,
       requestDate: formattedCreatedAt, // ✅ ชื่อคีย์สำหรับนำไปวางฝั่ง UI
-      days: 0,
       status:
         l.status === "pending"
           ? "รออนุมัติ"

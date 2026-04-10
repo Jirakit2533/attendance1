@@ -123,6 +123,8 @@ export default async function AdminDashboardPage() {
           type: leaveTable.type,
           startDate: leaveTable.startDate,
           endDate: leaveTable.endDate,
+          startTime: leaveTable.startTime, // เพิ่มการ Select startTime
+          endTime: leaveTable.endTime,     // เพิ่มการ Select endTime
           status: leaveTable.status,
           reason: leaveTable.reason,
           remark: leaveTable.remark,
@@ -132,6 +134,8 @@ export default async function AdminDashboardPage() {
           lastName: usersTable.lastName,
           userName: usersTable.userName,
           avatarUrl: usersTable.avatarUrl,
+          totalHours: leaveTable.totalHours,
+          createdAt: leaveTable.createdAt,
         })
         .from(leaveTable)
         .leftJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
@@ -141,7 +145,7 @@ export default async function AdminDashboardPage() {
             isNull(usersTable.deletedAt)
           )
         )
-        .orderBy(desc(leaveTable.startDate)),
+        .orderBy(desc(leaveTable.createdAt)),
 
       // --- ข้อมูลพื้นฐาน ---
       db
@@ -177,7 +181,7 @@ export default async function AdminDashboardPage() {
         .where(eq(companyTable.id, companyId || ""))
         .limit(1),
 
-      // --- OT Requests: แก้ไขเงื่อนไขการกรองเพื่อให้แสดงผล (ถอด isNull ของ OT ออกชั่วคราวเหมือน Leader) ---
+      // --- OT Requests ---
       db
         .select({
           id: overtimeRequestsTable.id,
@@ -203,8 +207,7 @@ export default async function AdminDashboardPage() {
         .where(
           and(
             eq(overtimeRequestsTable.companyId, companyId || ""),
-            // ถอด isNull(overtimeRequestsTable.deletedAt) ออกชั่วคราวเพื่อให้ข้อมูลที่ติด Bug แสดงผล
-            isNull(usersTable.deletedAt) // กรองเฉพาะพนักงานที่ยังไม่ถูกลบ
+            isNull(usersTable.deletedAt)
           )
         )
         .orderBy(desc(overtimeRequestsTable.createdAt)),
@@ -281,7 +284,7 @@ export default async function AdminDashboardPage() {
       totalHours: String(ot.overtimeByRequest || "0"),
       reason: String(ot.reason || ""),
       status: String(ot.status || "pending"),
-      remark: String(ot.remarks || ""), // Mapping จาก field remarks เข้า UI
+      remark: String(ot.remarks || ""),
       positionName: ot.positionName || "พนักงาน",
       departmentName: ot.departmentName || "ไม่ระบุแผนก",
     }));
@@ -308,7 +311,7 @@ export default async function AdminDashboardPage() {
     };
 
     const rawProps = {
-      currentAdminId: adminId, // 🚩 เพิ่ม ID เข้าไปเพื่อให้ Client เรียกใช้บันทึก approvedBy/rejectedBy
+      currentAdminId: adminId,
       initialEmployees: employees,
       initialAttendance: attendance,
       initialLeaves: (rawLeaves || []).map((l) => ({
@@ -316,6 +319,8 @@ export default async function AdminDashboardPage() {
         type: String(l?.type || "ลากิจ"),
         startDate: l?.startDate ? String(l.startDate) : "",
         endDate: l?.endDate ? String(l.endDate) : "",
+        startTime: l?.startTime || null, // Map ข้อมูล startTime
+        endTime: l?.endTime || null,     // Map ข้อมูล endTime
         status: String(l?.status || "pending"),
         reason: String(l?.reason || ""),
         remark: String(l?.remark || ""),
@@ -324,6 +329,8 @@ export default async function AdminDashboardPage() {
         employeeName: `${l?.firstName || ""} ${l?.lastName || ""}`.trim() || "ไม่ระบุพนักงาน",
         userName: String(l?.userName || ""),
         avatarUrl: l?.avatarUrl || null,
+        totalHours: l?.totalHours || 0,
+        createdAt: l?.createdAt ? String(l.createdAt) : null,
       })),
       admin: adminProfile,
       sites: sites,

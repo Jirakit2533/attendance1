@@ -99,6 +99,27 @@
       "when": 1775489674955,
       "tag": "0013_low_chamber",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1775822524833,
+      "tag": "0014_left_stick",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1775825974869,
+      "tag": "0015_dark_omega_red",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1775833914545,
+      "tag": "0016_serious_mulholland_black",
+      "breakpoints": true
     }
   ]
 }

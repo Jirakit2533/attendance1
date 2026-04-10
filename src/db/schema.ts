@@ -1,4 +1,4 @@
-import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer, jsonb, doublePrecision} from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 
@@ -213,7 +213,10 @@ export const leaveTable = pgTable("leave", {
   type: varchar("type", { length: 255 }).notNull(),
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
+  startTime: time("start_time"), 
+  endTime: time("end_time"),
   reason: text("reason").notNull(),
+  totalHours: doublePrecision("total_hours").notNull().default(0),
   status: leaveStatusEnum("status").notNull().default("pending"),
   approvedBy: uuid("approved_by_id").references(() => usersTable.id),
   approvedAt: timestamp("approved_at", { withTimezone: true }), 

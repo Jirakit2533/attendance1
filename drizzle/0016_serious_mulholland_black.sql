@@ -1,0 +1,1 @@
+ALTER TABLE "leave" ALTER COLUMN "total_hours" SET DATA TYPE double precision;

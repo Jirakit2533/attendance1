@@ -1,0 +1,1 @@
+ALTER TABLE "leave" ADD COLUMN "total_hours" integer DEFAULT 0 NOT NULL;

@@ -169,7 +169,9 @@ export default function AdminClientPage({
   const [showReport, setShowReport] = useState(false); // เปิด/ปิดหน้าแสดงตัวอย่างรายงาน
   const [reportData, setReportData] = useState<any[]>([]); // ถังเก็บข้อมูลที่จะโชว์ในตารางรายงาน
 
-  const [overtimeReques, setOvertimeReques] = useState<OvertimeRequest[]>(initialOvertimeRequests);
+  const [overtimeReques, setOvertimeReques] = useState<OvertimeRequest[]>(
+    initialOvertimeRequests
+  );
   const [isUpdating, setIsUpdating] = useState(false);
   const [otRemarks, setOtRemarks] = useState<Record<string, string>>({});
 
@@ -502,17 +504,27 @@ export default function AdminClientPage({
 
   const handleApproveOT = async (otId: string) => {
     if (!confirm("ยืนยันการอนุมัติ OT นี้ใช่หรือไม่?")) return;
-    setIsUpdating(true); 
+    setIsUpdating(true);
     try {
       const remark = otRemarks[otId] || "";
       // 🚩 เพิ่ม currentAdminId เป็นตัวที่ 4 ตรงนี้
-      const res = await updateOvertimeStatusAction(otId, "approved", remark, currentAdminId);
+      const res = await updateOvertimeStatusAction(
+        otId,
+        "approved",
+        remark,
+        currentAdminId
+      );
 
       if (res.success) {
         setOvertimeReques((prev) =>
           prev.map((item) =>
-            item.id === otId 
-              ? { ...item, status: "approved", remarks: remark, approvedBy: currentAdminId } 
+            item.id === otId
+              ? {
+                  ...item,
+                  status: "approved",
+                  remarks: remark,
+                  approvedBy: currentAdminId,
+                }
               : item
           )
         );
@@ -534,13 +546,23 @@ export default function AdminClientPage({
     try {
       const remark = otRemarks[otId] || "";
       // 🚩 เพิ่ม currentAdminId เป็นตัวที่ 4 ตรงนี้
-      const res = await updateOvertimeStatusAction(otId, "rejected", remark, currentAdminId);
+      const res = await updateOvertimeStatusAction(
+        otId,
+        "rejected",
+        remark,
+        currentAdminId
+      );
 
       if (res.success) {
         setOvertimeReques((prev) =>
           prev.map((item) =>
-            item.id === otId 
-              ? { ...item, status: "rejected", remarks: remark, rejectedBy: currentAdminId } 
+            item.id === otId
+              ? {
+                  ...item,
+                  status: "rejected",
+                  remarks: remark,
+                  rejectedBy: currentAdminId,
+                }
               : item
           )
         );
@@ -579,7 +601,6 @@ export default function AdminClientPage({
       setIsUpdating(false);
     }
   };
-
 
   const handleDirectReset = async (targetUserId: string) => {
     // 1. ถามเพื่อยืนยันป้องกันการกดพลาด
@@ -2417,13 +2438,13 @@ export default function AdminClientPage({
                                 พนักงาน
                               </th>
                               <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                                ประเภท
+                                วันที่ขอ
                               </th>
                               <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                                วันที่
+                                วันที่/ประเภท
                               </th>
                               <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                                จำนวนวัน
+                                จำนวนวัน/ชั่วโมง
                               </th>
                               <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
                                 เหตุผล
@@ -2483,33 +2504,93 @@ export default function AdminClientPage({
                                       </div>
                                     </td>
                                     <td className="py-4 px-6 text-center font-bold text-blue-600">
-                                      {l.type}
+                                      {l.createdAt
+                                        ? new Date(l.createdAt).toLocaleString(
+                                            "th-TH"
+                                          )
+                                        : "-"}
                                     </td>
-                                    <td className="py-4 px-6 text-center text-gray-500 text-[11px] font-bold leading-tight">
-                                      {new Date(l.startDate).toLocaleDateString(
-                                        "th-TH",
-                                        {
-                                          day: "2-digit",
-                                          month: "short",
-                                          year: "2-digit",
-                                        }
-                                      )}
-                                      <br /> - <br />
-                                      {new Date(l.endDate).toLocaleDateString(
-                                        "th-TH",
-                                        {
-                                          day: "2-digit",
-                                          month: "short",
-                                          year: "2-digit",
-                                        }
-                                      )}
+                                    <td className="py-3 px-4 text-center">
+                                      <div className="flex flex-col items-center gap-1.5">
+                                        {/* ประเภทการลา: เน้นให้เด่นขึ้นด้วยพื้นหลังอ่อนๆ */}
+                                        <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[12px] font-semibold">
+                                          {l.type}
+                                        </span>
+
+                                        {/* ช่วงวันที่: ใช้สีเทาเข้มขึ้นเพื่อให้ตัดกับพื้นหลังขาว และจัดเรียงแนวนอนพร้อม Icon เล็กๆ (ถ้ามี) */}
+                                        <div className="flex-row gap-1 items-center text-[13px] text-gray-600 font-medium">
+                                          <span>
+                                            {new Date(
+                                              l.startDate
+                                            ).toLocaleDateString("th-TH", {
+                                              day: "2-digit",
+                                              month: "short",
+                                              year: "2-digit",
+                                            })}
+                                          </span>
+                                          <span className="text-gray-400">
+                                            -
+                                          </span>
+                                          <span>
+                                            {new Date(
+                                              l.endDate
+                                            ).toLocaleDateString("th-TH", {
+                                              day: "2-digit",
+                                              month: "short",
+                                              year: "2-digit",
+                                            })}
+                                          </span>
+                                        </div>
+                                      </div>
                                     </td>
-                                    <td className="py-4 px-6 text-center">
-                                      <span className="bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg font-black text-xs border border-orange-100">
-                                        {isNaN(diffDays)
-                                          ? "-"
-                                          : `${diffDays} วัน`}
-                                      </span>
+                                    <td className="py-4 px-2 text-center">
+                                      <div className="flex flex-col items-center gap-1">
+                                        <div className="flex justify-center">
+                                          {(() => {
+                                            const hrs =
+                                              Number(l.totalHours) || 0;
+                                            const isHalfDay =
+                                              hrs === 4 || hrs === 4.5;
+                                            const isDayUnit = hrs >= 24;
+
+                                            // ปรับคลาสให้เป็นระเบียบ: ใช้ min-w-[80px] แทนการอัด px เยอะๆ
+                                            const baseClass =
+                                              "min-w-[85px] py-1.5 rounded-lg font-black text-[10px] sm:text-[11px] border uppercase tracking-wider inline-block text-center shadow-sm";
+
+                                            if (isHalfDay) {
+                                              return (
+                                                <span
+                                                  className={`${baseClass} bg-purple-50 text-purple-600 border-purple-100`}
+                                                >
+                                                  ครึ่งวัน
+                                                </span>
+                                              );
+                                            }
+
+                                            return (
+                                              <span
+                                                className={`${baseClass} ${
+                                                  isDayUnit
+                                                    ? "bg-orange-50 text-orange-600 border-orange-100"
+                                                    : "bg-blue-50 text-blue-600 border-blue-100"
+                                                }`}
+                                              >
+                                                {isDayUnit
+                                                  ? `${(hrs / 24).toFixed(1).replace(".0", "")}\u00A0วัน`
+                                                  : `${hrs}\u00A0ชม.`}
+                                              </span>
+                                            );
+                                          })()}
+                                        </div>
+
+                                        {/* แสดงเวลา Start - End ไว้ข้างใต้ปุ่ม และเช็คค่าว่าง */}
+                                        {l.startTime && l.endTime && (
+                                          <span className="text-[9px] text-slate-400 font-bold tracking-tighter tabular-nums leading-none">
+                                            {l.startTime.slice(0, 5)} -{" "}
+                                            {l.endTime.slice(0, 5)}
+                                          </span>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="py-4 px-6 text-gray-600 italic text-xs max-w-[200px] truncate">
                                       "{l.reason || "ไม่มีระบุเหตุผล"}"
@@ -2538,22 +2619,24 @@ export default function AdminClientPage({
                                         )}
                                       </div>
                                     </td>
-                                    <td className="py-4 px-6 text-center">
-                                      <span
-                                        className={`px-4 py-2 rounded-full text-[10px] font-black uppercase shadow-sm border ${
-                                          l.status === "pending"
-                                            ? "bg-orange-100 text-orange-600 border-orange-200"
+                                    <td className="py-4 px-2 text-center">
+                                      <div className="flex justify-center">
+                                        <span
+                                          className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${
+                                            l.status === "pending"
+                                              ? "bg-orange-50 text-orange-600 border-orange-200"
+                                              : l.status === "approved"
+                                                ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                                                : "bg-red-50 text-red-600 border-red-200"
+                                          }`}
+                                        >
+                                          {l.status === "pending"
+                                            ? "รออนุมัติ"
                                             : l.status === "approved"
-                                              ? "bg-emerald-100 text-emerald-600 border-emerald-200"
-                                              : "bg-red-100 text-red-600 border-red-200"
-                                        }`}
-                                      >
-                                        {l.status === "pending"
-                                          ? "รออนุมัติ"
-                                          : l.status === "approved"
-                                            ? "อนุมัติแล้ว"
-                                            : "ปฏิเสธ"}
-                                      </span>
+                                              ? "อนุมัติแล้ว"
+                                              : "ปฏิเสธ"}
+                                        </span>
+                                      </div>
                                     </td>
                                     <td className="py-4 px-6">
                                       <div className="flex justify-center gap-2">
@@ -2671,11 +2754,27 @@ export default function AdminClientPage({
                         currentItems.map((l) => {
                           const start = new Date(l.startDate);
                           const end = new Date(l.endDate);
-                          const dDays =
-                            Math.ceil(
-                              Math.abs(end.getTime() - start.getTime()) /
-                                (1000 * 60 * 60 * 24)
-                            ) + 1;
+                          // 1. คำนวณหาชั่วโมงทั้งหมดก่อน (Diff เป็นมิลลิวินาที -> ชั่วโมง)
+                          // 1. ดึงค่าตรงๆ จาก Object 'l' (Leave item) ที่หลังบ้าน Map มาให้แล้ว
+                          const hrs = Number(l.totalHours) || 0;
+
+                          // 2. เช็คเงื่อนไขตาม Logic ที่เราตกลงกัน
+                          const isHalfDay = hrs === 4 || hrs === 4.5;
+                          const isDayUnit = hrs >= 24;
+
+                          // 3. เตรียมตัวแปรสำหรับแสดงผลใน Paragraph
+                          let durationLabel = "";
+                          if (isHalfDay) {
+                            durationLabel = "ครึ่งวัน";
+                          } else if (isDayUnit) {
+                            // 24 ชม. = 1 วัน
+                            const dayCalc = (hrs / 24)
+                              .toFixed(1)
+                              .replace(".0", "");
+                            durationLabel = `${dayCalc} วัน`;
+                          } else {
+                            durationLabel = `${hrs} ชั่วโมง`;
+                          }
 
                           return (
                             <div
@@ -2800,9 +2899,31 @@ export default function AdminClientPage({
                                   <p className="text-[10px] text-slate-400 font-black uppercase mb-1">
                                     ระยะเวลา
                                   </p>
-                                  <p className="text-sm font-black text-slate-700">
-                                    {isNaN(dDays) ? "-" : `${dDays} วัน`}
-                                  </p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <p
+                                      className={`
+                                        px-3 py-1 rounded-lg font-black text-[11px] border uppercase tracking-wider w-fit shadow-sm
+                                            ${
+                                              isHalfDay
+                                                ? "bg-purple-50 text-purple-600 border-purple-100"
+                                                : isDayUnit
+                                                  ? "bg-orange-50 text-orange-600 border-orange-100"
+                                                  : "bg-blue-50 text-blue-600 border-blue-100"
+                                            }
+                                          `}
+                                    >
+                                      {durationLabel}
+                                    </p>
+
+                                    {l.startTime && l.endTime && (
+                                      <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 border border-slate-100 rounded-md">
+                                        <span className="text-[10px] text-slate-600 font-black tracking-tight">
+                                          {l.startTime.slice(0, 5)} -{" "}
+                                          {l.endTime.slice(0, 5)}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="bg-orange-50 p-3 rounded-2xl text-center">
                                   <p className="text-[10px] text-orange-400 font-black uppercase mb-1">
@@ -2977,7 +3098,8 @@ export default function AdminClientPage({
                             {overtimeReques.length > 0 ? (
                               overtimeReques.map((l) => {
                                 // ✅ ใช้ฟังก์ชัน getEffectiveRemark ที่เราเขียนไว้ใน State
-                                const currentRemark = otRemarks[l.id] ?? l.remark ?? "";
+                                const currentRemark =
+                                  otRemarks[l.id] ?? l.remark ?? "";
 
                                 return (
                                   <tr
@@ -3075,14 +3197,18 @@ export default function AdminClientPage({
                                           <>
                                             <button
                                               disabled={isProcessing}
-                                              onClick={() => handleApproveOT(l.id)}
+                                              onClick={() =>
+                                                handleApproveOT(l.id)
+                                              }
                                               className="disabled:opacity-50 bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-md"
                                             >
                                               อนุมัติ
                                             </button>
                                             <button
                                               disabled={isProcessing}
-                                              onClick={() => handleRejectOT(l.id)}
+                                              onClick={() =>
+                                                handleRejectOT(l.id)
+                                              }
                                               className="disabled:opacity-50 bg-white border border-red-200 text-red-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-50"
                                             >
                                               ปฏิเสธ
@@ -3119,7 +3245,8 @@ export default function AdminClientPage({
                                             )
                                           }
                                           readOnly={
-                                            l.status !== "pending" || isProcessing
+                                            l.status !== "pending" ||
+                                            isProcessing
                                           }
                                         />
                                       </div>

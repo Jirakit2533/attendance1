@@ -20,22 +20,22 @@ import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-// ฟังก์ชันจัดรูปแบบวันที่เป็นสไตล์ UTC (DD/MM/YYYY HH:mm)
-// ฟังก์ชันจัดรูปแบบวันที่ให้ตรงกับเวลาประเทศไทย (UTC+7)
+// ✅ ฟังก์ชันจัดรูปแบบวันที่ให้เป็นมาตรฐานเดียวกันทั้งหน้า (DD/MM/YYYY HH:mm)
 const formatThaiDate = (date: Date | string | null) => {
   if (!date) return null;
   const d = new Date(date);
   
-  // ใช้ Intl.DateTimeFormat เพื่อจัดการเรื่อง Timezone ให้แม่นยำ
-  return new Intl.DateTimeFormat('th-TH', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Bangkok'
-  }).format(d).replace(',', '');
+  // ตรวจสอบความถูกต้องของ Date Object
+  if (isNaN(d.getTime())) return null;
+
+  // ดึงค่าแยกส่วนและเติม 0 ข้างหน้าให้เป็น 2 หลัก
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear(); // ค.ศ.
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
 
 export default async function LeaderPage() {
@@ -155,6 +155,9 @@ export default async function LeaderPage() {
               type: leaveTable.type,
               startDate: leaveTable.startDate,
               endDate: leaveTable.endDate,
+              startTime: leaveTable.startTime,
+              endTime: leaveTable.endTime,
+              totalHours: leaveTable.totalHours,
               reason: leaveTable.reason,
               status: leaveTable.status,
               fileUrl: leaveTable.fileUrl,
@@ -185,7 +188,7 @@ export default async function LeaderPage() {
               eq(approverUser.positionId, approverPosition.id)
             )
             .where(teamFilter)
-            .orderBy(desc(leaveTable.id))
+            .orderBy(desc(leaveTable.createdAt))
             .limit(50)
         : Promise.resolve([]),
 
@@ -236,6 +239,9 @@ export default async function LeaderPage() {
           type: leaveTable.type,
           startDate: leaveTable.startDate,
           endDate: leaveTable.endDate,
+          startTime: leaveTable.startTime,
+          endTime: leaveTable.endTime,
+          totalHours: leaveTable.totalHours,
           reason: leaveTable.reason,
           status: leaveTable.status,
           fileUrl: leaveTable.fileUrl,
@@ -258,10 +264,10 @@ export default async function LeaderPage() {
           eq(approverUser.positionId, approverPosition.id)
         )
         .where(eq(leaveTable.user_id, user.id))
-        .orderBy(desc(leaveTable.id))
+        .orderBy(desc(leaveTable.createdAt))
         .limit(30),
 
-      // ✅ 7. ดึงข้อมูล OT ของทีม (Join ข้อมูลผู้อนุมัติแยกต่างหาก)
+      // ✅ 7. ดึงข้อมูล OT ของทีม
       currentDept
         ? db
             .select({
@@ -294,7 +300,7 @@ export default async function LeaderPage() {
             .limit(50)
         : Promise.resolve([]),
 
-      // ✅ 8. ดึงข้อมูล OT ของตัวเอง (Join ข้อมูลผู้อนุมัติแยกต่างหาก)
+      // ✅ 8. ดึงข้อมูล OT ของตัวเอง
       db
         .select({
           id: overtimeRequestsTable.id,
@@ -398,8 +404,8 @@ export default async function LeaderPage() {
         createdAt: formatThaiDate(ot.createdAt),
         requestDate: formatThaiDate(ot.createdAt), 
         remark: ot.remarks, 
-        approverFirst: ot.approverFirst, // ✅ เพิ่มให้ UI เช็คเงื่อนไข
-        approverLast: ot.approverLast,   // ✅ เพิ่มให้ UI เช็คเงื่อนไข
+        approverFirst: ot.approverFirst,
+        approverLast: ot.approverLast,
         approverName: ot.approverFirst ? `${ot.approverFirst} ${ot.approverLast || ""}`.trim() : "-",
         approverPosition: ot.approverPosition || "หัวหน้างาน",
       })),
@@ -411,8 +417,8 @@ export default async function LeaderPage() {
         createdAt: formatThaiDate(ot.createdAt),
         requestDate: formatThaiDate(ot.createdAt), 
         remark: ot.remarks, 
-        approverFirst: ot.approverFirst, // ✅ เพิ่มให้ UI เช็คเงื่อนไข
-        approverLast: ot.approverLast,   // ✅ เพิ่มให้ UI เช็คเงื่อนไข
+        approverFirst: ot.approverFirst,
+        approverLast: ot.approverLast,
         approverName: ot.approverFirst ? `${ot.approverFirst} ${ot.approverLast || ""}`.trim() : "-",
         approverPosition: ot.approverPosition || "แอดมิน/HR",
       })),

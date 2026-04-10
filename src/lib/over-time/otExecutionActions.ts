@@ -30,8 +30,7 @@ export async function executeOTAction(attendanceId: string, adminId: string) {
       throw new Error("⚠️ ไม่พบ OT ที่เป็น pending");
     }
 
-    // 2. หา request โดยเทียบ “วัน” (timezone ไทย)
-    // 2. หา request โดยเทียบ “วัน” (เทียบตรงๆ ง่ายกว่า)
+    // 2. หา request โดยเทียบ “วัน” 
 const requests = await db
 .select()
 .from(overtimeRequestsTable)
