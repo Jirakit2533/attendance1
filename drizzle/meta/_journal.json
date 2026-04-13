@@ -148,6 +148,27 @@
       "when": 1776063238571,
       "tag": "0020_optimal_plazm",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1776075521761,
+      "tag": "0021_wise_gauntlet",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1776080174337,
+      "tag": "0022_spotty_moondragon",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1776080196853,
+      "tag": "0023_flat_ultragirl",
+      "breakpoints": true
     }
   ]
 }

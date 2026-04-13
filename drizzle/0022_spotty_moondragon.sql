@@ -1,0 +1,1 @@
+ALTER TABLE "company" ADD COLUMN "features_config" jsonb DEFAULT '{}'::jsonb;

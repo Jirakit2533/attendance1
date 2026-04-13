@@ -6,7 +6,7 @@ import { eq, and, sql, isNull, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { uploadToDrive } from "@/lib/uploadthing-server";
 import { validateAndGetSite, isInsideBound, validateCheckOutLocation } from "@/lib/location-service";
-import { calculateOvertime } from "@/lib/over-time/ot-calculate";
+import { calculateOvertime } from "@/features/over-time/ot-calculate";
 import * as bcrypt from "bcryptjs";
 
 /* -------------------------------------------------------------------------- */
@@ -74,9 +74,20 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-    const [companyData] = await db.select({
-      otRoundingOption: companyTable.otRoundingOption
-    }).from(companyTable).where(eq(companyTable.id, user.companyId || "")).limit(1);
+    // 🚩 ดึงข้อมูล Company เพื่อเอา otRoundingOption และ featuresConfig (JSONB)
+    const [companyData] = await db
+      .select({
+        otRoundingOption: companyTable.otRoundingOption,
+        featuresConfig: companyTable.featuresConfig
+      })
+      .from(companyTable)
+      .where(eq(companyTable.id, user.companyId || ""))
+      .limit(1);
+
+    // 🚩 ตรวจสอบ Feature remarkAttendance จาก Array ใน JSONB
+    const config = (companyData?.featuresConfig as any) || {};
+    const activeFeatures = Array.isArray(config.activeFeatures) ? config.activeFeatures : [];
+    const isRemarkActive = activeFeatures.includes("remarkAttendance");
 
     const companyRounding = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
 
@@ -126,7 +137,6 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       const adjustedNowMin = (nowMin < startMin && endMin > 1440) ? nowMin + 1440 : nowMin;
       if (adjustedNowMin > endMin) currentWorkingStatus = "extra";
     } else {
-      // 💡 ถ้าไม่มีตารางกะ (วันหยุด/ไม่มีกะ) แต่ถูกเรียกมา ให้ถือว่าเป็น Extra ทันที
       currentWorkingStatus = "extra";
     }
 
@@ -139,7 +149,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       department_id: user.departmentId,
       site_id: validatedSite.id,
       siteInNameSnapshot: validatedSite.name || "",
-      siteCoordinatesSnapshot: validatedSite.coordinates || "",
+      siteInCoordinatesSnapshot: validatedSite.coordinates || "",
       shift_id: activeShiftId,
       temp_shift_id: activeTempShiftId,
       shiftStartTimeSnapshot: activeStartTime,
@@ -191,7 +201,9 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     return {
       success: true,
       siteName: validatedSite.name,
-      isOffsiteIn: finalIsOffsiteIn
+      isOffsiteIn: finalIsOffsiteIn,
+      attendanceId: insertedAttendance?.id,
+      requiresRemark: isRemarkActive 
     };
   } catch (error: any) {
     console.error("Check-in error:", error);

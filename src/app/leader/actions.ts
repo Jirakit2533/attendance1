@@ -5,7 +5,7 @@ import { leaveTable, attendanceTable, usersTable, shiftsTable, overtimeTable, de
 import { eq, and, sql, isNull, desc } from "drizzle-orm"; // เพิ่ม isNull, desc
 import { revalidatePath } from "next/cache";
 import { isInsideBound, validateAndGetSite, validateCheckOutLocation } from "@/lib/location-service";
-import { calculateOvertime } from "@/lib/over-time/ot-calculate";
+import { calculateOvertime } from "@/features/over-time/ot-calculate";
 import { getCurrentUser } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 
@@ -53,9 +53,20 @@ import bcrypt from "bcryptjs";
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-    const [companyData] = await db.select({
-      otRoundingOption: companyTable.otRoundingOption
-    }).from(companyTable).where(eq(companyTable.id, user.companyId || "")).limit(1);
+    // 🚩 ดึงข้อมูล Company เพื่อเอา otRoundingOption และ featuresConfig (JSONB)
+    const [companyData] = await db
+      .select({
+        otRoundingOption: companyTable.otRoundingOption,
+        featuresConfig: companyTable.featuresConfig
+      })
+      .from(companyTable)
+      .where(eq(companyTable.id, user.companyId || ""))
+      .limit(1);
+
+    // 🚩 ตรวจสอบ Feature remarkAttendance จาก Array ใน JSONB
+    const config = (companyData?.featuresConfig as any) || {};
+    const activeFeatures = Array.isArray(config.activeFeatures) ? config.activeFeatures : [];
+    const isRemarkActive = activeFeatures.includes("remarkAttendance");
 
     const companyRounding = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
 
@@ -199,7 +210,15 @@ import bcrypt from "bcryptjs";
       revalidatePath("/", "layout");
       revalidatePath("/leader");
       revalidatePath("/employee");
-      return { success: true, siteName: currentSiteName, offsite: isOffsiteIn === "1" };
+      
+      // 🚩 คืนค่า requiresRemark เพื่อเปิด Modal หน้าบ้าน
+      return { 
+        success: true, 
+        siteName: currentSiteName, 
+        offsite: isOffsiteIn === "1",
+        attendanceId: insertedAttendance?.id,
+        requiresRemark: isRemarkActive 
+      };
 
     /* -------------------------------------------------------------------------- */
     /* CHECK-OUT LOGIC (ขาออก)                                                    */
@@ -325,7 +344,9 @@ import bcrypt from "bcryptjs";
         siteName: locationValidation.siteOutName || currentRecord.siteInNameSnapshot || "",
         offsite: isOffsiteOutValue === "1",
         OffsiteCheckOutConfirm: false,
-        otTotal: otResult?.totalMinutes || 0
+        otTotal: otResult?.totalMinutes || 0,
+        attendanceId: currentRecord.id,
+        requiresRemark: isRemarkActive // ขาออกก็ตรวจสอบ Feature นี้เช่นกัน
       };
     }
   } catch (error: any) {

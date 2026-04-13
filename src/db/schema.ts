@@ -1,8 +1,7 @@
 import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer, jsonb, doublePrecision} from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { retry } from "effect/STM";
-
-
+import { status } from "effect/Fiber";
+import { update } from "effect/Differ";
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
 export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected", "expired"]);
 export const workingStatusEnum = pgEnum("working_status", ["normal", "extra"]);
@@ -29,6 +28,7 @@ export const companyTable = pgTable("company", {
   email: varchar("email", { length: 255 }),
   logoUrl: text("logo_url"),
   otRoundingOption: varchar("ot_rounding_option", { length: 30 }).notNull(),
+  featuresConfig: jsonb("features_config").default({}),
   createdByName: varchar("created_by_name", { length: 255 }),
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
   updateByName: varchar("update_by_name", { length: 255 }), 
@@ -204,6 +204,7 @@ export const attendanceTable = pgTable("attendance", {
   isOffsiteOutCoordinates: text("is_offsite_out_coordinates", { length: 255 }), 
   workingStatusEnum: workingStatusEnum("working_status").default("normal"),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
+  remark: text("remark"), //excusive remark for attendance record by company requested
 });
 
 export const leaveTable = pgTable("leave", {

@@ -14,6 +14,7 @@ import {
 } from "./actions";
 
 import { OffsiteCheckOutConfirm } from "@/app/component/modal/OffsiteCheckOutConfirm";
+import RemarkModal from "@/features/remarkAttendance/remarkAttendance.tsx";
 
 // --- เพิ่ม Component LoadingOverlay เหมือนหน้า Leader ---
 const LoadingOverlay = () => (
@@ -134,6 +135,7 @@ export default function EmployeeClientPage({
   const [showCamera, setShowCamera] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [readyToCapture, setReadyToCapture] = useState(false);
+  const [attendanceId, setAttendanceId] = useState<string | null>(null);
 
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [leaveSuccess, setLeaveSuccess] = useState(false);
@@ -388,6 +390,7 @@ export default function EmployeeClientPage({
   };
 
   /* ---------------- HANDLERS ---------------- */
+  /* ---------------- HANDLERS ---------------- */
   const handleCheckIn = () => {
     setIsCheckingOut(false);
     startCamera();
@@ -411,7 +414,13 @@ export default function EmployeeClientPage({
       }
 
       if (res.success) {
-        if (res.OffsiteCheckOutConfirm) {
+        // 🚩 เพิ่ม Logic: ตรวจสอบว่าต้องใส่หมายเหตุต่อหรือไม่
+        if (res.requiresRemark) {
+          setAttendanceId(res.attendanceId); // เก็บ ID ไว้ใช้ใน Modal
+          const modal = document.getElementById('remark_modal') as HTMLDialogElement;
+          if (modal) modal.showModal();
+          setShowOffsitePopup(false); // ปิด Popup นอกพื้นที่ถ้ามี
+        } else if (res.OffsiteCheckOutConfirm) {
           setPendingData({ ...pendingData, siteName: res.siteName });
           setShowOffsitePopup(true);
         } else {
@@ -482,9 +491,15 @@ export default function EmployeeClientPage({
       }
 
       if (res.success) {
-        // กรณีสำเร็จปกติ (ไม่อยู่นอกพื้นที่)
-        alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
-        router.refresh();
+        // 🚩 จุดแก้ไข: ถ้าสำเร็จปกติ แต่ Server บอกว่าต้องมี Remark (RequiresRemark)
+        if (res.requiresRemark) {
+          setAttendanceId(res.attendanceId);
+          const modal = document.getElementById('remark_modal') as HTMLDialogElement;
+          if (modal) modal.showModal();
+        } else {
+          alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
+          router.refresh();
+        }
       } else {
         // 🚩 จุดแก้ไข: ถ้า success เป็น false แต่มี OffsiteCheckOutConfirm เป็น true ให้เปิด Popup แทนการ Alert Error
         if (res.OffsiteCheckOutConfirm) {
@@ -2004,6 +2019,7 @@ export default function EmployeeClientPage({
       )}
 
       {/* 📸 MODAL CAMERA */}
+      {/* 📸 MODAL CAMERA */}
       {showCamera && (
         <div className="fixed inset-0 bg-slate-900/98 flex flex-col items-center justify-center z-[999] p-6 backdrop-blur-2xl">
           <div className="w-full max-w-[320px] relative">
@@ -2047,6 +2063,14 @@ export default function EmployeeClientPage({
             </div>
           </div>
         </div>
+      )}
+      {/* 🚩 REMARK MODAL (เพิ่มเข้าไปเพื่อทำงานร่วมกับกลไกใหม่) */}
+      {attendanceId && (
+        <RemarkModal 
+          attendanceId={attendanceId} 
+          role="employee" 
+          initialRemark="" 
+        />
       )}
 
       {/* 🟢 LOADING OVERLAY สำหรับเคสที่กดจากข้างนอก */}
