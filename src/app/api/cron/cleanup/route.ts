@@ -152,11 +152,9 @@ export async function GET(request: Request) {
 
     console.error("🚨 Cron Job Critical Error:", error);
     return NextResponse.json(
-      {
-        error: "Internal Server Error",
-        details: error.message,
-      },
+      { error: "Internal Server Error", details: error.message },
       { status: 500 }
+    );
     );
   }
 }
