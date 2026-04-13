@@ -155,6 +155,5 @@ export async function GET(request: Request) {
       { error: "Internal Server Error", details: error.message },
       { status: 500 }
     );
-    );
   }
 }
