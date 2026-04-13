@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import * as XLSX from "xlsx";
+import { logoutAction } from "@/server/auth";
 import {
   saveSiteAction,
   savePositionAction,
@@ -12,7 +13,6 @@ import {
   handleRemarkChangeAction,
   saveStaffAction,
   deleteStaffAction,
-  logoutAction,
   deleteSiteAction, // ✅ เพิ่มอันนี้
   deletePositionAction, // ✅ เพิ่มอันนี้ (สำหรับปุ่มลบตำแหน่ง)
   updateSiteAction, // ✅ เพิ่มอันนี้ (สำหรับปุ่มแก้ไขไซต์)

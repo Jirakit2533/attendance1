@@ -851,20 +851,6 @@ export async function updateCompanyAction(data: any) {
   }
 }
 
-export async function logoutAction() {
-  const cookieStore = await cookies();
-  
-  // ลบแบบปกติ
-  cookieStore.delete("session_user_id");
-  cookieStore.delete("user_role");
-
-  // บังคับเคลียร์ด้วยการตั้งค่าว่างและ maxAge: 0 เพื่อความชัวร์
-  cookieStore.set("session_user_id", "", { path: "/", maxAge: 0 });
-  cookieStore.set("user_role", "", { path: "/", maxAge: 0 });
-
-  return { success: true };
-}
-
 /* ==========================================================================
    ADMIN DIRECT RESET PASSWORD (ทางด่วนรีเซ็ตรหัสผ่าน)
    ========================================================================== */

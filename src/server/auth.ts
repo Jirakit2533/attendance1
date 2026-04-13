@@ -1,14 +1,17 @@
 "use server";
 
 import { db } from "@/db/db";
-import { superAdminTable, usersTable } from "@/db/schema";
+import { superAdminTable, usersTable, logTable} from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers"; // เพิ่ม headers สำหรับดึง IP/UA
 import bcrypt from "bcryptjs";
 
 export async function loginAction(formData: FormData) {
   const username = formData.get("username") as string;
   const password = formData.get("password") as string;
+  const headerList = await headers(); // ดึงข้อมูลหัวข้อรับส่ง
+  const ip = headerList.get("x-forwarded-for") || "unknown";
+  const ua = headerList.get("user-agent") || "unknown";
 
   try {
     const cookieStore = await cookies();
@@ -27,6 +30,17 @@ export async function loginAction(formData: FormData) {
     if (superAdmin && (await bcrypt.compare(password, superAdmin.passwordHash))) {
       // ปรับเป็นตัวพิมพ์เล็กเพื่อให้สอดคล้องกับ Middleware และระบบตรวจสอบใหม่
       const role = superAdmin.role.toLowerCase(); 
+
+      // บันทึก Log: Login สำเร็จ (Super Admin)
+      await db.insert(logTable).values({
+        userId: superAdmin.id,
+        userName: superAdmin.userName,
+        role: role,
+        action: "LOGIN_SUCCESS",
+        ipAddress: ip,
+        userAgent: ua,
+        loginAt: new Date(),
+      });
 
       cookieStore.set("session_user_id", superAdmin.id, {
         httpOnly: true,
@@ -62,6 +76,17 @@ export async function loginAction(formData: FormData) {
       // บังคับเป็นตัวพิมพ์เล็กเสมอเพื่อป้องกันความผิดพลาดจากข้อมูลเก่าใน DB
       const role = user.role.toLowerCase(); 
       
+      // บันทึก Log: Login สำเร็จ (User)
+      await db.insert(logTable).values({
+        userId: user.id,
+        userName: user.userName,
+        role: role,
+        action: "LOGIN_SUCCESS",
+        ipAddress: ip,
+        userAgent: ua,
+        loginAt: new Date(),
+      });
+
       cookieStore.set("session_user_id", user.id, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -96,6 +121,15 @@ export async function loginAction(formData: FormData) {
       };
     }
 
+    // บันทึก Log: Login ล้มเหลว
+    await db.insert(logTable).values({
+      userName: username,
+      action: "LOGIN_FAILED",
+      ipAddress: ip,
+      userAgent: ua,
+      details: { reason: "Invalid username or password" }
+    });
+
     return { success: false, message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
   } catch (err) {
     console.error("Login Error:", err);
@@ -106,6 +140,22 @@ export async function loginAction(formData: FormData) {
 export async function logoutAction() {
   try {
     const cookieStore = await cookies();
+    const userId = cookieStore.get("session_user_id")?.value;
+    const userRole = cookieStore.get("user_role")?.value;
+    const headerList = await headers();
+
+    // บันทึก Log: Logout
+    if (userId) {
+      await db.insert(logTable).values({
+        userId: userId,
+        userName: "Unknown (Logout Event)",
+        role: userRole || "unknown",
+        action: "LOGOUT",
+        ipAddress: headerList.get("x-forwarded-for") || "unknown",
+        userAgent: headerList.get("user-agent") || "unknown",
+        logoutAt: new Date(),
+      });
+    }
     
     // เคลียร์ค่าด้วย maxAge: 0 และระบุ Path ให้ชัดเจนเพื่อลบ Cookie ทุกระดับ
     cookieStore.set("session_user_id", "", { path: "/", maxAge: 0 });

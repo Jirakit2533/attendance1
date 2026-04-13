@@ -1,5 +1,6 @@
 import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer, jsonb, doublePrecision} from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
+import { retry } from "effect/STM";
 
 
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
@@ -229,7 +230,38 @@ export const leaveTable = pgTable("leave", {
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
 });
 
-// 1. Users Relations (รวมทุกอย่างไว้ที่เดียว ห้ามประกาศซ้ำ)
+export const logTable = pgTable("logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id"), 
+  userName: varchar("user_name", { length: 255 }).notNull(),
+  role: varchar("role", { length: 50 }),
+  action: varchar("action", { length: 50 }).notNull(),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  details: jsonb("details"),
+  loginAt: timestamp("login_at", { withTimezone: true }),
+  logoutAt: timestamp("logout_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .default(sql`timezone('UTC', now())`)
+    .notNull(),
+});
+
+export const automationLogTable = pgTable("automation_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  jobName: varchar("job_name", { length: 255 }).notNull(),
+  date: date("date").notNull(),
+  startAt: timestamp("start_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
+  endAt: timestamp("end_at", { withTimezone: true }),
+  durationMs: integer("duration_ms"), 
+  readCount: integer("read_count").default(0).notNull(),     
+  changeCount: integer("change_count").default(0).notNull(),
+  executedCount: integer("executed_count").default(0).notNull(), 
+  deletedCount: integer("deleted_count").default(0).notNull(), 
+  status: varchar("status", { length: 50 }).default("success").notNull(), 
+  retryCount: integer("retry_count").default(0).notNull(),
+  details: jsonb("details"), // เก็บข้อมูลดิบอื่นๆ เช่น JSON payload
+});
+
 export const usersRelations = relations(usersTable, ({ one, many }) => ({
   company: one(companyTable, {
     fields: [usersTable.companyId],

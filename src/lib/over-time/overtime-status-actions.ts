@@ -5,7 +5,7 @@ import { overtimeTable, overtimeRequestsTable } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm"; 
 
 export async function cleanupExpiredOvertime() {
-    // ใช้เวลาไทย (ไม่ต้องใช้ date-fns-tz)
+    // ใช้เวลาไทย (ไม่ต้องใช้ date-fns-tz) (คงเดิม)
     const dateLimit = new Date(
       Date.now() - 7 * 24 * 60 * 60 * 1000
     ).toLocaleDateString("en-CA", {
@@ -13,7 +13,7 @@ export async function cleanupExpiredOvertime() {
     });
 
     try {
-        // --- ส่วนที่ 1: OT ดิบ ---
+        // --- ส่วนที่ 1: OT ดิบ --- (คงเดิม)
         const expiredRaw = await db.update(overtimeTable)
           .set({ 
             status: "expired", 
@@ -28,7 +28,7 @@ export async function cleanupExpiredOvertime() {
           )
           .returning({ id: overtimeTable.id });
 
-        // --- ส่วนที่ 2: ใบคำขอ ---
+        // --- ส่วนที่ 2: ใบคำขอ --- (คงเดิม)
         const expiredRequests = await db.update(overtimeRequestsTable)
           .set({ 
             status: "expired",
@@ -44,6 +44,7 @@ export async function cleanupExpiredOvertime() {
           )
           .returning({ id: overtimeRequestsTable.id });
 
+        // คืนค่าจำนวนรายการที่ถูกจัดการ เพื่อนำไปบวกเป็น changeCount ใน API หลัก (คงเดิม)
         return { 
             expiredRawCount: expiredRaw.length || 0, 
             expiredRequestCount: expiredRequests.length || 0
