@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db/db";
-import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable, departmentsTable, companyTable, overtimeRequestsTable } from "@/db/schema";
+import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable, departmentsTable, companyTable, overtimeRequestsTable, companyFeatureSelectedTable } from "@/db/schema";
 import { eq, and, sql, isNull, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { uploadToDrive } from "@/lib/uploadthing-server";
@@ -10,9 +10,9 @@ import { calculateOvertime } from "@/features/over-time/ot-calculate";
 import * as bcrypt from "bcryptjs";
 
 /* -------------------------------------------------------------------------- */
-/* CHECKIN ACTION (การเข้างาน)                                                 */
+/* CHECKIN ACTION (การเข้างาน)                                               */
 /* -------------------------------------------------------------------------- */
-export async function checkInAction(userId: string, base64Image: string, location: string, isConfirmed?: boolean) {
+export async function checkInAction(userId: string, base64Image: string, location: string, isConfirmed?: boolean, remark?: string) {
   try {
     const now = new Date();
     const currentTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false });
@@ -74,24 +74,38 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-    // 🚩 ดึงข้อมูล Company เพื่อเอา otRoundingOption และ featuresConfig (JSONB)
+    // 🚩 ดึงข้อมูล Company เพื่อเอา otRoundingOption และ ID ของฟีเจอร์ที่เลือก
     const [companyData] = await db
       .select({
         otRoundingOption: companyTable.otRoundingOption,
-        featuresConfig: companyTable.featuresConfig
+        companyFeatureSelectedId: companyTable.companyFeatureSelectedId
       })
       .from(companyTable)
       .where(eq(companyTable.id, user.companyId || ""))
       .limit(1);
 
-    // 🚩 ตรวจสอบ Feature remarkAttendance จาก Array ใน JSONB
-    const config = (companyData?.featuresConfig as any) || {};
-    const activeFeatures = Array.isArray(config.activeFeatures) ? config.activeFeatures : [];
-    const isRemarkActive = activeFeatures.includes("remarkAttendance");
+    // 🚩 ตรวจสอบ Feature จากตาราง companyFeatureSelectedTable (ตาม Schema ใหม่)
+    let isRemarkActive = false;
+    if (companyData?.companyFeatureSelectedId) {
+      const [featureSelection] = await db
+        .select({
+          featureSelectedArray: companyFeatureSelectedTable.featureSelectedArray
+        })
+        .from(companyFeatureSelectedTable)
+        .where(eq(companyFeatureSelectedTable.id, companyData.companyFeatureSelectedId))
+        .limit(1);
+      
+      const activeFeatures = Array.isArray(featureSelection?.featureSelectedArray) 
+        ? featureSelection.featureSelectedArray 
+        : [];
+      
+      // ตรวจสอบว่ามีชื่อฟีเจอร์ remarkAttendance ใน Array หรือไม่
+      isRemarkActive = activeFeatures.includes("remarkAttendance");
+    }
 
     const companyRounding = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
 
-    // 🚩 ตรวจสอบพิกัดด้วย Logic รัศมี 20 เมตร และประเภทพนักงาน
+    // 🚩 ตรวจสอบพิกัดไซต์
     const validatedSite = await validateAndGetSite(
       lat.toString(),
       lon.toString(),
@@ -99,12 +113,12 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       user.siteId || ""
     );
 
-    // ถ้าเป็นกลุ่มทุกไซต์ แต่อยู่นอกเขต และยังไม่ได้กดยืนยัน (แสดง Pop-up)
     if (validatedSite.OffsiteCheckInConfirm && !isConfirmed) {
       return {
         success: false,
         offsite: true,
         siteName: validatedSite.name,
+        OffsiteCheckInConfirm: true, // เพิ่มให้ตรงกับหน้าบ้านที่รับค่า
         OffsiteCheckOutConfirm: true
       };
     }
@@ -144,6 +158,9 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const buffer = Buffer.from(base64Data, "base64");
     const uploadRes = await uploadToDrive(buffer, `checkin_${userId}_${Date.now()}.png`, "image/png");
 
+    // 🚩 ตรวจสอบความถูกต้องของ Remark (บันทึกรวมในขั้นตอนเดียว)
+    const finalRemark = isRemarkActive ? (remark?.trim() || null) : null;
+
     const [insertedAttendance] = await db.insert(attendanceTable).values({
       user_id: userId,
       department_id: user.departmentId,
@@ -163,6 +180,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       isOffsiteIn: finalIsOffsiteIn,
       isOffsiteInCoordinates: finalIsOffsiteIn === "1" ? location : null,
       workingStatusEnum: currentWorkingStatus,
+      remark: finalRemark, // บันทึกค่า Remark ที่ส่งมาพร้อม Insert ทันที
       isLate: currentWorkingStatus === "normal" && activeStartTime ? (toMin(currentTimeStr) > toMin(activeStartTime) ? 1 : 0) : 0,
       lateMinutes: currentWorkingStatus === "normal" && activeStartTime ? (() => {
         let nowM = toMin(currentTimeStr);
@@ -210,7 +228,6 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     return { success: false, error: error.message };
   }
 }
-
 /* -------------------------------------------------------------------------- */
 /* CHECKOUT ACTION (การออกงาน)                                                 */
 /* -------------------------------------------------------------------------- */

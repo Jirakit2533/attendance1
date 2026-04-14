@@ -169,6 +169,27 @@
       "when": 1776080196853,
       "tag": "0023_flat_ultragirl",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1776134616221,
+      "tag": "0024_bitter_enchantress",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1776134703551,
+      "tag": "0025_friendly_saracen",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1776144218230,
+      "tag": "0026_previous_valkyrie",
+      "breakpoints": true
     }
   ]
 }

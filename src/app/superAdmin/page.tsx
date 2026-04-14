@@ -1,5 +1,5 @@
 import { db } from "@/db/db";
-import { companyTable, usersTable, adminsTable, superAdminTable } from "@/db/schema";
+import { companyTable, usersTable, adminsTable, superAdminTable, featureLibraryTable } from "@/db/schema";
 import { desc, eq, and } from "drizzle-orm";
 import { cookies } from "next/headers"; 
 import { redirect } from "next/navigation"; 
@@ -17,9 +17,9 @@ export default async function SuperAdminPage() {
     // redirect('/login?error=session_expired');
   }
 
-  // 🚀 [Parallel Fetching] 
-  const [superAdminData, companiesData, adminsData] = await Promise.all([
-    // 1. ดึงข้อมูล Super Admin (ใช้ superAdminTable อ้างอิง id, name, role)
+  // 🚀 [Parallel Fetching] - เพิ่มการดึงข้อมูล featureLibraryTable เข้าไป
+  const [superAdminData, companiesData, adminsData, libraryData] = await Promise.all([
+    // 1. ดึงข้อมูล Super Admin
     userId 
       ? db.select({ id: superAdminTable.id, name: superAdminTable.name })
           .from(superAdminTable)
@@ -27,20 +27,22 @@ export default async function SuperAdminPage() {
           .limit(1)
       : [], 
 
-    // 2. ดึงข้อมูลบริษัททั้งหมด (อ้างอิง companyTable.created_at ตาม Schema)
+    // 2. ดึงข้อมูลบริษัททั้งหมด
     db.select().from(companyTable).orderBy(desc(companyTable.created_at)),
 
-    // 3. ดึงข้อมูลแอดมินทั้งหมด (Join usersTable กับ adminsTable)
+    // 3. ดึงข้อมูลแอดมินทั้งหมด
     db.select({
       user: usersTable,
       admin: adminsTable,
-      // อ้างอิง adminsTable.company (ชื่อคีย์ใน Schema คือ company)
       mappedCompanyId: adminsTable.company, 
     })
     .from(usersTable)
     .leftJoin(adminsTable, eq(usersTable.id, adminsTable.user_id))
-    .where(eq(usersTable.role, "admin")) // กรองเฉพาะ role admin จาก usersTable
-    .orderBy(desc(usersTable.created_at))
+    .where(eq(usersTable.role, "admin"))
+    .orderBy(desc(usersTable.created_at)),
+
+    // 🚩 ส่วนที่เพิ่มใหม่: ดึงข้อมูลฟีเจอร์จาก Library ทั้งหมด
+    db.select().from(featureLibraryTable).orderBy(desc(featureLibraryTable.name))
   ]);
 
   // 🚩 ตรวจสอบสิทธิ์ Super Admin
@@ -59,6 +61,7 @@ export default async function SuperAdminPage() {
     email: c.email || "-", 
     address: c.address || "-",
     otRoundingOption: c.otRoundingOption || "none",
+    companyFeatureSelectedId: c.companyFeatureSelectedId || null, // เพิ่มฟิลด์นี้ตาม Schema
     createdByName: c.createdByName || "System",
     updateByName: c.updateByName || null,
     deletedByName: c.deletedByName || null,
@@ -68,7 +71,6 @@ export default async function SuperAdminPage() {
     leaderCount: 0,
     employeeCount: 0, 
     
-    // อ้างอิง c.created_at และ c.updatedAt ตาม Schema
     createdAt: c.created_at instanceof Date ? c.created_at.toISOString() : new Date().toISOString(),
     updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : null,
     deletedAt: c.deletedAt instanceof Date ? c.deletedAt.toISOString() : null,
@@ -77,7 +79,6 @@ export default async function SuperAdminPage() {
   // 5. Mapping ข้อมูลแอดมิน (Strict Schema Mapping)
   const initialAdmins = (adminsData || []).map(({ user, admin, mappedCompanyId }) => ({
     id: user.id,
-    // ใช้ mappedCompanyId จาก adminsTable หรือ fallback ไปที่ user.companyId
     companyId: mappedCompanyId || user.companyId || "", 
     name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "ไม่ระบุชื่อ",
     username: user.userName || "user",
@@ -96,7 +97,6 @@ export default async function SuperAdminPage() {
     leaderCount: 0,
     employeeCount: 0, 
 
-    // อ้างอิง user.created_at และ admin.updatedAt ตาม Schema
     createdAt: user.created_at instanceof Date ? user.created_at.toISOString() : new Date().toISOString(),
     updatedAt: admin?.updatedAt instanceof Date ? admin.updatedAt.toISOString() : null,
     deletedAt: admin?.deletedAt instanceof Date ? admin.deletedAt.toISOString() : null,
@@ -108,12 +108,20 @@ export default async function SuperAdminPage() {
     name: currentSuperAdmin?.name || "System Admin" 
   };
 
+  // 7. เตรียมข้อมูล Feature Library สำหรับส่งไปหน้า Client
+  const featureLibrary = (libraryData || []).map(f => ({
+    id: f.id,
+    name: f.name,
+    description: f.description || ""
+  }));
+
   return (
     <div className="min-h-screen bg-slate-50">
       <SuperAdminClientPage 
         initialCompanies={initialCompanies} 
         initialAdmins={initialAdmins} 
         initialSuperAdmin={initialSuperAdmin}
+        featureLibrary={featureLibrary} // 🚩 ส่งค่าที่ Map แล้วไปที่หน้า Client
       />
     </div>
   );

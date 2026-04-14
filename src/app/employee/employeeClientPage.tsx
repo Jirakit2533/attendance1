@@ -389,8 +389,7 @@ export default function EmployeeClientPage({
     });
   };
 
-  /* ---------------- HANDLERS ---------------- */
-  /* ---------------- HANDLERS ---------------- */
+
   const handleCheckIn = () => {
     setIsCheckingOut(false);
     startCamera();
@@ -429,7 +428,13 @@ export default function EmployeeClientPage({
           router.refresh();
         }
       } else {
-        alert(res.error || "บันทึกไม่สำเร็จ");
+        // กรณี success เป็น false แต่เป็นเรื่อง Offsite
+        if (res.offsite || res.OffsiteCheckOutConfirm || res.OffsiteCheckInConfirm) {
+            setPendingData({ ...pendingData, siteName: res.siteName });
+            setShowOffsitePopup(true);
+        } else {
+            alert(res.error || "บันทึกไม่สำเร็จ");
+        }
       }
     } catch (err) {
       alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
@@ -501,8 +506,8 @@ export default function EmployeeClientPage({
           router.refresh();
         }
       } else {
-        // 🚩 จุดแก้ไข: ถ้า success เป็น false แต่มี OffsiteCheckOutConfirm เป็น true ให้เปิด Popup แทนการ Alert Error
-        if (res.OffsiteCheckOutConfirm) {
+        // 🚩 จุดแก้ไข: ถ้า success เป็น false แต่มี Offsite Confirm ให้เปิด Popup แทนการ Alert Error
+        if (res.offsite || res.OffsiteCheckOutConfirm || res.OffsiteCheckInConfirm) {
           setPendingData({ ...currentData, siteName: res.siteName });
           setShowOffsitePopup(true);
         } else {
@@ -2019,7 +2024,6 @@ export default function EmployeeClientPage({
       )}
 
       {/* 📸 MODAL CAMERA */}
-      {/* 📸 MODAL CAMERA */}
       {showCamera && (
         <div className="fixed inset-0 bg-slate-900/98 flex flex-col items-center justify-center z-[999] p-6 backdrop-blur-2xl">
           <div className="w-full max-w-[320px] relative">
@@ -2064,7 +2068,7 @@ export default function EmployeeClientPage({
           </div>
         </div>
       )}
-      {/* 🚩 REMARK MODAL (เพิ่มเข้าไปเพื่อทำงานร่วมกับกลไกใหม่) */}
+      {/* 🚩 REMARK MODAL (เชื่อมต่อกับ Attendance ID ที่ได้รับจาก Action) */}
       {attendanceId && (
         <RemarkModal 
           attendanceId={attendanceId} 

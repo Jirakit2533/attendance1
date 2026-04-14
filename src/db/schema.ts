@@ -1,7 +1,5 @@
 import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer, jsonb, doublePrecision} from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { status } from "effect/Fiber";
-import { update } from "effect/Differ";
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
 export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected", "expired"]);
 export const workingStatusEnum = pgEnum("working_status", ["normal", "extra"]);
@@ -28,7 +26,7 @@ export const companyTable = pgTable("company", {
   email: varchar("email", { length: 255 }),
   logoUrl: text("logo_url"),
   otRoundingOption: varchar("ot_rounding_option", { length: 30 }).notNull(),
-  featuresConfig: jsonb("features_config").default({}),
+  companyFeatureSelectedId: uuid("company_feature_selected_id").references(() => companyFeatureSelectedTable.id),
   createdByName: varchar("created_by_name", { length: 255 }),
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
   updateByName: varchar("update_by_name", { length: 255 }), 
@@ -36,6 +34,22 @@ export const companyTable = pgTable("company", {
   deletedByName: varchar("deleted_by_name", { length: 255 }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
+
+export const companyFeatureSelectedTable = pgTable("company_feature_selected", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }).unique(),
+  featureSelectedArray: jsonb("feature_selected_array").$type<string[]>().default([]),
+  createdBy: uuid("created_by_id").references(() => superAdminTable.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
+  updateBy: uuid("update_by_id").references(() => superAdminTable.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`),
+});
+
+export const featureLibraryTable = pgTable("feature_library", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+})
 
 export const adminsTable = pgTable("admins", {
   id: uuid("id").primaryKey().defaultRandom(),

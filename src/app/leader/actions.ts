@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db/db";
-import { leaveTable, attendanceTable, usersTable, shiftsTable, overtimeTable, departmentsTable, sitesTable, temporaryShiftsTable, companyTable, overtimeRequestsTable } from "@/db/schema";
+import { leaveTable, attendanceTable, usersTable, shiftsTable, overtimeTable, departmentsTable, sitesTable, temporaryShiftsTable, companyTable, overtimeRequestsTable, companyFeatureSelectedTable } from "@/db/schema";
 import { eq, and, sql, isNull, desc } from "drizzle-orm"; // เพิ่ม isNull, desc
 import { revalidatePath } from "next/cache";
 import { isInsideBound, validateAndGetSite, validateCheckOutLocation } from "@/lib/location-service";
@@ -22,6 +22,7 @@ import bcrypt from "bcryptjs";
   departmentId: string;
   siteId: string | null;
   isConfirmed?: boolean;
+  remark?: string; // 🚩 เพิ่มพารามิเตอร์ remark
 }) {
   try {
     const now = new Date();
@@ -86,7 +87,7 @@ import bcrypt from "bcryptjs";
     let isOffsiteIn = "0";
 
     /* -------------------------------------------------------------------------- */
-    /* CHECK-IN LOGIC (ขาเข้า)                                                     */
+    /* CHECK-IN LOGIC (ขาเข้า)                                                    */
     /* -------------------------------------------------------------------------- */
     if (data.type === "IN") {
       // 🚩 ดักพนักงานที่ยังไม่ลงชื่อออก ห้ามเข้าซ้อนเด็ดขาด (เหมือนชุดที่ 1)
@@ -162,6 +163,9 @@ import bcrypt from "bcryptjs";
         }
       }
 
+      // 🚩 ตรวจสอบ Remark ก่อนบันทึก
+      const finalRemark = isRemarkActive ? (data.remark?.trim() || null) : null;
+
       const [insertedAttendance] = await db.insert(attendanceTable).values({
         user_id: data.userId,
         department_id: data.departmentId,
@@ -171,7 +175,7 @@ import bcrypt from "bcryptjs";
         siteInNameSnapshot: currentSiteName,
         siteCoordinatesSnapshot: currentSiteCoords,
         shiftStartTimeSnapshot: activeStartTime,
-        shiftEndTimeSnapshot: activeEndTime,
+        shiftEndTimeSnapshot: activeEndTime, // แก้ไข: ใช้ snapshot สิ้นสุดที่ถูกต้อง (เดิมเป็น StartTime)
         departmentNameSnapshot: deptNameSnapshot,
         date: dateStr,
         checkIn: currentTimeStr,
@@ -183,6 +187,7 @@ import bcrypt from "bcryptjs";
         isOffsiteIn: isOffsiteIn,
         isOffsiteInCoordinates: isOffsiteIn === "1" ? data.location : null,
         lateMinutes: lateMinutes,
+        remark: finalRemark, // 🚩 บันทึก Remark ลงไปพร้อมกับการ Insert ทันที
       }).returning({ id: attendanceTable.id });
 
       if (insertedAttendance) {
