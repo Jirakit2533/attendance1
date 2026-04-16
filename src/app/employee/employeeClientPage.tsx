@@ -3,7 +3,6 @@ import Image from "next/image";
 
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getAllSitesAction } from "@/app/employee/actions";
 import { logoutAction } from "@/server/auth";
 import {
   checkInAction,
@@ -106,7 +105,7 @@ export default function EmployeeClientPage({
   initialRecords,
   initialLeaves,
   companyData,
-  initialOT = [], // ✨ แก้ไขตรงนี้จาก : เป็น = เพื่อกำหนดค่า Default และให้ตัวแปรถูกประกาศ
+  initialOT = [],
 }: Props) {
   const router = useRouter();
 
@@ -137,6 +136,12 @@ export default function EmployeeClientPage({
   const [readyToCapture, setReadyToCapture] = useState(false);
   const [attendanceId, setAttendanceId] = useState<string | null>(null);
 
+  const [isRemarkModalOpen, setIsRemarkModalOpen] = useState(false);
+  const [currentAttendanceId, setCurrentAttendanceId] = useState<string | null>(
+    null
+  );
+  const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
+
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [leaveSuccess, setLeaveSuccess] = useState(false);
   const [leaveType, setLeaveType] = useState("");
@@ -144,7 +149,8 @@ export default function EmployeeClientPage({
   const [leaveEnd, setLeaveEnd] = useState("");
   const [leaveReason, setLeaveReason] = useState("");
   const [leaveError, setLeaveError] = useState("");
-
+  const activeFeatures = userProfile?.company?.companyFeatureSelected?.featureSelectedArray || [];
+  const isRemarkActive = activeFeatures.includes("remarkAttendance");
   const [showOffsitePopup, setShowOffsitePopup] = useState(false);
   const [pendingData, setPendingData] = useState<any>(null);
 
@@ -389,7 +395,6 @@ export default function EmployeeClientPage({
     });
   };
 
-
   const handleCheckIn = () => {
     setIsCheckingOut(false);
     startCamera();
@@ -400,52 +405,71 @@ export default function EmployeeClientPage({
     startCamera();
   };
 
-  // ✅ ฟังก์ชันช่วยเรียก Action สำหรับงาน Attendance (รักษาโครงสร้างเดิม)
-  const executeAttendanceAction = async (isConfirmed = false) => {
-    setIsProcessing(true);
+  // ✅ ฟังก์ชันช่วยเรียก Action สำหรับงาน Attendance (รักษาโครงสร้างเดิม ปรับลำดับ UI ให้ Seamless)
+  const executeAttendanceAction = async (isConfirmed = false, remark: string = "") => {
+    setIsProcessing(true); // เริ่มหมุน Loading
     try {
       const { id, img, loc } = pendingData;
-      let res;
+      let res: any; // ใช้ any เพื่อแก้ปัญหา Interface ที่ไม่ตรงกัน
+
+      // 🚩 ส่ง remark พ่วงเข้าไปใน Action หลักด้วย
       if (isCheckingOut) {
-        res = await checkOutAction(id, img, loc, isConfirmed);
+        res = await checkOutAction(id, img, loc, isConfirmed, remark);
       } else {
-        res = await checkInAction(id, img, loc, isConfirmed);
+        res = await checkInAction(id, img, loc, isConfirmed, remark);
       }
 
       if (res.success) {
-        // 🚩 เพิ่ม Logic: ตรวจสอบว่าต้องใส่หมายเหตุต่อหรือไม่
-        if (res.requiresRemark) {
-          setAttendanceId(res.attendanceId); // เก็บ ID ไว้ใช้ใน Modal
-          const modal = document.getElementById('remark_modal') as HTMLDialogElement;
-          if (modal) modal.showModal();
-          setShowOffsitePopup(false); // ปิด Popup นอกพื้นที่ถ้ามี
-        } else if (res.OffsiteCheckOutConfirm) {
+        if (res.requiresRemark && !remark) {
+          // 🚩 ขั้นตอนต่อเนื่อง: ถ้าต้องการ Remark แต่ยังไม่มีค่าส่งมา ให้เปิด Modal
+          setAttendanceId(res.attendanceId);
+          console.log("Check-in Success, ID is:", res.attendanceId);
+
+          // ใช้ setTimeout เพื่อรอให้ React Update State ลงใน Input Hidden ของ Modal ก่อนสั่งเปิด
+          setTimeout(() => {
+            const modal = document.getElementById(
+              "remark_modal"
+            ) as HTMLDialogElement;
+            if (modal) {
+              modal.showModal();
+              setShowOffsitePopup(false);
+              setIsProcessing(false); // หยุดหมุนเมื่อ Modal พร้อมใช้งาน
+            }
+          }, 50);
+        } else {
+          // 🚩 ถ้าบันทึกสำเร็จ (และส่ง Remark เรียบร้อยแล้ว)
+          alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
+          setShowOffsitePopup(false);
+          
+          // ปิด Modal Remark (ถ้ามันเปิดอยู่)
+          const modal = document.getElementById("remark_modal") as HTMLDialogElement;
+          if (modal) modal.close();
+
+          router.refresh();
+          setIsProcessing(false);
+        }
+      } else {
+        if (
+          res.offsite ||
+          res.OffsiteCheckOutConfirm ||
+          res.OffsiteCheckInConfirm
+        ) {
           setPendingData({ ...pendingData, siteName: res.siteName });
           setShowOffsitePopup(true);
         } else {
-          alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
-          setShowOffsitePopup(false);
-          router.refresh();
+          alert(res.error || "บันทึกไม่สำเร็จ");
         }
-      } else {
-        // กรณี success เป็น false แต่เป็นเรื่อง Offsite
-        if (res.offsite || res.OffsiteCheckOutConfirm || res.OffsiteCheckInConfirm) {
-            setPendingData({ ...pendingData, siteName: res.siteName });
-            setShowOffsitePopup(true);
-        } else {
-            alert(res.error || "บันทึกไม่สำเร็จ");
-        }
+        setIsProcessing(false);
       }
     } catch (err) {
       alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
-    } finally {
       setIsProcessing(false);
     }
   };
 
   const handleCapture = async () => {
     if (!videoRef.current || !streamRef.current) return;
-    setIsProcessing(true);
+    setIsProcessing(true); // หมุน Loading ทันทีที่ถ่ายรูป
 
     const canvas = document.createElement("canvas");
     canvas.width = videoRef.current.videoWidth;
@@ -465,11 +489,8 @@ export default function EmployeeClientPage({
           maximumAge: 0,
         })
       );
-      const locationStr = `${pos.coords.latitude.toFixed(
-        6
-      )}, ${pos.coords.longitude.toFixed(6)}`;
+      const locationStr = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
 
-      // 1. เก็บข้อมูลไว้ใน state
       const currentData = {
         id: userProfile.id,
         img: capturedImg,
@@ -477,57 +498,57 @@ export default function EmployeeClientPage({
       };
       setPendingData(currentData);
 
-      // 2. ลองส่งข้อมูลครั้งแรก (isConfirmed = false)
-      let res;
-      if (isCheckingOut) {
-        res = await checkOutAction(
-          currentData.id,
-          currentData.img,
-          currentData.loc,
-          false
-        );
-      } else {
-        res = await checkInAction(
-          currentData.id,
-          currentData.img,
-          currentData.loc,
-          false
-        );
-      }
+      // 🚩 [FIXED] เช็คฟีเจอร์แบบปลอดภัยด้วย Optional Chaining และตรวจสอบ Array จริง
+      const featureArray = userProfile?.company?.companyFeatureSelected?.featureSelectedArray;
+      const isRemarkRequired = Array.isArray(featureArray) && featureArray.includes("remarkAttendance");
 
-      if (res.success) {
-        // 🚩 จุดแก้ไข: ถ้าสำเร็จปกติ แต่ Server บอกว่าต้องมี Remark (RequiresRemark)
-        if (res.requiresRemark) {
-          setAttendanceId(res.attendanceId);
-          const modal = document.getElementById('remark_modal') as HTMLDialogElement;
-          if (modal) modal.showModal();
+      if (isRemarkRequired) {
+        // 🟢 กรณีต้องใส่ Remark: เปิด Modal ให้ User พิมพ์ก่อน (ยังไม่ยิง Action)
+        console.log("Remark Required: Opening Modal...");
+        
+        const modal = document.getElementById("remark_modal") as HTMLDialogElement;
+        if (modal) {
+          // ใช้ setTimeout เล็กน้อยเพื่อให้แน่ใจว่า DOM อัปเดต state pendingData เสร็จแล้ว
+          setTimeout(() => {
+            modal.showModal();
+            setIsProcessing(false); // หยุดหมุนเพื่อให้ User พิมพ์หมายเหตุ
+          }, 50);
         } else {
-          alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
-          router.refresh();
+          // ถ้าหา Modal ไม่เจอ ให้ fallback ยิงแบบปกติไปก่อนกันงานค้าง
+          console.error("Modal not found!");
+          throw new Error("ไม่สามารถเปิดช่องบันทึกหมายเหตุได้");
         }
       } else {
-        // 🚩 จุดแก้ไข: ถ้า success เป็น false แต่มี Offsite Confirm ให้เปิด Popup แทนการ Alert Error
-        if (res.offsite || res.OffsiteCheckOutConfirm || res.OffsiteCheckInConfirm) {
-          setPendingData({ ...currentData, siteName: res.siteName });
-          setShowOffsitePopup(true);
+        // ⚪ กรณีไม่ต้องใส่ Remark: ยิง Action ทันทีเหมือนเดิม
+        let res: any;
+        if (isCheckingOut) {
+          res = await checkOutAction(currentData.id, currentData.img, currentData.loc, false);
         } else {
-          // กรณี Error จริงๆ (เช่น พิกัดเพี้ยน หรือ Error อื่นจาก Server)
-          alert(res.error || "บันทึกไม่สำเร็จ");
+          res = await checkInAction(currentData.id, currentData.img, currentData.loc, false);
+        }
+
+        if (res.success) {
+          alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
+          router.refresh();
+          setIsProcessing(false);
+        } else {
+          if (res.offsite || res.OffsiteCheckOutConfirm || res.OffsiteCheckInConfirm) {
+            setPendingData({ ...currentData, siteName: res.siteName });
+            setShowOffsitePopup(true);
+          } else {
+            alert(res.error || "บันทึกไม่สำเร็จ");
+          }
+          setIsProcessing(false);
         }
       }
     } catch (error: any) {
       if (error.code === 1) {
         alert("กรุณาอนุญาตสิทธิ์การเข้าถึงตำแหน่งในเบราว์เซอร์");
       } else if (error.code === 2 || error.code === 3) {
-        alert(
-          "ไม่สามารถระบุตำแหน่งได้ กรุณาเปิด GPS และตรวจสอบว่าอยู่ในที่โล่ง"
-        );
+        alert("ไม่สามารถระบุตำแหน่งได้ กรุณาเปิด GPS และตรวจสอบว่าอยู่ในที่โล่ง");
       } else {
-        alert(
-          "เกิดข้อผิดพลาดในการบันทึกข้อมูลหรือพิกัด กรุณาเปิดตำแหน่ง GPS และลองอีกครั้ง"
-        );
+        alert(error.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูลหรือพิกัด");
       }
-    } finally {
       setIsProcessing(false);
     }
   };
@@ -1115,22 +1136,22 @@ export default function EmployeeClientPage({
                               ขอเมื่อ : {l.requestDate}
                             </div>
                             <p className="font-black text-indigo-900 text-lg uppercase tracking-tight">
-  {l.type}
-  {/* ✅ แสดงจำนวน: 4 หรือ 4.5 เป็นครึ่งวัน | น้อยกว่า 24 เป็นชั่วโมง | ตั้งแต่ 24 ขึ้นไป หารเป็นวัน */}
-  <span className="ml-2 text-sm text-indigo-500">
-    (
-    {(() => {
-      const hours = Number(l.totalHours) || 0;
-      if (hours === 4 || hours === 4.5) {
-        return "ครึ่งวัน";
-      }
-      return hours < 24
-        ? `${hours} ชั่วโมง`
-        : `${(hours / 24).toFixed(1).replace(".0", "")} วัน`;
-    })()}
-    )
-  </span>
-</p>
+                              {l.type}
+                              {/* ✅ แสดงจำนวน: 4 หรือ 4.5 เป็นครึ่งวัน | น้อยกว่า 24 เป็นชั่วโมง | ตั้งแต่ 24 ขึ้นไป หารเป็นวัน */}
+                              <span className="ml-2 text-sm text-indigo-500">
+                                (
+                                {(() => {
+                                  const hours = Number(l.totalHours) || 0;
+                                  if (hours === 4 || hours === 4.5) {
+                                    return "ครึ่งวัน";
+                                  }
+                                  return hours < 24
+                                    ? `${hours} ชั่วโมง`
+                                    : `${(hours / 24).toFixed(1).replace(".0", "")} วัน`;
+                                })()}
+                                )
+                              </span>
+                            </p>
 
                             <p className="text-xs font-bold text-black-500 mt-1">
                               ตั้งแต่ {l.start}{" "}
@@ -2069,13 +2090,13 @@ export default function EmployeeClientPage({
         </div>
       )}
       {/* 🚩 REMARK MODAL (เชื่อมต่อกับ Attendance ID ที่ได้รับจาก Action) */}
-      {attendanceId && (
-        <RemarkModal 
-          attendanceId={attendanceId} 
-          role="employee" 
-          initialRemark="" 
-        />
-      )}
+      <RemarkModal
+        attendanceId={attendanceId || ""}
+        role="employee"
+        initialRemark={null}
+        // 🚩 ส่ง executeAttendanceAction เข้าไปเพื่อให้ Modal เรียกใช้งานตอนกดบันทึก
+        executeAttendanceAction={executeAttendanceAction}
+      />
 
       {/* 🟢 LOADING OVERLAY สำหรับเคสที่กดจากข้างนอก */}
       {isProcessing && !showCamera && (

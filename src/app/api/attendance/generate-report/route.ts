@@ -1,12 +1,21 @@
 import { db } from "@/db/db";
-import { attendanceTable, usersTable, shiftsTable, sitesTable } from "@/db/schema";
-import { and, eq, or, gte, lte, inArray, asc } from "drizzle-orm";
+import { attendanceTable, usersTable, shiftsTable, sitesTable, departmentsTable, positionsTable } from "@/db/schema";
+import { and, eq, gte, lte, inArray, asc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { employeeIds, startDate, endDate } = body;
+    const { 
+      employeeIds, 
+      startDate, 
+      endDate, 
+      departmentId, 
+      positionId, 
+      siteId, 
+      format, 
+      reportType 
+    } = body;
 
     // 1. Validation เบื้องต้น
     if (!employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0) {
@@ -24,31 +33,35 @@ export async function POST(req: Request) {
       checkIn: attendanceTable.checkIn,
       checkOut: attendanceTable.checkOut,
       userId: attendanceTable.user_id,
-      employeeName: usersTable.firstName,
+      empCode: usersTable.empCode, // เพิ่มรหัสพนักงาน
+      firstName: usersTable.firstName,
       lastName: usersTable.lastName,
-      siteName: sitesTable.name,
-      // ✅ แก้ไข: อ้างอิงชื่อให้ตรงตาม Schema (siteInNameSnapshot)
+      // ดึงข้อมูล Master ปัจจุบัน (สำหรับหัวรายงาน)
+      currentDepartment: departmentsTable.name,
+      currentPosition: positionsTable.name,
+      currentSite: sitesTable.name,
+      // ข้อมูล Snapshot (สำหรับข้อมูลในตารางที่แม่นยำตามวันนั้นๆ)
       siteSnapName: attendanceTable.siteInNameSnapshot,
       departmentSnapName: attendanceTable.departmentNameSnapshot,
-      // ✅ เพิ่มเติม: ดึงเวลาจาก Snapshot เพื่อใช้คำนวณสายใน Report ให้แม่นยำ
       shiftStartTimeSnapshot: attendanceTable.shiftStartTimeSnapshot,
       shiftEndTimeSnapshot: attendanceTable.shiftEndTimeSnapshot,
+      // ข้อมูล Shift เดิม (ถ้ามี)
       startTime: shiftsTable.startTime,
       endTime: shiftsTable.endTime,
-      // ✅ เพิ่มเติม: ดึงสถานะจาก DB ตรงๆ
       isLate: attendanceTable.isLate,
       isEarlyExit: attendanceTable.isEarlyExit,
       locationIn: attendanceTable.locationIn,
       locationOut: attendanceTable.locationOut,
+      remark: attendanceTable.remark,
     })
     .from(attendanceTable)
     .innerJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
     .leftJoin(sitesTable, eq(attendanceTable.site_id, sitesTable.id))
     .leftJoin(shiftsTable, eq(attendanceTable.shift_id, shiftsTable.id))
+    .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id)) // Join เพิ่มเพื่อเอาชื่อแผนก
+    .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))    // Join เพิ่มเพื่อเอาชื่อตำแหน่ง
     .where(and(
-      // กรองเฉพาะพนักงานที่เลือกมา
       inArray(attendanceTable.user_id, employeeIds),
-      // กรองตามช่วงวันที่
       gte(attendanceTable.date, startDate),
       lte(attendanceTable.date, endDate)
     ))
@@ -63,11 +76,24 @@ export async function POST(req: Request) {
       });
     }
 
-    // 4. ปรับโครงสร้างข้อมูลเล็กน้อยก่อนส่งกลับ (เพื่อความสะดวกของ Client)
-    const finalData = reportData.map(item => ({
-      ...item,
-      fullName: `${item.employeeName} ${item.lastName}`,
-    }));
+    // 4. ปรับโครงสร้างข้อมูล (Transform) เพื่อให้ UI ใช้งานง่ายขึ้น
+    const finalData = reportData.map(item => {
+      // ✅ Logic สถานะ: ถ้ามีเข้าแต่ไม่มีออก = ไม่ได้ลงชื่อออก, ถ้ามีครบ = สมบูรณ์
+      let statusText = "ไม่ได้ลงชื่อเข้า"; // Default (กรณีข้อมูลผิดพลาด)
+      if (item.checkIn && !item.checkOut) {
+        statusText = "ไม่ได้ลงชื่อออก";
+      } else if (item.checkIn && item.checkOut) {
+        statusText = "สมบูรณ์";
+      }
+
+      return {
+        ...item,
+        fullName: `${item.employeeName} ${item.lastName}`,
+        statusText: statusText, // ส่งสถานะที่คำนวณแล้วไปให้ UI เลย
+        exportFormat: format,
+        generatedType: reportType
+      };
+    });
 
     // ส่งข้อมูลกลับไปยัง Client
     return NextResponse.json({ success: true, data: finalData });

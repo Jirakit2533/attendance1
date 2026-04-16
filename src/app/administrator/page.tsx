@@ -59,6 +59,7 @@ export default async function AdminDashboardPage() {
           lastName: usersTable.lastName,
           role: usersTable.role,
           departmentId: usersTable.departmentId,
+          departmentName: departmentsTable.name, // เพิ่มการ Select ชื่อแผนก
           positionName: positionsTable.name,
           siteName: sitesTable.name,
           siteId: usersTable.site_id,
@@ -70,6 +71,7 @@ export default async function AdminDashboardPage() {
         .from(usersTable)
         .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
         .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
+        .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id)) // Join แผนกเพิ่ม
         .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId))
         .where(
           and(
@@ -229,7 +231,9 @@ export default async function AdminDashboardPage() {
         employeeName: `${emp?.firstName || ""} ${emp?.lastName || ""}`.trim() || "ไม่ระบุชื่อ",
         role: String(emp?.role || "employee"),
         departmentId: emp?.departmentId ? String(emp.departmentId) : null,
+        departmentName: emp?.departmentName || "ไม่ระบุแผนก", // Map เพิ่มให้สอดคล้องกับฟิลเตอร์
         positionId: emp?.positionId ? String(emp.positionId) : null,
+        positionName: emp?.positionName || "พนักงาน", // Map เพิ่มให้สอดคล้องกับฟิลเตอร์
         siteId: emp?.siteId ? String(emp.siteId) : null,
         site: String(emp?.siteName || "ไม่ระบุ"),
         siteName: emp?.siteName || "ไม่ระบุ",

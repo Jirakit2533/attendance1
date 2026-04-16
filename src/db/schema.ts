@@ -218,7 +218,7 @@ export const attendanceTable = pgTable("attendance", {
   isOffsiteOutCoordinates: text("is_offsite_out_coordinates", { length: 255 }), 
   workingStatusEnum: workingStatusEnum("working_status").default("normal"),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
-  remark: text("remark"), //excusive remark for attendance record by company requested
+  remark: text("remark"),
 });
 
 export const leaveTable = pgTable("leave", {
@@ -314,4 +314,3 @@ export const companyRelations = relations(companyTable, ({ many }) => ({
   overtimeRequests: many(overtimeRequestsTable),
 }));
 
-// 3. Attendance Relations

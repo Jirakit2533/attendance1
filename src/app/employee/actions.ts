@@ -8,6 +8,7 @@ import { uploadToDrive } from "@/lib/uploadthing-server";
 import { validateAndGetSite, isInsideBound, validateCheckOutLocation } from "@/lib/location-service";
 import { calculateOvertime } from "@/features/over-time/ot-calculate";
 import * as bcrypt from "bcryptjs";
+import { FeatureService } from "@/features/feature-service"; // 
 
 /* -------------------------------------------------------------------------- */
 /* CHECKIN ACTION (การเข้างาน)                                               */
@@ -74,38 +75,21 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-    // 🚩 ดึงข้อมูล Company เพื่อเอา otRoundingOption และ ID ของฟีเจอร์ที่เลือก
-    const [companyData] = await db
-      .select({
+    // 🚩 [REFACTORED] ดึงข้อมูล Company และตรวจสอบ Feature ผ่าน FeatureService ที่ Knight เตรียมไว้
+    const [companyData, isRemarkActive] = await Promise.all([
+      db.select({
         otRoundingOption: companyTable.otRoundingOption,
         companyFeatureSelectedId: companyTable.companyFeatureSelectedId
       })
       .from(companyTable)
       .where(eq(companyTable.id, user.companyId || ""))
-      .limit(1);
-
-    // 🚩 ตรวจสอบ Feature จากตาราง companyFeatureSelectedTable (ตาม Schema ใหม่)
-    let isRemarkActive = false;
-    if (companyData?.companyFeatureSelectedId) {
-      const [featureSelection] = await db
-        .select({
-          featureSelectedArray: companyFeatureSelectedTable.featureSelectedArray
-        })
-        .from(companyFeatureSelectedTable)
-        .where(eq(companyFeatureSelectedTable.id, companyData.companyFeatureSelectedId))
-        .limit(1);
-      
-      const activeFeatures = Array.isArray(featureSelection?.featureSelectedArray) 
-        ? featureSelection.featureSelectedArray 
-        : [];
-      
-      // ตรวจสอบว่ามีชื่อฟีเจอร์ remarkAttendance ใน Array หรือไม่
-      isRemarkActive = activeFeatures.includes("remarkAttendance");
-    }
+      .limit(1)
+      .then(res => res[0]),
+      FeatureService.isFeatureActive(user.companyId || "", "remarkAttendance")
+    ]);
 
     const companyRounding = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
 
-    // 🚩 ตรวจสอบพิกัดไซต์
     const validatedSite = await validateAndGetSite(
       lat.toString(),
       lon.toString(),
@@ -118,7 +102,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
         success: false,
         offsite: true,
         siteName: validatedSite.name,
-        OffsiteCheckInConfirm: true, // เพิ่มให้ตรงกับหน้าบ้านที่รับค่า
+        OffsiteCheckInConfirm: true,
         OffsiteCheckOutConfirm: true
       };
     }
@@ -158,15 +142,21 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     const buffer = Buffer.from(base64Data, "base64");
     const uploadRes = await uploadToDrive(buffer, `checkin_${userId}_${Date.now()}.png`, "image/png");
 
-    // 🚩 ตรวจสอบความถูกต้องของ Remark (บันทึกรวมในขั้นตอนเดียว)
-    const finalRemark = isRemarkActive ? (remark?.trim() || null) : null;
+    // 🚩 บันทึกตามที่หน้าบ้านส่งมาโดยตรง ทันทีที่กดตกลงจาก Modal
+    const finalRemark = remark?.trim() || "";
+    
+    // 🔍 LOG ตรวจสอบค่าก่อน Insert
+    console.log("--- SERVER DEBUG ---");
+    console.log("Remark Received:", remark);
+    console.log("Final Remark to DB:", finalRemark);
 
+    // 🚩 [CRITICAL FIX] บันทึกข้อมูลและรับ ID ที่แท้จริงจากฐานข้อมูล
     const [insertedAttendance] = await db.insert(attendanceTable).values({
       user_id: userId,
       department_id: user.departmentId,
       site_id: validatedSite.id,
       siteInNameSnapshot: validatedSite.name || "",
-      siteInCoordinatesSnapshot: validatedSite.coordinates || "",
+      siteCoordinatesSnapshot: validatedSite.coordinates || "", 
       shift_id: activeShiftId,
       temp_shift_id: activeTempShiftId,
       shiftStartTimeSnapshot: activeStartTime,
@@ -180,7 +170,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       isOffsiteIn: finalIsOffsiteIn,
       isOffsiteInCoordinates: finalIsOffsiteIn === "1" ? location : null,
       workingStatusEnum: currentWorkingStatus,
-      remark: finalRemark, // บันทึกค่า Remark ที่ส่งมาพร้อม Insert ทันที
+      remark: finalRemark, // บันทึกค่า Remark พร้อมกับการ Insert ทันที
       isLate: currentWorkingStatus === "normal" && activeStartTime ? (toMin(currentTimeStr) > toMin(activeStartTime) ? 1 : 0) : 0,
       lateMinutes: currentWorkingStatus === "normal" && activeStartTime ? (() => {
         let nowM = toMin(currentTimeStr);
@@ -191,7 +181,10 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       })() : 0,
     }).returning({ id: attendanceTable.id });
 
-    if (insertedAttendance) {
+    // 🚩 ตรวจสอบว่า Insert สำเร็จจริงก่อนไปทำ OT
+    if (insertedAttendance?.id) {
+      console.log("✅ Insert Success, ID:", insertedAttendance.id);
+      
       const otResult = calculateOvertime({
         checkIn: currentTimeStr,
         checkOut: currentTimeStr,
@@ -205,12 +198,14 @@ export async function checkInAction(userId: string, base64Image: string, locatio
         userName: user.name || "Unknown",
         companyId: user.companyId || "",
         shiftId: activeShiftId,
-        attendanceId: insertedAttendance.id,
+        attendanceId: insertedAttendance.id, 
         date: dateStr,
         overtimeBefore: otResult.beforeMinutes,
         otRoundingOption: companyRounding,
         status: "pending"
       });
+    } else {
+      throw new Error("บันทึกข้อมูลเข้างานล้มเหลว (No ID returned from database)");
     }
 
     revalidatePath("/employee");
@@ -220,7 +215,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       success: true,
       siteName: validatedSite.name,
       isOffsiteIn: finalIsOffsiteIn,
-      attendanceId: insertedAttendance?.id,
+      attendanceId: insertedAttendance.id, 
       requiresRemark: isRemarkActive 
     };
   } catch (error: any) {

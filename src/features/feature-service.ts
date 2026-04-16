@@ -1,7 +1,7 @@
 //@/features/feature-service.ts
 
-import { db } from "@/lib/db";
-import { companyFeatureSelectedTable } from "@/lib/db/schema";
+import { db } from "@/db/db";
+import { companyFeatureSelectedTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export const FeatureService = {
