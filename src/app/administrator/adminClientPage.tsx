@@ -3206,14 +3206,18 @@ export default function AdminClientPage({
                                             ? "bg-orange-100 text-orange-600 border-orange-200"
                                             : l.status === "approved"
                                               ? "bg-emerald-100 text-emerald-600 border-emerald-200"
-                                              : "bg-red-100 text-red-600 border-red-200"
+                                              : l.status === "executed"
+                                                ? "bg-blue-100 text-blue-600 border-blue-200"
+                                                : "bg-red-100 text-red-600 border-red-200"
                                         }`}
                                       >
                                         {l.status === "pending"
                                           ? "รออนุมัติ"
                                           : l.status === "approved"
                                             ? "อนุมัติแล้ว"
-                                            : "ปฏิเสธ"}
+                                            : l.status === "executed"
+                                              ? "เสร็จสมบูรณ์"
+                                              : "ปฏิเสธ"}
                                       </span>
                                     </td>
 
@@ -3241,6 +3245,10 @@ export default function AdminClientPage({
                                               ปฏิเสธ
                                             </button>
                                           </>
+                                        ) : l.status === "executed" ? (
+                                          <div className="text-[10px] font-bold text-slate-400 italic bg-slate-50 px-4 py-2 rounded-xl border border-dashed border-slate-200">
+                                            🔒 ล็อครายการแล้ว
+                                          </div>
                                         ) : (
                                           <button
                                             disabled={isProcessing}
