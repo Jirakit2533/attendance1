@@ -2,8 +2,8 @@ import { db } from "@/db/db";
 import { sitesTable, attendanceTable, usersTable } from "@/db/schema"; 
 import { and, eq, sql, ne, isNull, desc } from "drizzle-orm"; 
 
-// ปรับเป็นประมาณ 50 เมตร (0.00045) เพื่อรองรับความคลาดเคลื่อนระหว่างอุปกรณ์ PC และ Mobile
-const OFFSET_50M = 0.00045; 
+// ปรับเป็นประมาณ 20 เมตร (0.00018) ตามความต้องการล่าสุด
+const OFFSET_20M = 0.00018; 
 
 /**
  * 1. ฟังก์ชันสำหรับเช็คว่าพิกัดอยู่ในกรอบหรือไม่
@@ -23,10 +23,10 @@ export const isInsideBound = (
   if (isNaN(uLat) || isNaN(uLon) || isNaN(sLat) || isNaN(sLon)) return false;
 
   return (
-    uLat >= sLat - OFFSET_50M &&
-    uLat <= sLat + OFFSET_50M &&
-    uLon >= sLon - OFFSET_50M &&
-    uLon <= sLon + OFFSET_50M
+    uLat >= sLat - OFFSET_20M &&
+    uLat <= sLat + OFFSET_20M &&
+    uLon >= sLon - OFFSET_20M &&
+    uLon <= sLon + OFFSET_20M
   );
 };
 

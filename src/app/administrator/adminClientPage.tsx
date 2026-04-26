@@ -168,6 +168,7 @@ export default function AdminClientPage({
   const [showFilterModal, setShowFilterModal] = useState(false); // เปิด/ปิดหน้าเลือกพนักงาน
   const [showReport, setShowReport] = useState(false); // เปิด/ปิดหน้าแสดงตัวอย่างรายงาน
   const [reportData, setReportData] = useState<any[]>([]); // ถังเก็บข้อมูลที่จะโชว์ในตารางรายงาน
+  const [leaveData, setLeaveData] = useState<any[]>([]);
 
   const [overtimeReques, setOvertimeReques] = useState<OvertimeRequest[]>(
     initialOvertimeRequests
@@ -392,35 +393,47 @@ export default function AdminClientPage({
   // 4. Filter สำหรับช่องค้นหาใน Report
   // --- 1. กรองรายชื่อพนักงานในหน้า Modal (Member Selection) ---
   const filteredEmpSuggestions = useMemo(() => {
-    return initialEmployees.filter((emp) => {
+    return (initialEmployees || []).filter((emp) => {
+      // ❗ กัน null / undefined object หลุดเข้ามา
+      if (!emp || typeof emp !== "object") return false;
+
+      // normalize search
+      const search = searchTerm?.toLowerCase() || "";
+
       // 1. ตรวจสอบชื่อ/รหัสพนักงาน (Search)
       const matchesSearch =
         !searchTerm ||
-        emp.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.userName.toLowerCase().includes(searchTerm.toLowerCase());
+        emp.employeeName?.toLowerCase().includes(search) ||
+        emp.userName?.toLowerCase().includes(search) ||
+        emp.firstName?.toLowerCase().includes(search) ||
+        emp.lastName?.toLowerCase().includes(search);
 
       // 2. ตรวจสอบแผนก (Department)
-      // เงื่อนไข: ถ้าเลือก "ทุกแผนก" หรือค่าเป็นว่าง ให้ matchesDept เป็น true เสมอ
       const matchesDept =
         !filterDepartment ||
+        filterDepartment === "" ||
         filterDepartment === "ทุกแผนก" ||
         emp.departmentName === filterDepartment ||
-        emp.departmentId === filterDepartment; // เผื่อกรณีเก็บเป็น ID
+        String(emp.departmentId) === String(filterDepartment);
 
       // 3. ตรวจสอบตำแหน่ง (Position)
       const matchesPos =
         !filterPosition ||
+        filterPosition === "" ||
         filterPosition === "ทุกตำแหน่ง" ||
         emp.positionName === filterPosition ||
-        emp.position === filterPosition;
+        emp.position === filterPosition ||
+        String(emp.positionId) === String(filterPosition);
 
       // 4. ตรวจสอบไซต์งาน (Site)
       const matchesSite =
         !filterSite ||
+        filterSite === "" ||
         filterSite === "ทุกไซต์งาน" ||
         filterSite === "ทุกไซต์" ||
+        filterSite === "ทั้งหมด (All Filter)" ||
         emp.siteName === filterSite ||
-        emp.siteId === filterSite;
+        String(emp.siteId) === String(filterSite);
 
       // ต้องผ่านทุกเงื่อนไขถึงจะแสดงผล
       return matchesSearch && matchesDept && matchesPos && matchesSite;
@@ -432,7 +445,6 @@ export default function AdminClientPage({
     filterSite,
     initialEmployees,
   ]);
-
   const filteredPositions = useMemo(() => {
     if (!filterDepartment) return allPositions; // ถ้าไม่เลือกแผนก ให้โชว์ทุกตำแหน่ง
     return allPositions.filter(
@@ -583,7 +595,82 @@ export default function AdminClientPage({
       setIsUpdating(false);
     }
   };
+  // --- ฟังก์ชันสำหรับ Download Excel ---
+  const handleDownloadExcel = async (data: any[]) => {
+    try {
+      const XLSX = await import("xlsx");
 
+      // 1. เตรียมข้อมูลสำหรับ Worksheet
+      const worksheetData = data.map((item) => {
+        // ข้อมูลพื้นฐานที่มีทุกประเภทรายงาน
+        const baseData = {
+          วันที่: item.date || "-",
+          รหัสพนักงาน: item.empCode || "-",
+          ชื่อ: item.firstName || "-",
+          นามสกุล: item.lastName || "-",
+        };
+
+        // ตรวจสอบว่าเป็นรายงาน OT หรือไม่ (เช็คจาก reportType หรือ generatedType)
+        const isOTReport =
+          reportType === "overtime" ||
+          reportType === "ot" ||
+          item.generatedType === "overtime";
+
+        if (!isOTReport) {
+          // ส่วนของรายงานการเข้างาน (Attendance)
+          return {
+            ...baseData,
+            กะงาน: `${item.shiftStartTimeSnapshot?.substring(0, 5) || "00:00"} - ${item.shiftEndTimeSnapshot?.substring(0, 5) || "00:00"}`,
+            จุดปฏิบัติงาน: item.siteSnapName || item.siteName || "-",
+            เวลาเข้า: item.checkIn?.substring(0, 5) || "--:--",
+            เวลาออก: item.checkOut?.substring(0, 5) || "--:--",
+            สถานะ: item.statusText || (item.isLate ? "สาย" : "ปกติ"),
+          };
+        } else {
+          // ส่วนของรายงานโอที (OT)
+          const totalMinutes =
+            Number(item.otHours) || Number(item.overtimeByRequest) || 0;
+          const h = Math.floor(totalMinutes / 60);
+          const m = totalMinutes % 60;
+
+          return {
+            ...baseData,
+            "เริ่ม (Time)": item.timeStart?.substring(0, 5) || "-",
+            "สิ้นสุด (Time)": item.timeEnd?.substring(0, 5) || "-",
+            "จำนวนชั่วโมง (ชม.นาที)": `${h}.${m.toString().padStart(2, "0")}`,
+            จำนวนนาทีสุทธิ: totalMinutes,
+            "สถานะ/หมายเหตุ":
+              item.otRemark || item.reason || item.otStatus || "-",
+            ผู้อนุมัติ: item.approvedByName || "-",
+          };
+        }
+      });
+
+      // 2. สร้าง Workbook และ Worksheet
+      const ws = XLSX.utils.json_to_sheet(worksheetData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+
+      // 3. กำหนดชื่อไฟล์
+      const dateStr = new Date()
+        .toLocaleDateString("th-TH", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        })
+        .replace(/\//g, "-");
+
+      const typeLabel =
+        reportType === "attendance" ? "Attendance" : "OT_Report";
+      const fileName = `Report_${typeLabel}_${dateStr}.xlsx`;
+
+      // 4. เขียนไฟล์และดาวน์โหลด
+      XLSX.writeFile(wb, fileName);
+    } catch (error) {
+      console.error("Excel Export Error:", error);
+      alert("ไม่สามารถดาวน์โหลดไฟล์ Excel ได้ในขณะนี้");
+    }
+  };
   const resetOTStatus = async (otId: string) => {
     if (!confirm("ต้องการดึงรายการกลับมาเป็นรออนุมัติใช่หรือไม่?")) return;
     setIsUpdating(true);
@@ -633,7 +720,6 @@ export default function AdminClientPage({
 
   const handleGenerateReport = async () => {
     // 1. ป้องกันการกดซ้ำ และตรวจสอบว่ามีการเลือกพนักงานหรือไม่
-    // ปรับแก้ไข: ตรวจสอบจาก selectedEmployees (พนักงานที่เรา "ติ๊ก" เลือกจริงๆ)
     if (isProcessing || selectedEmployees.length === 0) {
       alert("กรุณาเลือกรายชื่อพนักงานที่ต้องการสร้างรายงาน");
       return;
@@ -654,38 +740,83 @@ export default function AdminClientPage({
           ? "/api/attendance/generate-report"
           : "/api/overtime/generate-report";
 
-      // 3. ยิง API ไปยัง Backend
+      // 3. ยิง API ตัวหลักเพียงตัวเดียว (Attendance จะรวมข้อมูล Leave มาให้แล้ว)
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // ✅ ส่งเฉพาะ IDs พนักงานที่เราเลือก (ซึ่งผ่านการกรองจากหน้า UI มาแล้ว)
           employeeIds: selectedEmployees,
           startDate: startDate,
           endDate: endDate,
           format: exportFormat,
           reportType: reportType,
-          // หมายเหตุ: ไม่ต้องส่ง departmentId/siteId ไปซ้ำซ้อน
-          // เพื่อให้ Backend กรองจากรายชื่อพนักงาน (employeeIds) ที่เราเลือกไปให้โดยตรง
         }),
       });
 
       const result = await response.json();
 
       if (response.ok && result.success) {
-        // 4. เมื่อ Server ประมวลผลเสร็จและส่งข้อมูลกลับมา
-        setReportData(result.data);
+        // 4. normalize data กัน undefined + กัน type mismatch
+        let finalData = Array.isArray(result.data)
+          ? result.data.filter(Boolean)
+          : [];
 
-        // 5. สั่งเปิดหน้า Preview Report และปิด Modal กรอง
+        // จัดการข้อมูลการลา (Leave Data) ที่แนบมากับ API Attendance
+        const finalLeaveData =
+          result.leaveData && Array.isArray(result.leaveData)
+            ? result.leaveData.map((leave: any) => ({
+                ...leave,
+                // ประกันว่า key ชื่อผู้อนุมัติจะถูกส่งต่อไปยัง UI อย่างถูกต้อง
+                approvedByName: leave.approvedByName ?? "ไม่ระบุผู้อนุมัติ",
+              }))
+            : [];
+
+        if (reportType === "overtime") {
+          finalData = finalData.map((item: any) => ({
+            ...item,
+            // ข้อมูลจาก Schema ใหม่ที่ส่งมาจาก API
+            // 1. ใช้ชื่อผู้อนุมัติที่ Join มาจาก Aliased Table
+            approvedByName: item.approvedByName ?? "System Admin",
+            approvedBy: item.approvedBy ?? null,
+
+            // 2. ใช้ค่าชั่วโมงที่อนุมัติจริง (otHours) จาก overtimeTable
+            // หากไม่มีให้ Fallback ไปที่ค่าที่ Request (overtimeByRequest)
+            otHours: item.otHours ?? item.overtimeByRequest ?? 0,
+
+            // 3. ใช้สถานะจากตารางหลัก (otStatus) ที่เป็น 'approved'
+            status: item.otStatus ?? item.status,
+
+            // 4. ข้อมูลเพิ่มเติม
+            reason: item.reason ?? "-",
+            remarks: item.remarks ?? "-",
+            timeStart: item.timeStart ?? "-",
+            timeEnd: item.timeEnd ?? "-",
+            date: item.date,
+            userName: item.userName ?? `${item.firstName} ${item.lastName}`,
+          }));
+
+          // ถ้าเป็น OT Report ปกติจะไม่มีข้อมูลลาแยกมา แต่เราล้าง State Leave ไว้กันเหนื่อย
+          setLeaveData([]);
+        }
+
+        if (reportType === "attendance") {
+          finalData = finalData.map((item: any) => ({
+            ...item,
+            approvedBy: item.approvedBy ?? null,
+            approvedByName: item.approvedByName ?? null,
+          }));
+
+          // เก็บข้อมูลการลาเข้า State เฉพาะเมื่อเป็นรายงานลงเวลา
+          setLeaveData(finalLeaveData);
+        }
+
+        // เก็บข้อมูลหลักเข้า State
+        setReportData(finalData);
+
         setShowReport(true);
         setShowFilterModal(false);
-
-        // ถ้าเป็น Mobile ให้ปิด Sidebar ด้วย
         setIsMobileFilterOpen(false);
       } else {
-        // กรณี Server ส่ง Error กลับมา
         alert(
           result.message ||
             `ไม่พบข้อมูล${reportType === "attendance" ? "การลงเวลา" : "การทำงานล่วงเวลา"}ในช่วงวันที่เลือก`
@@ -695,11 +826,9 @@ export default function AdminClientPage({
       console.error("Generate Report Error:", error);
       alert("เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง");
     } finally {
-      // 6. ปิดสถานะการโหลด
       setIsProcessing(false);
     }
   };
-
   const handleUpdateCompany = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSavingCompany(true);
@@ -2604,7 +2733,15 @@ export default function AdminClientPage({
                                               >
                                                 {isDayUnit
                                                   ? `${(hrs / 24).toFixed(1).replace(".0", "")}\u00A0วัน`
-                                                  : `${hrs}\u00A0ชม.`}
+                                                  : (() => {
+                                                      const fullHours =
+                                                        Math.floor(hrs);
+                                                      const minutes =
+                                                        Math.round(
+                                                          (hrs - fullHours) * 60
+                                                        );
+                                                      return `${fullHours}.${minutes.toString().padStart(2, "0")}\u00A0ชม.`;
+                                                    })()}
                                               </span>
                                             );
                                           })()}
@@ -2781,11 +2918,11 @@ export default function AdminClientPage({
                         currentItems.map((l) => {
                           const start = new Date(l.startDate);
                           const end = new Date(l.endDate);
-                          // 1. คำนวณหาชั่วโมงทั้งหมดก่อน (Diff เป็นมิลลิวินาที -> ชั่วโมง)
-                          // 1. ดึงค่าตรงๆ จาก Object 'l' (Leave item) ที่หลังบ้าน Map มาให้แล้ว
+
+                          // 1. ดึงค่าตรงๆ จาก Object 'l'
                           const hrs = Number(l.totalHours) || 0;
 
-                          // 2. เช็คเงื่อนไขตาม Logic ที่เราตกลงกัน
+                          // 2. เช็คเงื่อนไขตาม Logic
                           const isHalfDay = hrs === 4 || hrs === 4.5;
                           const isDayUnit = hrs >= 24;
 
@@ -2800,7 +2937,10 @@ export default function AdminClientPage({
                               .replace(".0", "");
                             durationLabel = `${dayCalc} วัน`;
                           } else {
-                            durationLabel = `${hrs} ชั่วโมง`;
+                            // แก้ไขส่วนนี้ให้แสดงผลเป็น ชั่วโมง.นาที
+                            const fullHours = Math.floor(hrs);
+                            const minutes = Math.round((hrs - fullHours) * 60);
+                            durationLabel = `${fullHours}.${minutes.toString().padStart(2, "0")} ชั่วโมง`;
                           }
 
                           return (
@@ -4493,634 +4633,889 @@ export default function AdminClientPage({
 
       {/* --- 📊 MODAL (Report Generator) --- */}
       {showFilterModal && (
-  <div className="fixed inset-0 bg-slate-100 z-[500] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 font-sans">
-    {/* --- 1. Header --- */}
-    <div className="bg-white border-b border-slate-200 px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between shadow-sm sticky top-0 z-[530]">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => setIsMobileFilterOpen(true)}
-          className="lg:hidden w-10 h-10 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
-        >
-          <span className="w-5 h-[2px] bg-slate-400 rounded-full"></span>
-          <span className="w-5 h-[2px] bg-slate-400 rounded-full"></span>
-          <span className="w-5 h-[2px] bg-slate-400 rounded-full"></span>
-        </button>
+        <div className="fixed inset-0 bg-slate-100 z-[500] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 font-sans">
+          {/* --- 1. Header --- */}
+          <div className="bg-white border-b border-slate-200 px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between shadow-sm sticky top-0 z-[530]">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsMobileFilterOpen(true)}
+                className="lg:hidden w-10 h-10 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
+              >
+                <span className="w-5 h-[2px] bg-slate-400 rounded-full"></span>
+                <span className="w-5 h-[2px] bg-slate-400 rounded-full"></span>
+                <span className="w-5 h-[2px] bg-slate-400 rounded-full"></span>
+              </button>
 
-        <div className="w-10 h-10 bg-blue-600 rounded-xl hidden lg:flex items-center justify-center text-white text-xl shadow-lg shadow-blue-100">
-          {isProcessing ? (
-            <span className="animate-spin text-lg">⏳</span>
-          ) : (
-            "📊"
-          )}
-        </div>
-        <div>
-          <h3 className="text-base lg:text-lg font-black text-slate-900 leading-none mb-1 uppercase italic">
-            สร้างรายงาน
-          </h3>
-          <p className="text-[9px] lg:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            {isProcessing
-              ? "กำลังประมวลผลข้อมูล..."
-              : "ระบบสร้างรายงานและคัดกรองรายชื่อ"}
-          </p>
-        </div>
-      </div>
-      <button
-        disabled={isProcessing}
-        onClick={() => setShowFilterModal(false)}
-        className="w-10 h-10 lg:w-12 lg:h-12 flex items-center justify-center bg-slate-100 text-slate-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-50"
-      >
-        ✕
-      </button>
-    </div>
+              <div className="w-10 h-10 bg-blue-600 rounded-xl hidden lg:flex items-center justify-center text-white text-xl shadow-lg shadow-blue-100">
+                {isProcessing ? (
+                  <span className="animate-spin text-lg">⏳</span>
+                ) : (
+                  "📊"
+                )}
+              </div>
+              <div>
+                <h3 className="text-base lg:text-lg font-black text-slate-900 leading-none mb-1 uppercase italic">
+                  สร้างรายงาน
+                </h3>
+                <p className="text-[9px] lg:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  {isProcessing
+                    ? "กำลังประมวลผลข้อมูล..."
+                    : "ระบบสร้างรายงานและคัดกรองรายชื่อ"}
+                </p>
+              </div>
+            </div>
+            <button
+              disabled={isProcessing}
+              onClick={() => setShowFilterModal(false)}
+              className="w-10 h-10 lg:w-12 lg:h-12 flex items-center justify-center bg-slate-100 text-slate-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-50"
+            >
+              ✕
+            </button>
+          </div>
 
-    <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
-      {/* --- 2. Side Bar: Filters --- */}
-      {isMobileFilterOpen && (
-        <div
-          className="fixed inset-0 bg-slate-900/40 z-[510] lg:hidden backdrop-blur-sm animate-in fade-in duration-300"
-          onClick={() => setIsMobileFilterOpen(false)}
-        ></div>
-      )}
+          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
+            {/* --- 2. Side Bar: Filters --- */}
+            {isMobileFilterOpen && (
+              <div
+                className="fixed inset-0 bg-slate-900/40 z-[510] lg:hidden backdrop-blur-sm animate-in fade-in duration-300"
+                onClick={() => setIsMobileFilterOpen(false)}
+              ></div>
+            )}
 
-      <div
-        className={`
+            <div
+              className={`
           fixed inset-y-0 left-0 w-80 bg-white z-[520] p-6 overflow-y-auto shadow-2xl transition-transform duration-300 transform
           lg:relative lg:translate-x-0 lg:shadow-none lg:z-0 lg:border-r lg:border-slate-200
           ${isMobileFilterOpen ? "translate-x-0" : "-translate-x-full"}
         `}
-      >
-        <div className="flex items-center justify-between mb-6 lg:block">
-          <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>{" "}
-            เงื่อนไขรายงาน
-          </h4>
-          <button
-            onClick={() => setIsMobileFilterOpen(false)}
-            className="lg:hidden text-slate-400 font-bold"
-          >
-            ปิด ✕
-          </button>
-        </div>
-
-        {/* ปรับปรุงพื้นที่ด้านล่าง Sidebar ไม่ให้โดน Footer ทับบน Mobile */}
-        <div className="space-y-6 pb-32 lg:pb-6">
-          {/* ประเภทรายงาน (Report Type) */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
-              ประเภทรายงาน (Report Type)
-            </label>
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                type="button"
-                onClick={() => setReportType("attendance")}
-                className={`p-3.5 rounded-2xl text-[11px] font-black uppercase border transition-all flex items-center gap-3 ${
-                  reportType === "attendance"
-                    ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100"
-                    : "bg-slate-50 border-slate-100 text-slate-400 hover:border-blue-200"
-                }`}
-              >
-                <span className="text-base">📅</span> รายงานการเข้างาน
-              </button>
-              <button
-                type="button"
-                onClick={() => setReportType("overtime")}
-                className={`p-3.5 rounded-2xl text-[11px] font-black uppercase border transition-all flex items-center gap-3 ${
-                  reportType === "overtime"
-                    ? "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-100"
-                    : "bg-slate-50 border-slate-100 text-slate-400 hover:border-orange-200"
-                }`}
-              >
-                <span className="text-base">⏰</span> รายงาน OT
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
-              รูปแบบไฟล์ (Format)
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setExportFormat("excel")}
-                className={`p-4 rounded-xl text-xs font-black uppercase border transition-all ${
-                  exportFormat === "excel"
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-500/10"
-                    : "bg-slate-50 border-slate-100 text-slate-400"
-                }`}
-              >
-                📗 Excel
-              </button>
-              <button
-                onClick={() => setExportFormat("pdf")}
-                className={`p-4 rounded-xl text-xs font-black uppercase border transition-all ${
-                  exportFormat === "pdf"
-                    ? "bg-red-50 border-red-500 text-red-700 ring-2 ring-red-500/10"
-                    : "bg-slate-50 border-slate-100 text-slate-400"
-                }`}
-              >
-                📕 PDF
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
-              ช่วงวันที่ (Date Range)
-            </label>
-            <div className="grid grid-cols-1 gap-2">
-              <input
-                type="date"
-                disabled={isProcessing}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:ring-4 ring-blue-500/10 outline-none transition-all"
-              />
-              <input
-                type="date"
-                disabled={isProcessing}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:ring-4 ring-blue-500/10 outline-none transition-all"
-              />
-            </div>
-          </div>
-
-          {/* ระดับ 1: แผนก */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
-              แผนก (Department)
-            </label>
-            <select
-              value={filterDepartment || ""}
-              disabled={isProcessing}
-              onChange={(e) => {
-                setFilterDepartment(e.target.value);
-                setFilterPosition("");
-              }}
-              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-4 ring-blue-500/10 transition-all"
             >
-              <option value="">ทุกแผนก</option>
-              {allDepartments?.map((d: any) => (
-                <option key={d.id} value={d.name}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              <div className="flex items-center justify-between mb-6 lg:block">
+                <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>{" "}
+                  เงื่อนไขรายงาน
+                </h4>
+                <button
+                  onClick={() => setIsMobileFilterOpen(false)}
+                  className="lg:hidden text-slate-400 font-bold"
+                >
+                  ปิด ✕
+                </button>
+              </div>
 
-          {/* ระดับ 2: ตำแหน่ง */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
-              ตำแหน่ง (Position)
-            </label>
-            <select
-              value={filterPosition || ""}
-              disabled={isProcessing}
-              onChange={(e) => setFilterPosition(e.target.value)}
-              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-4 ring-blue-500/10 transition-all"
-            >
-              <option value="">ทุกตำแหน่ง</option>
-              {Array.from(
-                new Set(
-                  initialEmployees
-                    .filter(
-                      (emp: any) =>
-                        !filterDepartment ||
-                        emp.departmentName === filterDepartment
+              {/* ปรับปรุงพื้นที่ด้านล่าง Sidebar ไม่ให้โดน Footer ทับบน Mobile */}
+              <div className="space-y-6 pb-32 lg:pb-6">
+                {/* ประเภทรายงาน (Report Type) */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
+                    ประเภทรายงาน (Report Type)
+                  </label>
+                  <div className="grid grid-cols-1 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReportType("attendance")}
+                      className={`p-3.5 rounded-2xl text-[11px] font-black uppercase border transition-all flex items-center gap-3 ${
+                        reportType === "attendance"
+                          ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100"
+                          : "bg-slate-50 border-slate-100 text-slate-400 hover:border-blue-200"
+                      }`}
+                    >
+                      <span className="text-base">📅</span> รายงานการเข้างาน
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportType("overtime")}
+                      className={`p-3.5 rounded-2xl text-[11px] font-black uppercase border transition-all flex items-center gap-3 ${
+                        reportType === "overtime"
+                          ? "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-100"
+                          : "bg-slate-50 border-slate-100 text-slate-400 hover:border-orange-200"
+                      }`}
+                    >
+                      <span className="text-base">⏰</span> รายงาน OT
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
+                    รูปแบบไฟล์ (Format)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setExportFormat("excel")}
+                      className={`p-4 rounded-xl text-xs font-black uppercase border transition-all ${
+                        exportFormat === "excel"
+                          ? "bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-500/10"
+                          : "bg-slate-50 border-slate-100 text-slate-400"
+                      }`}
+                    >
+                      📗 Excel
+                    </button>
+                    <button
+                      onClick={() => setExportFormat("pdf")}
+                      className={`p-4 rounded-xl text-xs font-black uppercase border transition-all ${
+                        exportFormat === "pdf"
+                          ? "bg-red-50 border-red-500 text-red-700 ring-2 ring-red-500/10"
+                          : "bg-slate-50 border-slate-100 text-slate-400"
+                      }`}
+                    >
+                      📕 PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
+                    ช่วงวันที่ (Date Range)
+                  </label>
+                  <div className="grid grid-cols-1 gap-2">
+                    <input
+                      type="date"
+                      disabled={isProcessing}
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:ring-4 ring-blue-500/10 outline-none transition-all"
+                    />
+                    <input
+                      type="date"
+                      disabled={isProcessing}
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:ring-4 ring-blue-500/10 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* ระดับ 1: แผนก */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
+                    แผนก (Department)
+                  </label>
+                  <select
+                    value={filterDepartment || ""}
+                    disabled={isProcessing}
+                    onChange={(e) => {
+                      setFilterDepartment(e.target.value);
+                      setFilterPosition("");
+                    }}
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-4 ring-blue-500/10 transition-all"
+                  >
+                    <option value="">ทุกแผนก</option>
+                    {allDepartments?.map((d: any) => (
+                      <option key={d.id} value={d.name}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* ระดับ 2: ตำแหน่ง */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
+                    ตำแหน่ง (Position)
+                  </label>
+                  <select
+                    value={filterPosition || ""}
+                    disabled={isProcessing}
+                    onChange={(e) => setFilterPosition(e.target.value)}
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-4 ring-blue-500/10 transition-all"
+                  >
+                    <option value="">ทุกตำแหน่ง</option>
+                    {Array.from(
+                      new Set(
+                        initialEmployees
+                          .filter(
+                            (emp: any) =>
+                              !filterDepartment ||
+                              emp.departmentName === filterDepartment
+                          )
+                          .map((emp: any) => emp.positionName)
+                      )
                     )
-                    .map((emp: any) => emp.positionName)
-                )
-              )
-                .filter(Boolean)
-                .sort()
-                .map((posName) => (
-                  <option key={String(posName)} value={String(posName)}>
-                    {String(posName)}
-                  </option>
-                ))}
-            </select>
-          </div>
+                      .filter(Boolean)
+                      .sort()
+                      .map((posName) => (
+                        <option key={String(posName)} value={String(posName)}>
+                          {String(posName)}
+                        </option>
+                      ))}
+                  </select>
+                </div>
 
-          {/* ระดับ 3: ไซต์งาน */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
-              สถานที่ปฏิบัติงาน (Site)
-            </label>
-            <select
-              value={filterSite || ""}
-              disabled={isProcessing}
-              onChange={(e) => setFilterSite(e.target.value)}
-              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-4 ring-blue-500/10 transition-all"
-            >
-              <option value="">ทั้งหมด (All Filter)</option>
-              {Array.from(
-                new Map(
-                  initialEmployees
-                    .filter((emp: any) => {
-                      const matchesDept =
-                        !filterDepartment ||
-                        emp.departmentName === filterDepartment;
-                      const matchesPos =
-                        !filterPosition ||
-                        emp.positionName === filterPosition;
-                      return matchesDept && matchesPos;
+                {/* ระดับ 3: ไซต์งาน */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 ml-1 uppercase">
+                    สถานที่ปฏิบัติงาน (Site)
+                  </label>
+                  <select
+                    value={filterSite || ""}
+                    disabled={isProcessing}
+                    onChange={(e) => setFilterSite(e.target.value)}
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-4 ring-blue-500/10 transition-all"
+                  >
+                    <option value="">ทั้งหมด (All Filter)</option>
+
+                    {Array.from(
+                      new Map(
+                        (initialEmployees ?? [])
+                          .filter((emp: any) => {
+                            if (!emp) return false;
+
+                            const matchesDept =
+                              !filterDepartment ||
+                              emp.departmentName === filterDepartment;
+
+                            const matchesPos =
+                              !filterPosition ||
+                              emp.positionName === filterPosition;
+
+                            return matchesDept && matchesPos;
+                          })
+                          .filter((emp: any) => emp?.siteId && emp?.siteName)
+                          .map((emp: any) => [emp.siteId, emp.siteName])
+                      )
+                    )
+                      .sort((a, b) => {
+                        const aName = a?.[1] ?? "";
+                        const bName = b?.[1] ?? "";
+                        return aName.localeCompare(bName);
+                      })
+                      .map(([siteId, siteName]) => (
+                        <option key={String(siteId)} value={String(siteId)}>
+                          {String(siteName ?? "")}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {(filterDepartment || filterSite || filterPosition) && (
+                  <button
+                    onClick={() => {
+                      setFilterDepartment("");
+                      setFilterSite("");
+                      setFilterPosition("");
+                    }}
+                    className="w-full py-2 text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition-colors"
+                  >
+                    ล้างตัวกรองทั้งหมด
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setIsMobileFilterOpen(false)}
+                  className="lg:hidden w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-blue-100"
+                >
+                  ตกลงและบันทึกฟิลเตอร์
+                </button>
+              </div>
+            </div>
+
+            {/* --- 3. Right Side: Member Selection --- */}
+            <div className="flex-1 flex flex-col bg-slate-50/50 overflow-hidden">
+              <div className="p-4 lg:p-6 bg-white border-b border-slate-200 flex flex-col sm:flex-row gap-3 lg:gap-4 justify-between items-center">
+                <div className="relative w-full sm:max-w-md">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                    🔍
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="ค้นหา..."
+                    value={searchTerm}
+                    className="w-full pl-11 pr-4 py-3 lg:py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 ring-blue-500/5 transition-all"
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <button
+                  disabled={isProcessing}
+                  onClick={() => {
+                    const visibleIds =
+                      filteredEmpSuggestions?.map((e: any) => e.id) || [];
+                    if (selectedEmployees.length === visibleIds.length)
+                      setSelectedEmployees([]);
+                    else setSelectedEmployees(visibleIds);
+                  }}
+                  className="w-full sm:w-auto whitespace-nowrap px-6 lg:px-8 py-3 lg:py-4 bg-white border border-slate-200 rounded-2xl text-[10px] lg:text-xs font-black text-slate-600 uppercase hover:bg-slate-900 hover:text-white shadow-sm transition-all active:scale-95"
+                >
+                  {selectedEmployees.length ===
+                  (filteredEmpSuggestions?.length || 0)
+                    ? "ล้างการเลือก"
+                    : "เลือกทั้งหมด"}
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-3 lg:p-6 pb-40 lg:pb-6 relative">
+                <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-2 lg:gap-4">
+                  {filteredEmpSuggestions?.length > 0 ? (
+                    filteredEmpSuggestions.map((emp: any) => {
+                      const isSelected = selectedEmployees.includes(emp.id);
+                      const siteDisplayName =
+                        emp.siteName ||
+                        allSites.find(
+                          (s) => String(s.id) === String(emp.siteId)
+                        )?.name ||
+                        "ทั่วไป";
+                      const posDisplayName =
+                        emp.position ||
+                        allPositions.find(
+                          (p) => String(p.id) === String(emp.positionId)
+                        )?.name ||
+                        "พนักงาน";
+
+                      return (
+                        <div
+                          key={emp.id}
+                          onClick={() => {
+                            if (isSelected)
+                              setSelectedEmployees(
+                                selectedEmployees.filter((id) => id !== emp.id)
+                              );
+                            else
+                              setSelectedEmployees([
+                                ...selectedEmployees,
+                                emp.id,
+                              ]);
+                          }}
+                          className={`relative flex flex-col lg:flex-row items-center gap-2 lg:gap-4 p-3 lg:p-5 rounded-3xl lg:rounded-[2.2rem] border-2 transition-all cursor-pointer select-none ${
+                            isSelected
+                              ? "bg-blue-50 border-blue-500 shadow-lg shadow-blue-100 ring-2 ring-blue-500/10"
+                              : "bg-white border-slate-100 shadow-sm hover:border-blue-200"
+                          }`}
+                        >
+                          <div className="w-10 h-10 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl overflow-hidden bg-blue-100 flex-shrink-0 border border-slate-100">
+                            {emp.avatarUrl ? (
+                              <img
+                                src={emp.avatarUrl}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-sm lg:text-xl font-black text-blue-600">
+                                {emp.firstName?.substring(0, 1) || "?"}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1 text-center lg:text-left">
+                            <p
+                              className={`text-[10px] lg:text-sm font-black uppercase truncate ${
+                                isSelected ? "text-blue-700" : "text-slate-900"
+                              }`}
+                            >
+                              {emp.firstName}
+                            </p>
+                            <div className="hidden lg:flex flex-col gap-0.5 mt-1">
+                              <p className="text-[9px] font-bold text-blue-600 uppercase tracking-tight truncate italic">
+                                📍 {siteDisplayName}
+                              </p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter truncate">
+                                💼 {posDisplayName}
+                              </p>
+                            </div>
+                          </div>
+
+                          {isSelected && (
+                            <div className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full animate-pulse lg:hidden"></div>
+                          )}
+                        </div>
+                      );
                     })
-                    .filter((emp: any) => emp.siteId)
-                    .map((emp: any) => [emp.siteId, emp.siteName])
-                ).entries()
-              )
-                .sort((a, b) => a[1].localeCompare(b[1]))
-                .map(([siteId, siteName]) => (
-                  <option key={String(siteId)} value={String(siteId)}>
-                    {String(siteName)}
-                  </option>
-                ))}
-            </select>
+                  ) : (
+                    <div className="col-span-full py-20 text-center text-slate-300 italic uppercase font-black tracking-widest text-[10px]">
+                      ไม่พบข้อมูลพนักงาน
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* --- 4. Sticky Footer --- */}
+              <div className="p-4 lg:p-8 bg-white border-t border-slate-200 shadow-[0_-10px_40px_rgba(0,0,0,0.06)] fixed bottom-0 left-0 right-0 lg:relative z-[540]">
+                <div className="max-w-7xl mx-auto flex flex-col items-center gap-3 lg:gap-6">
+                  <div
+                    className={`px-6 py-2 rounded-full text-white text-[10px] font-black transition-all transform ${
+                      selectedEmployees.length > 0
+                        ? "bg-blue-600 scale-105 shadow-xl shadow-blue-200"
+                        : "bg-slate-300"
+                    }`}
+                  >
+                    เลือกแล้ว {selectedEmployees.length} ท่าน
+                  </div>
+
+                  <div className="flex gap-2 w-full">
+                    <button
+                      disabled={isProcessing}
+                      type="button"
+                      onClick={() => {
+                        setShowFilterModal(false);
+                        setSelectedEmployees([]);
+                      }}
+                      className="flex-1 py-3.5 lg:py-5 bg-red-50 text-red-500 rounded-2xl lg:rounded-[1.5rem] font-black uppercase text-[10px] lg:text-sm hover:bg-red-500 hover:text-white transition-all active:scale-95"
+                    >
+                      ยกเลิก
+                    </button>
+
+                    <button
+                      disabled={isProcessing || selectedEmployees.length === 0}
+                      type="button"
+                      onClick={handleGenerateReport}
+                      className={`flex-[2.5] py-3.5 lg:py-5 rounded-2xl lg:rounded-[1.5rem] font-black uppercase text-[10px] lg:text-sm tracking-widest shadow-2xl transition-all flex items-center justify-center gap-2 active:scale-95 ${
+                        selectedEmployees.length === 0
+                          ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                          : reportType === "overtime"
+                            ? "bg-orange-500 text-white hover:bg-orange-600 shadow-orange-200"
+                            : "bg-slate-900 text-white hover:bg-blue-600"
+                      }`}
+                    >
+                      {isProcessing ? "กำลังประมวลผล..." : "แสดงเอกสาร"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-
-          {(filterDepartment || filterSite || filterPosition) && (
-            <button
-              onClick={() => {
-                setFilterDepartment("");
-                setFilterSite("");
-                setFilterPosition("");
-              }}
-              className="w-full py-2 text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition-colors"
-            >
-              ล้างตัวกรองทั้งหมด
-            </button>
-          )}
-
-          <button
-            onClick={() => setIsMobileFilterOpen(false)}
-            className="lg:hidden w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-blue-100"
-          >
-            ตกลงและบันทึกฟิลเตอร์
-          </button>
         </div>
-      </div>
-
-      {/* --- 3. Right Side: Member Selection --- */}
-      <div className="flex-1 flex flex-col bg-slate-50/50 overflow-hidden">
-        <div className="p-4 lg:p-6 bg-white border-b border-slate-200 flex flex-col sm:flex-row gap-3 lg:gap-4 justify-between items-center">
-          <div className="relative w-full sm:max-w-md">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-              🔍
-            </span>
-            <input
-              type="text"
-              placeholder="ค้นหา..."
-              value={searchTerm}
-              className="w-full pl-11 pr-4 py-3 lg:py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 ring-blue-500/5 transition-all"
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <button
-            disabled={isProcessing}
-            onClick={() => {
-              const visibleIds =
-                filteredEmpSuggestions?.map((e: any) => e.id) || [];
-              if (selectedEmployees.length === visibleIds.length)
-                setSelectedEmployees([]);
-              else setSelectedEmployees(visibleIds);
+      )}
+      {/* --- 🖨️ MODAL: REPORT PREVIEW --- */}
+      {showReport && (
+        <div className="fixed inset-0 bg-slate-900/95 flex flex-col items-center z-[600] p-4 overflow-y-auto custom-scrollbar font-sans print:overflow-visible print:bg-white print:p-0 print:relative">
+          {/* สไตล์สำหรับคุมขนาด PDF/A4 ตอนสั่งพิมพ์ */}
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
+              @media print {
+                @page { 
+                  size: A4; 
+                  margin: 0; 
+                }
+                body { 
+                  -webkit-print-color-adjust: exact; 
+                }
+                #report-content {
+                  width: 210mm !important;
+                }
+                .page-break-after-always {
+                  page-break-after: always;
+                }
+              }
+              `,
             }}
-            className="w-full sm:w-auto whitespace-nowrap px-6 lg:px-8 py-3 lg:py-4 bg-white border border-slate-200 rounded-2xl text-[10px] lg:text-xs font-black text-slate-600 uppercase hover:bg-slate-900 hover:text-white shadow-sm transition-all active:scale-95"
-          >
-            {selectedEmployees.length ===
-            (filteredEmpSuggestions?.length || 0)
-              ? "ล้างการเลือก"
-              : "เลือกทั้งหมด"}
-          </button>
-        </div>
+          />
 
-        <div className="flex-1 overflow-y-auto p-3 lg:p-6 pb-40 lg:pb-6 relative">
-          <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-2 lg:gap-4">
-            {filteredEmpSuggestions?.length > 0 ? (
-              filteredEmpSuggestions.map((emp: any) => {
-                const isSelected = selectedEmployees.includes(emp.id);
-                const siteDisplayName =
-                  emp.siteName ||
-                  allSites.find(
-                    (s) => String(s.id) === String(emp.siteId)
-                  )?.name ||
-                  "ทั่วไป";
-                const posDisplayName =
-                  emp.position ||
-                  allPositions.find(
-                    (p) => String(p.id) === String(emp.positionId)
-                  )?.name ||
-                  "พนักงาน";
+          {/* --- Header Controller (ซ่อนเมื่อพิมพ์) --- */}
+          <div className="w-full max-w-[210mm] bg-white mb-4 p-4 rounded-2xl shadow-xl flex justify-between items-center print:hidden border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm ${exportFormat === "excel" ? "bg-emerald-500" : "bg-red-500"} text-white`}
+              >
+                {exportFormat === "excel" ? "📗" : "📕"}
+              </div>
+              <div>
+                <h2 className="font-bold text-lg text-slate-800 uppercase leading-none">
+                  {exportFormat === "excel"
+                    ? "เอกสารประเภท Excel"
+                    : "เอกสารประเภท PDF"}
+                </h2>
+                <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase">
+                  {reportType === "attendance"
+                    ? "รายงานการเข้างาน"
+                    : "รายงานการทำโอที (OT)"}{" "}
+                  • {Array.isArray(reportData) ? reportData.length : 0} รายการ
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                  จำนวนเอกสาร:{" "}
+                </span>
+                <span className="text-[11px] font-black text-blue-600">
+                  {reportType === "ot" ||
+                  reportType === "overtime" ||
+                  (Array.isArray(reportData) &&
+                    reportData[0]?.generatedType === "overtime")
+                    ? (() => {
+                        const safeData = Array.isArray(reportData)
+                          ? reportData
+                          : [];
+                        const userIds = [
+                          ...new Set(safeData.map((item: any) => item?.userId)),
+                        ];
+                        let totalPages = 0;
+                        userIds.forEach((id) => {
+                          const userRows = safeData.filter(
+                            (item: any) => item?.userId === id
+                          ).length;
+                          // ปรับ rowsPerPage เป็น 15 ให้สอดคล้องกับด้านล่าง
+                          totalPages += Math.ceil(userRows / 15);
+                        });
+                        return totalPages || 1;
+                      })()
+                    : Math.ceil(
+                        (Array.isArray(reportData) ? reportData.length : 0) / 15
+                      ) || 1}{" "}
+                  หน้า
+                </span>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() =>
+                    exportFormat === "pdf"
+                      ? window.print()
+                      : handleDownloadExcel(
+                          Array.isArray(reportData) ? reportData : []
+                        )
+                  }
+                  className={`px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase shadow-lg transition-all active:scale-95 text-white ${exportFormat === "excel" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-slate-900 hover:bg-blue-600"}`}
+                >
+                  {exportFormat === "pdf"
+                    ? "พิมพ์รายงาน / Save PDF"
+                    : "ดาวน์โหลด Excel"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowReport(false);
+                    setShowFilterModal(true);
+                    setIsMobileFilterOpen(false);
+                  }}
+                  className="bg-slate-100 hover:bg-red-50 hover:text-red-500 px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase transition-all text-slate-400"
+                >
+                  ย้อนกลับ
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            id="report-content"
+            className="w-full flex flex-col items-center gap-8 print:gap-0 print:block print:w-full"
+          >
+            {(() => {
+              let pages: any[] = [];
+              // ลดจำนวนแถวต่อหน้าลงเหลือ 15 เพื่อให้เนื้อหาขยับขึ้นและไม่ล้นหน้ากระดาษ
+              const rowsPerPage = 15;
+
+              const safeReportData = Array.isArray(reportData)
+                ? reportData
+                : [];
+              const safeLeaveData = Array.isArray(leaveData) ? leaveData : [];
+
+              const isOTReport =
+                reportType === "overtime" ||
+                reportType === "ot" ||
+                safeReportData[0]?.generatedType === "overtime";
+
+              if (isOTReport) {
+                const userIds = Array.from(
+                  new Set(safeReportData.map((item: any) => item?.userId))
+                );
+
+                userIds.forEach((id) => {
+                  const userData = safeReportData.filter(
+                    (item: any) => item?.userId === id
+                  );
+
+                  const totalForUser = userData.reduce(
+                    (sum, item) =>
+                      sum +
+                      (Number(item?.otHours) ||
+                        Number(item?.overtimeByRequest) ||
+                        0),
+                    0
+                  );
+                  const totalPagesForUser = Math.ceil(
+                    userData.length / rowsPerPage
+                  );
+                  const actualApprover = userData.find(
+                    (item: any) =>
+                      item?.approvedByName &&
+                      item.approvedByName !== "-" &&
+                      item.approvedByName !== ""
+                  )?.approvedByName;
+
+                  for (let i = 0; i < userData.length; i += rowsPerPage) {
+                    const isLastPageForUser =
+                      i + rowsPerPage >= userData.length;
+                    pages.push({
+                      items: userData.slice(i, i + rowsPerPage),
+                      totalOtMinutes: isLastPageForUser ? totalForUser : null,
+                      isLastPageForUser,
+                      currentUser: userData[0],
+                      currentPageForUser: Math.floor(i / rowsPerPage) + 1,
+                      totalPagesForUser,
+                      leaves: isLastPageForUser
+                        ? safeLeaveData.filter((l: any) => l.userId === id)
+                        : [],
+                    });
+                  }
+                });
+              } else {
+                for (let i = 0; i < safeReportData.length; i += rowsPerPage) {
+                  const isLastPage = i + rowsPerPage >= safeReportData.length;
+                  pages.push({
+                    items: safeReportData.slice(i, i + rowsPerPage),
+                    totalOtMinutes: null,
+                    isLastPageForUser: isLastPage,
+                    currentPageForUser: Math.floor(i / rowsPerPage) + 1,
+                    totalPagesForUser:
+                      Math.ceil(safeReportData.length / rowsPerPage) || 1,
+                    leaves: isLastPage ? safeLeaveData : [],
+                  });
+                }
+              }
+
+              return pages.map((pageObj: any, pageIndex: number) => {
+                const group = Array.isArray(pageObj.items) ? pageObj.items : [];
 
                 return (
                   <div
-                    key={emp.id}
-                    onClick={() => {
-                      if (isSelected)
-                        setSelectedEmployees(
-                          selectedEmployees.filter((id) => id !== emp.id)
-                        );
-                      else setSelectedEmployees([...selectedEmployees, emp.id]);
-                    }}
-                    className={`relative flex flex-col lg:flex-row items-center gap-2 lg:gap-4 p-3 lg:p-5 rounded-3xl lg:rounded-[2.2rem] border-2 transition-all cursor-pointer select-none ${
-                      isSelected
-                        ? "bg-blue-50 border-blue-500 shadow-lg shadow-blue-100 ring-2 ring-blue-500/10"
-                        : "bg-white border-slate-100 shadow-sm hover:border-blue-200"
-                    }`}
+                    key={pageIndex}
+                    className="bg-white w-full max-w-[210mm] min-h-[297mm] shadow-2xl flex flex-col p-12 print:p-8 print:m-0 print:shadow-none print:w-[210mm] print:min-h-[297mm] relative page-break-after-always overflow-hidden font-sans"
                   >
-                    {/* เอา Checkbox Input ออกแล้ว ใช้ Card State แทน */}
-                    <div className="w-10 h-10 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl overflow-hidden bg-blue-100 flex-shrink-0 border border-slate-100">
-                      {emp.avatarUrl ? (
-                        <img
-                          src={emp.avatarUrl}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-sm lg:text-xl font-black text-blue-600">
-                          {emp.firstName?.substring(0, 1) || "?"}
+                    {/* Header */}
+                    <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-start">
+                      <div>
+                        <h2 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
+                          {admin?.company || "COMPANY NAME"}
+                        </h2>
+                        <p className="text-slate-600 font-bold text-[12px] mt-1 uppercase">
+                          {!isOTReport
+                            ? "สรุปรายการการเข้างานพนักงาน"
+                            : `สรุปรายการการทำโอที (OT): ${group[0]?.firstName} ${group[0]?.lastName}`}
+                        </p>
+                        <p className="text-blue-600 font-bold text-[10px] mt-0.5">
+                          ประจำวันที่: {formattedStartDate} — {formattedEndDate}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] font-medium text-slate-400 leading-tight">
+                          พิมพ์เมื่อ: {reportDate} {reportTime} <br />
+                          Ref:{" "}
+                          {Math.random()
+                            .toString(36)
+                            .substring(2, 8)
+                            .toUpperCase()}
+                        </div>
+                        <div className="mt-2 text-[10px] font-bold text-slate-900 uppercase tracking-widest">
+                          หน้าที่ {pageObj.currentPageForUser} จาก{" "}
+                          {pageObj.totalPagesForUser}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Main Data Table */}
+                    <div className="flex-1">
+                      <table className="w-full text-left border-collapse border border-slate-300">
+                        <thead>
+                          <tr className="bg-slate-900 text-white">
+                            <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 w-24 text-center">
+                              วันที่
+                            </th>
+                            <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300">
+                              ชื่อ-นามสกุล / รหัส
+                            </th>
+                            {!isOTReport ? (
+                              <>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
+                                  กะงาน
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center">
+                                  จุดปฏิบัติงาน
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-32">
+                                  ลงเวลา
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-20">
+                                  สถานะ
+                                </th>
+                              </>
+                            ) : (
+                              <>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
+                                  เริ่ม (Time)
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
+                                  สิ้นสุด (Time)
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-24">
+                                  ชั่วโมงอนุมัติ
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-24">
+                                  สถานะ/เหตุผล
+                                </th>
+                              </>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {group.map((a: any, i: number) => (
+                            <tr key={i} className="text-[10px] leading-tight">
+                              <td className="px-3 py-2 text-center border border-slate-200">
+                                {a.date}
+                              </td>
+                              <td className="px-3 py-2 border border-slate-200 uppercase font-bold text-slate-900">
+                                {a.firstName} {a.lastName}
+                              </td>
+                              {!isOTReport ? (
+                                <>
+                                  <td className="px-3 py-2 text-center border border-slate-200">
+                                    {a.shiftStartTimeSnapshot?.substring(0, 5)}-
+                                    {a.shiftEndTimeSnapshot?.substring(0, 5)}
+                                  </td>
+                                  <td className="px-3 py-2 text-center border border-slate-200 truncate max-w-[150px]">
+                                    {a.siteSnapName || "-"}
+                                  </td>
+                                  <td className="px-3 py-2 text-center border border-slate-200 font-bold">
+                                    {a.checkIn?.substring(0, 5) || "--:--"} -{" "}
+                                    {a.checkOut?.substring(0, 5) || "--:--"}
+                                  </td>
+                                  <td className="px-3 py-2 text-right border border-slate-200 font-black">
+                                    {a.statusText}
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="px-3 py-2 text-center border border-slate-200">
+                                    {a.timeStart?.substring(0, 5) || "-"}
+                                  </td>
+                                  <td className="px-3 py-2 text-center border border-slate-200">
+                                    {a.timeEnd?.substring(0, 5) || "-"}
+                                  </td>
+                                  <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
+                                    {(() => {
+                                      const totalMinutes =
+                                        Number(a.otHours) ||
+                                        Number(a.overtimeByRequest) ||
+                                        0;
+                                      const h = Math.floor(totalMinutes / 60);
+                                      const m = totalMinutes % 60;
+                                      return `${h}.${m.toString().padStart(2, "0")}`;
+                                    })()}{" "}
+                                    ชม.
+                                  </td>
+                                  <td className="px-3 py-2 text-right border border-slate-200 truncate max-w-[120px]">
+                                    {a.otRemark ||
+                                      a.reason ||
+                                      a.otStatus ||
+                                      "-"}
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      {/* --- Leave Information Section --- */}
+                      {pageObj.leaves && pageObj.leaves.length > 0 && (
+                        <div className="mt-6">
+                          <div className="flex items-center gap-2 mb-2 border-l-4 border-red-500 pl-3">
+                            <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-wider">
+                              รายการข้อมูลการลาที่ได้รับการอนุมัติ (Leave Records)
+                            </h3>
+                          </div>
+                          <table className="w-full border-collapse border border-slate-300">
+                            <thead className="bg-slate-50">
+                              <tr className="text-[9px] uppercase text-slate-500">
+                                <th className="px-3 py-1.5 border border-slate-300 text-center w-40">
+                                  ช่วงวันที่ลา (เริ่ม - สิ้นสุด)
+                                </th>
+                                <th className="px-3 py-1.5 border border-slate-300">
+                                  ชื่อ-นามสกุล ผู้ลา
+                                </th>
+                                <th className="px-3 py-1.5 border border-slate-300 text-center w-20">
+                                  จำนวน (วัน)
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {pageObj.leaves.map((l: any, li: number) => (
+                                <tr
+                                  key={li}
+                                  className="text-[9px] border-b border-slate-200"
+                                >
+                                  <td className="px-3 py-1.5 border border-slate-200 text-center font-medium">
+                                    {l.startDate} ถึง {l.endDate}
+                                  </td>
+                                  <td className="px-3 py-1.5 border border-slate-200 font-bold text-slate-700">
+                                    {l.fullName}
+                                  </td>
+                                  <td className="px-3 py-1.5 border border-slate-200 text-center font-bold text-red-600">
+                                    {l.totalDays}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       )}
                     </div>
 
-                    <div className="min-w-0 flex-1 text-center lg:text-left">
-                      <p className={`text-[10px] lg:text-sm font-black uppercase truncate ${isSelected ? 'text-blue-700' : 'text-slate-900'}`}>
-                        {emp.firstName}
-                      </p>
-                      <div className="hidden lg:flex flex-col gap-0.5 mt-1">
-                        <p className="text-[9px] font-bold text-blue-600 uppercase tracking-tight truncate italic">
-                          📍 {siteDisplayName}
-                        </p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter truncate">
-                          💼 {posDisplayName}
-                        </p>
-                      </div>
-                    </div>
+                    {/* --- Footer (ส่วนลายเซ็นและสรุปผล) --- */}
+                    {pageObj.isLastPageForUser && (
+                      <div className="mt-4 border-t-2 border-slate-100 pt-4">
+                        <div className="flex justify-between items-end">
+                          {/* ฝั่งซ้าย: สรุปตัวเลข */}
+                          <div className="space-y-1">
+                            {isOTReport && (
+                              <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
+                                <p className="text-[10px] font-bold text-blue-600 uppercase">
+                                  รวมเวลาโอทีทั้งหมด (สุทธิ)
+                                </p>
+                                <p className="text-xl font-black text-blue-900">
+                                  {(() => {
+                                    const totalMinutes =
+                                      Number(pageObj.totalOtMinutes) || 0;
+                                    const h = Math.floor(totalMinutes / 60);
+                                    const m = totalMinutes % 60;
+                                    return `${h}.${m.toString().padStart(2, "0")}`;
+                                  })()}{" "}
+                                  <span className="text-xs font-bold">
+                                    ชั่วโมง
+                                  </span>
+                                </p>
+                              </div>
+                            )}
+                            <p className="text-[9px] text-slate-400 italic">
+                              * เอกสารนี้จัดทำโดยระบบอัตโนมัติ
+                              ข้อมูลมีความถูกต้องตามการบันทึกในระบบ
+                            </p>
+                          </div>
 
-                    {/* เพิ่ม Indicator เล็กๆ เมื่อเลือก (Optional: ถ้าอยากให้มีจุดสังเกต) */}
-                    {isSelected && (
-                      <div className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full animate-pulse lg:hidden"></div>
+                          {/* ฝั่งขวา: ลายเซ็น */}
+                          <div className="flex gap-8">
+                            <div className="text-center w-40">
+                              <div className="h-10 border-b border-slate-300 mb-2"></div>
+                              <p className="text-[10px] font-bold text-slate-900 uppercase">
+                                ผู้จัดทำ/พนักงาน
+                              </p>
+                              <p className="text-[9px] text-slate-400">
+                                (...................................................)
+                              </p>
+                            </div>
+                            <div className="text-center w-40">
+                              <div className="h-10 border-b border-slate-300 mb-2 flex items-end justify-center">
+                                <span className="text-[10px] font-black text-slate-800 mb-1 uppercase italic">
+                                  {pageObj.approvedByName}
+                                </span>
+                              </div>
+                              <p className="text-[10px] font-bold text-slate-900 uppercase">
+                                ผู้อนุมัติ (Approver)
+                              </p>
+                              <p className="text-[9px] text-slate-400">
+                                วันที่: ...... / ...... / ......
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
                 );
-              })
-            ) : (
-              <div className="col-span-full py-20 text-center text-slate-300 italic uppercase font-black tracking-widest text-[10px]">
-                ไม่พบข้อมูลพนักงาน
-              </div>
-            )}
+              });
+            })()}
           </div>
         </div>
-
-        {/* --- 4. Sticky Footer --- */}
-        <div className="p-4 lg:p-8 bg-white border-t border-slate-200 shadow-[0_-10px_40px_rgba(0,0,0,0.06)] fixed bottom-0 left-0 right-0 lg:relative z-[540]">
-          <div className="max-w-7xl mx-auto flex flex-col items-center gap-3 lg:gap-6">
-            <div
-              className={`px-6 py-2 rounded-full text-white text-[10px] font-black transition-all transform ${
-                selectedEmployees.length > 0
-                  ? "bg-blue-600 scale-105 shadow-xl shadow-blue-200"
-                  : "bg-slate-300"
-              }`}
-            >
-              เลือกแล้ว {selectedEmployees.length} ท่าน
-            </div>
-
-            <div className="flex gap-2 w-full">
-              <button
-                disabled={isProcessing}
-                type="button"
-                onClick={() => {
-                  setShowFilterModal(false);
-                  setSelectedEmployees([]);
-                }}
-                className="flex-1 py-3.5 lg:py-5 bg-red-50 text-red-500 rounded-2xl lg:rounded-[1.5rem] font-black uppercase text-[10px] lg:text-sm hover:bg-red-500 hover:text-white transition-all active:scale-95"
-              >
-                ยกเลิก
-              </button>
-
-              <button
-                disabled={isProcessing || selectedEmployees.length === 0}
-                type="button"
-                onClick={handleGenerateReport}
-                className={`flex-[2.5] py-3.5 lg:py-5 rounded-2xl lg:rounded-[1.5rem] font-black uppercase text-[10px] lg:text-sm tracking-widest shadow-2xl transition-all flex items-center justify-center gap-2 active:scale-95 ${
-                  selectedEmployees.length === 0
-                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                    : "bg-slate-900 text-white hover:bg-blue-600"
-                }`}
-              >
-                {isProcessing ? "กำลังประมวลผล..." : "แสดงเอกสาร"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-      {/* --- 🖨️ MODAL: REPORT PREVIEW --- */}
-      {showReport && (
-  <div className="fixed inset-0 bg-slate-900/95 flex flex-col items-center z-[600] p-4 overflow-y-auto custom-scrollbar font-sans">
-    
-    {/* --- Header Controller (ซ่อนเมื่อพิมพ์) --- */}
-    <div className="w-full max-w-[210mm] bg-white mb-4 p-4 rounded-2xl shadow-xl flex justify-between items-center print:hidden border-b border-slate-100">
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm ${exportFormat === "excel" ? "bg-emerald-500" : "bg-red-500"} text-white`}>
-          {exportFormat === "excel" ? "📗" : "📕"}
-        </div>
-        <div>
-          <h2 className="font-bold text-lg text-slate-800 uppercase leading-none">
-            {exportFormat === "excel" ? "เอกสารประเภท Excel" : "เอกสารประเภท PDF"}
-          </h2>
-          <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase text-slate-400">
-            {reportType === "attendance" ? "รายงานการเข้างาน" : "รายงานการทำโอที (OT)"} • {reportData.length} รายการ
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-           <span className="text-[10px] font-bold text-slate-500 uppercase">จำนวนเอกสาร: </span>
-           <span className="text-[11px] font-black text-blue-600">
-             {/* คำนวณจำนวนหน้าทั้งหมดที่จะเกิดขึ้น */}
-             {reportType === "ot" 
-                ? [...new Set(reportData.map((item: any) => item.userId))].length 
-                : Math.ceil(reportData.length / 25)} หน้า
-           </span>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => exportFormat === "pdf" ? window.print() : handleDownloadExcel(reportData)}
-            className={`px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase shadow-lg transition-all active:scale-95 text-white ${exportFormat === "excel" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-slate-900 hover:bg-blue-600"}`}
-          >
-            {exportFormat === "pdf" ? "พิมพ์รายงาน / Save PDF" : "ด่วน์โหลด Excel"}
-          </button>
-          <button
-            onClick={() => { setShowReport(false); setShowFilterModal(true); }}
-            className="bg-slate-100 hover:bg-red-50 hover:text-red-500 px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase transition-all text-slate-400"
-          >
-            ย้อนกลับ
-          </button>
-        </div>
-      </div>
-    </div>
-
-    {/* --- Render Area --- */}
-    <div id="report-content" className="w-full flex flex-col items-center gap-8 print:gap-0">
-      {(() => {
-        // Logic การแบ่งกลุ่มข้อมูล (Pagination Logic)
-        let pages = [];
-        if (reportType === "ot") {
-          // กรณี OT: แยกกลุ่มตาม User (1 คน 1 ใบ)
-          const userIds = Array.from(new Set(reportData.map((item: any) => item.userId)));
-          pages = userIds.map(id => reportData.filter((item: any) => item.userId === id));
-        } else {
-          // กรณี Attendance: หั่นข้อมูลหน้าละ 25 แถว (เพื่อให้พอดี A4)
-          const rowsPerPage = 25;
-          for (let i = 0; i < reportData.length; i += rowsPerPage) {
-            pages.push(reportData.slice(i, i + rowsPerPage));
-          }
-        }
-
-        return pages.map((group: any[], pageIndex: number) => {
-          const totalOtMinutes = group.reduce((sum, item) => sum + (Number(item.overtimeApproved) || 0), 0);
-          
-          return (
-            <div
-              key={pageIndex}
-              className="bg-white w-full max-w-[210mm] min-h-[297mm] shadow-2xl flex flex-col p-12 print:p-8 print:m-0 relative page-break-after-always overflow-hidden"
-            >
-              {/* Header */}
-              <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
-                    {admin.company || "COMPANY NAME"}
-                  </h2>
-                  <p className="text-slate-600 font-bold text-[12px] mt-1 uppercase">
-                    {reportType === "attendance" ? "สรุปรายการการเข้างานพนักงาน" : "สรุปรายการการทำโอที (OT) พนักงาน"}
-                  </p>
-                  <p className="text-blue-600 font-bold text-[10px] mt-0.5">
-                    ประจำวันที่: {formattedStartDate} — {formattedEndDate}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-[9px] font-medium text-slate-400 leading-tight">
-                    พิมพ์เมื่อ: {reportDate} {reportTime} <br />
-                    Ref: {Math.random().toString(36).substring(2, 8).toUpperCase()}
-                  </div>
-                  <div className="mt-2 text-[10px] font-bold text-slate-900 uppercase tracking-widest">
-                    หน้าที่ {pageIndex + 1} จาก {pages.length}
-                  </div>
-                </div>
-              </div>
-
-              {/* Table */}
-              <div className="flex-1 overflow-hidden">
-                <table className="w-full text-left border-collapse border border-slate-300">
-                  <thead>
-                    <tr className="bg-slate-900 text-white">
-                      <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 w-24 text-center">วันที่</th>
-                      <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300">ชื่อ-นามสกุล / รหัส</th>
-                      {reportType === "attendance" ? (
-                        <>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">กะงาน</th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center">จุดปฏิบัติงาน</th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-32">ลงเวลา</th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-20">สถานะ</th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">ก่อนกะ</th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">หลังกะ</th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-24">รวมอนุมัติ</th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-20">ผู้อนุมัติ</th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {group.map((a: any, i: number) => (
-                      <tr key={i} className="text-[10px] leading-tight">
-                        <td className="px-3 py-2 text-center border border-slate-200">{a.date}</td>
-                        <td className="px-3 py-2 border border-slate-200 uppercase font-bold text-slate-900">
-                          {a.firstName} {a.lastName} <br/>
-                          <span className="text-[8px] text-slate-400 font-medium">{a.empCode}</span>
-                        </td>
-                        {reportType === "attendance" ? (
-                          <>
-                            <td className="px-3 py-2 text-center border border-slate-200">{a.shiftStartTimeSnapshot?.substring(0, 5)} - {a.shiftEndTimeSnapshot?.substring(0, 5)}</td>
-                            <td className="px-3 py-2 text-center border border-slate-200 text-[9px]">{a.siteSnapName || a.siteName}</td>
-                            <td className="px-3 py-2 text-center border border-slate-200 font-bold">
-                               <span className={a.isLate ? "text-red-500" : "text-emerald-600"}>{a.checkIn?.substring(0, 5) || "--:--"}</span>
-                               <span className="mx-1 text-slate-300">-</span>
-                               <span>{a.checkOut?.substring(0, 5) || "--:--"}</span>
-                            </td>
-                            <td className="px-3 py-2 text-right border border-slate-200 font-bold uppercase text-[8px]">
-                              {a.checkIn && a.checkOut ? "ลงชื่อครบ" : "ไม่ได้ลงชื่อออก"}
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="px-3 py-2 text-center border border-slate-200">{a.overtimeBefore || 0}</td>
-                            <td className="px-3 py-2 text-center border border-slate-200">{a.overtimeAfter || 0}</td>
-                            <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
-                              {Math.floor(a.overtimeApproved / 60)}.{ (a.overtimeApproved % 60).toString().padStart(2, '0') } ชม.
-                            </td>
-                            <td className="px-3 py-2 text-right border border-slate-200 text-[8px] font-bold">{a.approvedByName || "-"}</td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* OT Summary Area - แสดงเฉพาะ OT เมื่อเป็นหน้าสุดท้ายของพนักงานคนนั้น */}
-              {reportType === "ot" && (
-                <div className="mt-4 bg-slate-50 p-4 border-2 border-slate-900 rounded-lg flex justify-between items-center">
-                  <span className="font-bold text-[11px] uppercase tracking-wider">Total Certified Overtime:</span>
-                  <span className="text-xl font-black text-blue-700">
-                    {Math.floor(totalOtMinutes / 60)}.{ (totalOtMinutes % 60).toString().padStart(2, '0') } <span className="text-[10px]">HRS</span>
-                  </span>
-                </div>
-              )}
-
-              {/* Signatures */}
-              <div className="mt-10 grid grid-cols-2 gap-12 pb-6 px-4">
-                <div className="text-center border-t border-slate-300 pt-3">
-                  <p className="text-[10px] font-bold text-slate-900 uppercase">(....................................................)</p>
-                  <p className="text-[8px] font-medium text-slate-400 mt-1 uppercase italic">
-                    {reportType === "attendance" ? "Data Checker" : "OT Requester"}
-                  </p>
-                </div>
-                <div className="text-center border-t border-slate-300 pt-3">
-                  <p className="text-[10px] font-bold text-slate-900 uppercase">(....................................................)</p>
-                  <p className="text-[8px] font-medium text-slate-400 mt-1 uppercase italic">
-                    {reportType === "attendance" ? "Authorized Signature" : "Final Approver"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          );
-        });
-      })()}
-    </div>
-
-    <style
-      dangerouslySetInnerHTML={{
-        __html: `
-          @media print {
-            @page { size: A4 portrait; margin: 0; }
-            body { background: white !important; margin: 0; padding: 0; }
-            .print\\:hidden { display: none !important; }
-            #report-content { width: 210mm !important; gap: 0 !important; }
-            .page-break-after-always { page-break-after: always !important; box-shadow: none !important; }
-          }
-          .page-break-after-always { page-break-after: always; }
-        `,
-      }}
-    />
-  </div>
-)}
+      )}
       {/* --- 🖨️ MODAL: EDIT SITE & POSITION --- */}
       {showManageModal && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[600] flex items-center justify-center p-4">
