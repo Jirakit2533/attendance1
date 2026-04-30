@@ -1,5 +1,6 @@
 import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer, jsonb, doublePrecision} from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
+
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
 export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected", "expired"]);
 export const workingStatusEnum = pgEnum("working_status", ["normal", "extra"]);
@@ -69,11 +70,11 @@ export const departmentsTable = pgTable("departments", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull(),
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
-  createdBy: uuid("created_by_id").references(() => usersTable.id),
+  createdBy: uuid("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
-  updateBy: uuid("update_by_id").references(() => usersTable.id),
+  updateBy: uuid("update_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`), 
-  deletedBy: uuid("deleted_by_id").references(() => usersTable.id),
+  deletedBy: uuid("deleted_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
@@ -84,9 +85,9 @@ export const sitesTable = pgTable("sites", {
   coordinates: varchar("coordinates", { length: 255 }),
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
   departmentId: uuid("department_id").references(() => departmentsTable.id),
-  createdBy: uuid("created_by_id").references(() => usersTable.id),
+  createdBy: uuid("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
-  updateBy: uuid("update_by_id").references(() => usersTable.id),
+  updateBy: uuid("update_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`), 
 });
 
@@ -94,16 +95,16 @@ export const positionsTable = pgTable("positions", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull(),
   company_id: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
-  createdBy: uuid("created_by_id").references(() => usersTable.id), 
+  createdBy: uuid("created_by_id").references(() => usersTable.id, { onDelete: "set null" }), 
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
 });
 
 export const shiftsTable = pgTable("shifts", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => usersTable.id),
-  startTime: time("start_time").notNull(), // 08:00:00
-  endTime: time("end_time").notNull(),     // 17:00:00
-  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),          // แยกตามบริษัท
+  userId: uuid("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
+  startTime: time("start_time").notNull(), 
+  endTime: time("end_time").notNull(),     
+  companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),          
   siteId: uuid("site_id").references(() => sitesTable.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -111,12 +112,12 @@ export const shiftsTable = pgTable("shifts", {
 
 export const overtimeTable = pgTable("overtime", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => usersTable.id),
+  userId: uuid("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   userName: varchar("user_name", { length: 255 }).notNull(),
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
   shiftId: uuid("shift_id").references(() => shiftsTable.id),
-  attendanceId: uuid("attendance_id").references(() => attendanceTable.id).unique(), // เชื่อมกับบันทึกเวลาวันนั้น
-  status: otStatusEnum("status").default("pending").notNull(), // สถานะ OT: pending, approved, rejected
+  attendanceId: uuid("attendance_id").references(() => attendanceTable.id).unique(), 
+  status: otStatusEnum("status").default("pending").notNull(), 
   date: date("date").notNull(),
   overtimeBefore: integer("overtime_before").notNull().default(0),
   overtimeAfter: integer("overtime_after").notNull().default(0),
@@ -127,7 +128,7 @@ export const overtimeTable = pgTable("overtime", {
 
 export const overtimeRequestsTable = pgTable("overtime_requests", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => usersTable.id),
+  userId: uuid("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   userName: varchar("user_name", { length: 255 }).notNull(),
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
   departmentId: uuid("department_id").references(() => departmentsTable.id),
@@ -142,13 +143,13 @@ export const overtimeRequestsTable = pgTable("overtime_requests", {
   remarks: text("remarks"),
   status: otStatusEnum("status").default("pending").notNull(),
   approvedAt: timestamp("approved_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
-  approvedBy: uuid("approved_by").references(() => usersTable.id),
+  approvedBy: uuid("approved_by").references(() => usersTable.id, { onDelete: "set null" }),
   rejectedAt: timestamp("rejected_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
-  rejectedBy: uuid("rejected_by").references(() => usersTable.id),
+  rejectedBy: uuid("rejected_by").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
-  createdBy: uuid("created_by").references(() => usersTable.id),
+  createdBy: uuid("created_by").references(() => usersTable.id, { onDelete: "set null" }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  deletedBy: uuid("deleted_by").references(() => usersTable.id),
+  deletedBy: uuid("deleted_by").references(() => usersTable.id, { onDelete: "set null" }),
 })
 
 export const temporaryShiftsTable = pgTable("temporary_shifts", {
@@ -162,7 +163,7 @@ export const temporaryShiftsTable = pgTable("temporary_shifts", {
   status: varchar("status", { length: 20 }).default("pending").notNull(), 
   overtimeId: uuid("overtime_id").references(() => overtimeTable.id),
   remark: text("remark"),
-  createdBy: uuid("created_by_id").references(() => usersTable.id),
+  createdBy: uuid("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`),
 });
 
@@ -180,17 +181,17 @@ export const usersTable = pgTable("users", {
   site_id: uuid("site_id").references(() => sitesTable.id, { onDelete: "set null" }),
   avatarUrl: text("avatar_url"), 
   avatarId: text("avatar_id"),
-  createdBy: uuid("created_by_id").references(() => usersTable.id),
+  createdBy: uuid("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
-  updateBy: uuid("update_by_id").references(() => usersTable.id),
+  updateBy: uuid("update_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`), 
-  deletedBy: uuid("deleted_by_id").references(() => usersTable.id),
+  deletedBy: uuid("deleted_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export const attendanceTable = pgTable("attendance", {
   id: uuid("id").primaryKey().defaultRandom(),
-  user_id: uuid("user_id").references(() => usersTable.id),
+  user_id: uuid("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   department_id: uuid("department_id").references(() => departmentsTable.id),
   shift_id: uuid("shift_id").references(() => shiftsTable.id),
   site_id: uuid("site_id").references(() => sitesTable.id),
@@ -210,11 +211,11 @@ export const attendanceTable = pgTable("attendance", {
   imageOut: text("image_out"),
   imageOutId: text("image_out_id"),
   locationOut: varchar("location_out", { length: 255 }),
-  isLate: integer("is_late").default(0),      // 0 = ปกติ, 1 = สาย
-  isEarlyExit: text("is_early_exit", { length: 255 }), // 0 = ปกติ, 1 = ออกสาย
-  isOffsiteIn: text("is_offsite_in", { length: 255 }), // 0 = ปกติ, 1 = ออกไซต์
+  isLate: integer("is_late").default(0),      
+  isEarlyExit: text("is_early_exit", { length: 255 }), 
+  isOffsiteIn: text("is_offsite_in", { length: 255 }), 
   isOffsiteInCoordinates: text("is_offsite_in_coordinates", { length: 255 }), 
-  isOffsiteOut: text("is_offsite_out", { length: 255 }), // 0 = ปกติ, 1 = ออกไซต์
+  isOffsiteOut: text("is_offsite_out", { length: 255 }), 
   isOffsiteOutCoordinates: text("is_offsite_out_coordinates", { length: 255 }), 
   workingStatusEnum: workingStatusEnum("working_status").default("normal"),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
@@ -223,7 +224,7 @@ export const attendanceTable = pgTable("attendance", {
 
 export const leaveTable = pgTable("leave", {
   id: uuid("id").primaryKey().defaultRandom(),
-  user_id: uuid("user_id").references(() => usersTable.id),
+  user_id: uuid("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   department_id: uuid("department_id").references(() => departmentsTable.id),
   site_id: uuid("site_id").references(() => sitesTable.id, { onDelete: "cascade" }),
   type: varchar("type", { length: 255 }).notNull(),
@@ -234,9 +235,9 @@ export const leaveTable = pgTable("leave", {
   reason: text("reason").notNull(),
   totalHours: doublePrecision("total_hours").notNull().default(0),
   status: leaveStatusEnum("status").notNull().default("pending"),
-  approvedBy: uuid("approved_by_id").references(() => usersTable.id),
+  approvedBy: uuid("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   approvedAt: timestamp("approved_at", { withTimezone: true }), 
-  rejectedBy: uuid("rejected_by_id").references(() => usersTable.id),
+  rejectedBy: uuid("rejected_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   rejectedAt: timestamp("rejected_at", { withTimezone: true }), 
   remark: text("remark"),
   fileUrl: text("file_url"), 
@@ -274,7 +275,7 @@ export const automationLogTable = pgTable("automation_logs", {
   deletedCount: integer("deleted_count").default(0).notNull(), 
   status: varchar("status", { length: 50 }).default("success").notNull(), 
   retryCount: integer("retry_count").default(0).notNull(),
-  details: jsonb("details"), // เก็บข้อมูลดิบอื่นๆ เช่น JSON payload
+  details: jsonb("details"),
 });
 
 export const usersRelations = relations(usersTable, ({ one, many }) => ({
@@ -304,7 +305,6 @@ export const usersRelations = relations(usersTable, ({ one, many }) => ({
   }),
 }));
 
-// 2. Company Relations
 export const companyRelations = relations(companyTable, ({ many }) => ({
   admins: many(adminsTable),
   departments: many(departmentsTable),
@@ -313,4 +313,3 @@ export const companyRelations = relations(companyTable, ({ many }) => ({
   positions: many(positionsTable),
   overtimeRequests: many(overtimeRequestsTable),
 }));
-
