@@ -180,6 +180,7 @@ export const usersTable = pgTable("users", {
   site_id: uuid("site_id").references(() => sitesTable.id, { onDelete: "set null" }),
   avatarUrl: text("avatar_url"), 
   avatarId: text("avatar_id"),
+  favoriteMusic: text("favorite_music", { length: 255 }),
   createdBy: uuid("created_by_id").references(() => usersTable.id),
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
   updateBy: uuid("update_by_id").references(() => usersTable.id),

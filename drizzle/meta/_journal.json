@@ -190,6 +190,13 @@
       "when": 1776144218230,
       "tag": "0026_previous_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1777475923579,
+      "tag": "0027_bright_madame_hydra",
+      "breakpoints": true
     }
   ]
 }

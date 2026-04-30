@@ -13,9 +13,9 @@ import {
   handleRemarkChangeAction,
   saveStaffAction,
   deleteStaffAction,
-  deleteSiteAction, // ✅ เพิ่มอันนี้
-  deletePositionAction, // ✅ เพิ่มอันนี้ (สำหรับปุ่มลบตำแหน่ง)
-  updateSiteAction, // ✅ เพิ่มอันนี้ (สำหรับปุ่มแก้ไขไซต์)
+  deleteSiteAction, 
+  deletePositionAction, 
+  updateSiteAction, 
   updatePositionAction,
   updateAdminProfileAction,
   updateCompanyAction,
@@ -123,7 +123,7 @@ export default function AdminClientPage({
   const [coords, setCoords] = useState("");
   const [isLocating, setIsLocating] = useState(false);
 
-  // --- State สำหรับ Company Profile ---
+  // State สำหรับ Company Profile 
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
   const [companyLogoPreview, setCompanyLogoPreview] = useState<string | null>(
@@ -164,7 +164,7 @@ export default function AdminClientPage({
   const [editingPos, setEditingPos] = useState<any>(null);
   const [selectedRole, setSelectedRole] = useState("employee"); // ใช้ในหน้า Register เพื่อเช็คสิทธิ์ Leader
 
-  // --- 📊 1. [STATE] ข้อมูลพื้นฐานสำหรับ Report ---
+  //  1. [STATE] ข้อมูลพื้นฐานสำหรับ Report
   const [showFilterModal, setShowFilterModal] = useState(false); // เปิด/ปิดหน้าเลือกพนักงาน
   const [showReport, setShowReport] = useState(false); // เปิด/ปิดหน้าแสดงตัวอย่างรายงาน
   const [reportData, setReportData] = useState<any[]>([]); // ถังเก็บข้อมูลที่จะโชว์ในตารางรายงาน
@@ -176,7 +176,7 @@ export default function AdminClientPage({
   const [isUpdating, setIsUpdating] = useState(false);
   const [otRemarks, setOtRemarks] = useState<Record<string, string>>({});
 
-  // --- 📅 2. [STATE] เงื่อนไขการกรอง (Filters) ---
+  // [STATE] เงื่อนไขการกรอง (Filters) 
   const [startDate, setStartDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -189,9 +189,7 @@ export default function AdminClientPage({
   const [searchTerm, setSearchTerm] = useState(""); // ช่องค้นหาชื่อพนักงานใน Modal
   const [selectedEmployees, setSelectedEmployees] = useState<any[]>([]); // รายชื่อพนักงานที่ถูกติ๊กเลือก
   const [exportFormat, setExportFormat] = useState("excel"); // รูปแบบไฟล์ที่จะโหลด ('excel' | 'pdf')
-  const [reportType, setReportType] = useState<"attendance" | "overtime">(
-    "attendance"
-  );
+  const [reportType, setReportType] = useState<"attendance" | "overtime">( "attendance" );
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -5075,11 +5073,11 @@ export default function AdminClientPage({
       )}
       {/* --- 🖨️ MODAL: REPORT PREVIEW --- */}
       {showReport && (
-  <div className="fixed inset-0 bg-slate-900/95 flex flex-col items-center z-[600] p-4 overflow-y-auto custom-scrollbar font-sans print:overflow-visible print:bg-white print:p-0 print:relative">
-    {/* สไตล์สำหรับคุมขนาด PDF/A4 ตอนสั่งพิมพ์ */}
-    <style
-      dangerouslySetInnerHTML={{
-        __html: `
+        <div className="fixed inset-0 bg-slate-900/95 flex flex-col items-center z-[600] p-4 overflow-y-auto custom-scrollbar font-sans print:overflow-visible print:bg-white print:p-0 print:relative">
+          {/* สไตล์สำหรับคุมขนาด PDF/A4 ตอนสั่งพิมพ์ */}
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
         @media print {
           @page { 
             size: A4; 
@@ -5097,418 +5095,423 @@ export default function AdminClientPage({
           }
         }
         `,
-      }}
-    />
-
-    {/* --- Header Controller (ซ่อนเมื่อพิมพ์) --- */}
-    <div className="w-full max-w-[210mm] bg-white mb-4 p-4 rounded-2xl shadow-xl flex justify-between items-center print:hidden border-b border-slate-100">
-      <div className="flex items-center gap-3">
-        <div
-          className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm ${exportFormat === "excel" ? "bg-emerald-500" : "bg-red-500"} text-white`}
-        >
-          {exportFormat === "excel" ? "📗" : "📕"}
-        </div>
-        <div>
-          <h2 className="font-bold text-lg text-slate-800 uppercase leading-none">
-            {exportFormat === "excel"
-              ? "เอกสารประเภท Excel"
-              : "เอกสารประเภท PDF"}
-          </h2>
-          <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase">
-            {reportType === "attendance"
-              ? "รายงานการเข้างาน"
-              : "รายงานการทำโอที (OT)"}{" "}
-            • {Array.isArray(reportData) ? reportData.length : 0} รายการ
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-          <span className="text-[10px] font-bold text-slate-500 uppercase">
-            จำนวนเอกสาร:{" "}
-          </span>
-          <span className="text-[11px] font-black text-blue-600">
-            {reportType === "ot" ||
-            reportType === "overtime" ||
-            (Array.isArray(reportData) &&
-              reportData[0]?.generatedType === "overtime")
-              ? (() => {
-                  const safeData = Array.isArray(reportData)
-                    ? reportData
-                    : [];
-                  const userIds = [
-                    ...new Set(safeData.map((item: any) => item?.userId)),
-                  ];
-                  let totalPages = 0;
-                  userIds.forEach((id) => {
-                    const userRows = safeData.filter(
-                      (item: any) => item?.userId === id
-                    ).length;
-                    totalPages += Math.ceil(userRows / 15);
-                  });
-                  return totalPages || 1;
-                })()
-              : Math.ceil(
-                  (Array.isArray(reportData) ? reportData.length : 0) / 15
-                ) || 1}{" "}
-            หน้า
-          </span>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() =>
-              exportFormat === "pdf"
-                ? window.print()
-                : handleDownloadExcel(
-                    Array.isArray(reportData) ? reportData : []
-                  )
-            }
-            className={`px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase shadow-lg transition-all active:scale-95 text-white ${exportFormat === "excel" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-slate-900 hover:bg-blue-600"}`}
-          >
-            {exportFormat === "pdf"
-              ? "พิมพ์รายงาน / Save PDF"
-              : "ดาวน์โหลด Excel"}
-          </button>
-          <button
-            onClick={() => {
-              setShowReport(false);
-              setShowFilterModal(true);
-              setIsMobileFilterOpen(false);
             }}
-            className="bg-slate-100 hover:bg-red-50 hover:text-red-500 px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase transition-all text-slate-400"
-          >
-            ย้อนกลับ
-          </button>
-        </div>
-      </div>
-    </div>
+          />
 
-    <div
-      id="report-content"
-      className="w-full flex flex-col items-center gap-8 print:gap-0 print:block print:w-full"
-    >
-      {(() => {
-        let pages: any[] = [];
-        const rowsPerPage = 15;
-
-        const safeReportData = Array.isArray(reportData)
-          ? reportData
-          : [];
-        const safeLeaveData = Array.isArray(leaveData) ? leaveData : [];
-
-        const isOTReport =
-          reportType === "overtime" ||
-          reportType === "ot" ||
-          safeReportData[0]?.generatedType === "overtime";
-
-        if (isOTReport) {
-          const userIds = Array.from(
-            new Set(safeReportData.map((item: any) => item?.userId))
-          );
-
-          userIds.forEach((id) => {
-            const userData = safeReportData.filter(
-              (item: any) => item?.userId === id
-            );
-
-            const totalForUser = userData.reduce(
-              (sum, item) =>
-                sum +
-                (Number(item?.otHours) ||
-                  Number(item?.overtimeByRequest) ||
-                  0),
-              0
-            );
-            const totalPagesForUser = Math.ceil(
-              userData.length / rowsPerPage
-            );
-
-            for (let i = 0; i < userData.length; i += rowsPerPage) {
-              const isLastPageForUser =
-                i + rowsPerPage >= userData.length;
-              pages.push({
-                items: userData.slice(i, i + rowsPerPage),
-                totalOtMinutes: isLastPageForUser ? totalForUser : null,
-                isLastPageForUser,
-                currentUser: userData[0],
-                currentPageForUser: Math.floor(i / rowsPerPage) + 1,
-                totalPagesForUser,
-                leaves: isLastPageForUser
-                  ? safeLeaveData.filter((l: any) => l.userId === id)
-                  : [],
-              });
-            }
-          });
-        } else {
-          for (let i = 0; i < safeReportData.length; i += rowsPerPage) {
-            const isLastPage = i + rowsPerPage >= safeReportData.length;
-            pages.push({
-              items: safeReportData.slice(i, i + rowsPerPage),
-              totalOtMinutes: null,
-              isLastPageForUser: isLastPage,
-              currentPageForUser: Math.floor(i / rowsPerPage) + 1,
-              totalPagesForUser:
-                Math.ceil(safeReportData.length / rowsPerPage) || 1,
-              leaves: isLastPage ? safeLeaveData : [],
-            });
-          }
-        }
-
-        return pages.map((pageObj: any, pageIndex: number) => {
-          const group = Array.isArray(pageObj.items) ? pageObj.items : [];
-
-          return (
-            <div
-              key={pageIndex}
-              className="bg-white w-full max-w-[210mm] min-h-[297mm] shadow-2xl flex flex-col p-12 print:p-10 print:m-0 print:shadow-none print:w-[210mm] print:min-h-[297mm] relative page-break-after-always overflow-hidden font-sans"
-            >
-              {/* Header */}
-              <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
-                    {admin?.company || "COMPANY NAME"}
-                  </h2>
-                  <p className="text-slate-600 font-bold text-[12px] mt-1 uppercase">
-                    {!isOTReport
-                      ? "สรุปรายการการเข้างานพนักงาน"
-                      : `สรุปรายการการทำโอที (OT): ${group[0]?.firstName} ${group[0]?.lastName}`}
-                  </p>
-                  <p className="text-blue-600 font-bold text-[10px] mt-0.5">
-                    ประจำวันที่: {formattedStartDate} — {formattedEndDate}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-[9px] font-medium text-slate-400 leading-tight">
-                    พิมพ์เมื่อ: {reportDate} {reportTime} <br />
-                    Ref:{" "}
-                    {Math.random()
-                      .toString(36)
-                      .substring(2, 8)
-                      .toUpperCase()}
-                  </div>
-                  <div className="mt-2 text-[10px] font-bold text-slate-900 uppercase tracking-widest">
-                    หน้าที่ {pageObj.currentPageForUser} จาก{" "}
-                    {pageObj.totalPagesForUser}
-                  </div>
-                </div>
+          {/* --- Header Controller (ซ่อนเมื่อพิมพ์) --- */}
+          <div className="w-full max-w-[210mm] bg-white mb-4 p-4 rounded-2xl shadow-xl flex justify-between items-center print:hidden border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm ${exportFormat === "excel" ? "bg-emerald-500" : "bg-red-500"} text-white`}
+              >
+                {exportFormat === "excel" ? "📗" : "📕"}
               </div>
-
-              {/* Main Data Table */}
-              <div className="flex-1">
-                <table className="w-full text-left border-collapse border border-slate-300">
-                  <thead>
-                    <tr className="bg-slate-900 text-white">
-                      <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 w-24 text-center">
-                        วันที่
-                      </th>
-                      <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300">
-                        ชื่อ-นามสกุล / รหัส
-                      </th>
-                      {!isOTReport ? (
-                        <>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
-                            กะงาน
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center">
-                            จุดปฏิบัติงาน
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-32">
-                            ลงเวลา
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-20">
-                            สถานะ
-                          </th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
-                            เริ่ม (Time)
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
-                            สิ้นสุด (Time)
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-24">
-                            ชั่วโมงอนุมัติ
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-24">
-                            สถานะ/เหตุผล
-                          </th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {group.map((a: any, i: number) => (
-                      <tr key={i} className="text-[10px] leading-tight">
-                        <td className="px-3 py-2 text-center border border-slate-200">
-                          {a.date}
-                        </td>
-                        <td className="px-3 py-2 border border-slate-200 uppercase font-bold text-slate-900">
-                          {a.firstName} {a.lastName}
-                        </td>
-                        {!isOTReport ? (
-                          <>
-                            <td className="px-3 py-2 text-center border border-slate-200">
-                              {a.shiftStartTimeSnapshot?.substring(0, 5)}-
-                              {a.shiftEndTimeSnapshot?.substring(0, 5)}
-                            </td>
-                            <td className="px-3 py-2 text-center border border-slate-200 truncate max-w-[150px]">
-                              {a.siteSnapName || "-"}
-                            </td>
-                            <td className="px-3 py-2 text-center border border-slate-200 font-bold">
-                              {a.checkIn?.substring(0, 5) || "--:--"} -{" "}
-                              {a.checkOut?.substring(0, 5) || "--:--"}
-                            </td>
-                            <td className="px-3 py-2 text-right border border-slate-200 font-black">
-                              {a.statusText}
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="px-3 py-2 text-center border border-slate-200">
-                              {a.timeStart?.substring(0, 5) || "-"}
-                            </td>
-                            <td className="px-3 py-2 text-center border border-slate-200">
-                              {a.timeEnd?.substring(0, 5) || "-"}
-                            </td>
-                            <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
-                              {(() => {
-                                const totalMinutes =
-                                  Number(a.otHours) ||
-                                  Number(a.overtimeByRequest) ||
-                                  0;
-                                const h = Math.floor(totalMinutes / 60);
-                                const m = totalMinutes % 60;
-                                return `${h}.${m.toString().padStart(2, "0")}`;
-                              })()}{" "}
-                              ชม.
-                            </td>
-                            <td className="px-3 py-2 text-right border border-slate-200 truncate max-w-[120px]">
-                              {a.otRemark ||
-                                a.reason ||
-                                a.otStatus ||
-                                "-"}
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {/* --- Leave Information Section --- */}
-                {pageObj.leaves && pageObj.leaves.length > 0 && (
-                  <div className="mt-4">
-                    <div className="flex items-center gap-2 mb-2 border-l-4 border-red-500 pl-3">
-                      <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-wider">
-                        รายการข้อมูลการลาที่ได้รับการอนุมัติ (Leave Records)
-                      </h3>
-                    </div>
-                    <table className="w-full border-collapse border border-slate-300">
-                      <thead className="bg-slate-50">
-                        <tr className="text-[9px] uppercase text-slate-500">
-                          <th className="px-3 py-1.5 border border-slate-300 text-center w-40">
-                            ช่วงวันที่ลา (เริ่ม - สิ้นสุด)
-                          </th>
-                          <th className="px-3 py-1.5 border border-slate-300">
-                            ชื่อ-นามสกุล ผู้ลา
-                          </th>
-                          <th className="px-3 py-1.5 border border-slate-300 text-center w-20">
-                            จำนวน (วัน)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pageObj.leaves.map((l: any, li: number) => (
-                          <tr
-                            key={li}
-                            className="text-[9px] border-b border-slate-200"
-                          >
-                            <td className="px-3 py-1.5 border border-slate-200 text-center font-medium">
-                              {l.startDate} ถึง {l.endDate}
-                            </td>
-                            <td className="px-3 py-1.5 border border-slate-200 font-bold text-slate-700">
-                              {l.fullName}
-                            </td>
-                            <td className="px-3 py-1.5 border border-slate-200 text-center font-bold text-red-600">
-                              {l.totalDays}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+              <div>
+                <h2 className="font-bold text-lg text-slate-800 uppercase leading-none">
+                  {exportFormat === "excel"
+                    ? "เอกสารประเภท Excel"
+                    : "เอกสารประเภท PDF"}
+                </h2>
+                <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase">
+                  {reportType === "attendance"
+                    ? "รายงานการเข้างาน"
+                    : "รายงานการทำโอที (OT)"}{" "}
+                  • {Array.isArray(reportData) ? reportData.length : 0} รายการ
+                </p>
               </div>
-
-              {/* --- Footer (ส่วนลายเซ็นและสรุปผล) --- */}
-              {pageObj.isLastPageForUser && (
-                <div className="mt-auto border-t-2 border-slate-100 pt-4 print:pb-2">
-                  <div className="flex justify-between items-end">
-                    {/* ฝั่งซ้าย: สรุปตัวเลข */}
-                    <div className="space-y-1">
-                      {isOTReport && (
-                        <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
-                          <p className="text-[10px] font-bold text-blue-600 uppercase">
-                            รวมเวลาโอทีทั้งหมด (สุทธิ)
-                          </p>
-                          <p className="text-xl font-black text-blue-900">
-                            {(() => {
-                              const totalMinutes =
-                                Number(pageObj.totalOtMinutes) || 0;
-                              const h = Math.floor(totalMinutes / 60);
-                              const m = totalMinutes % 60;
-                              return `${h}.${m.toString().padStart(2, "0")}`;
-                            })()}{" "}
-                            <span className="text-xs font-bold">
-                              ชั่วโมง
-                            </span>
-                          </p>
-                        </div>
-                      )}
-                      <p className="text-[9px] text-slate-400 italic">
-                        * เอกสารนี้จัดทำโดยระบบอัตโนมัติ
-                        ข้อมูลมีความถูกต้องตามการบันทึกในระบบ
-                      </p>
-                    </div>
-
-                    {/* ฝั่งขวา: ลายเซ็น */}
-                    <div className="flex gap-8">
-                      <div className="text-center w-40">
-                        <div className="h-10 border-b border-slate-300 mb-2"></div>
-                        <p className="text-[10px] font-bold text-slate-900 uppercase">
-                          ผู้จัดทำ/พนักงาน
-                        </p>
-                        <p className="text-[9px] text-slate-400">
-                          (...................................................)
-                        </p>
-                      </div>
-                      <div className="text-center w-40">
-                        <div className="h-10 border-b border-slate-300 mb-2 flex items-end justify-center">
-                          <span className="text-[10px] font-black text-slate-800 mb-1 uppercase italic">
-                            {group.find((item: any) => item?.approvedByName && item.approvedByName !== "-")?.approvedByName || ""}
-                          </span>
-                        </div>
-                        <p className="text-[10px] font-bold text-slate-900 uppercase">
-                          ผู้อนุมัติ (Approver)
-                        </p>
-                        <p className="text-[9px] text-slate-400">
-                          วันที่: ...... / ...... / ......
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
-          );
-        });
-      })()}
-    </div>
-  </div>
-)}
+
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                  จำนวนเอกสาร:{" "}
+                </span>
+                <span className="text-[11px] font-black text-blue-600">
+                  {reportType === "ot" ||
+                  reportType === "overtime" ||
+                  (Array.isArray(reportData) &&
+                    reportData[0]?.generatedType === "overtime")
+                    ? (() => {
+                        const safeData = Array.isArray(reportData)
+                          ? reportData
+                          : [];
+                        const userIds = [
+                          ...new Set(safeData.map((item: any) => item?.userId)),
+                        ];
+                        let totalPages = 0;
+                        userIds.forEach((id) => {
+                          const userRows = safeData.filter(
+                            (item: any) => item?.userId === id
+                          ).length;
+                          totalPages += Math.ceil(userRows / 15);
+                        });
+                        return totalPages || 1;
+                      })()
+                    : Math.ceil(
+                        (Array.isArray(reportData) ? reportData.length : 0) / 15
+                      ) || 1}{" "}
+                  หน้า
+                </span>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() =>
+                    exportFormat === "pdf"
+                      ? window.print()
+                      : handleDownloadExcel(
+                          Array.isArray(reportData) ? reportData : []
+                        )
+                  }
+                  className={`px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase shadow-lg transition-all active:scale-95 text-white ${exportFormat === "excel" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-slate-900 hover:bg-blue-600"}`}
+                >
+                  {exportFormat === "pdf"
+                    ? "พิมพ์รายงาน / Save PDF"
+                    : "ดาวน์โหลด Excel"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowReport(false);
+                    setShowFilterModal(true);
+                    setIsMobileFilterOpen(false);
+                  }}
+                  className="bg-slate-100 hover:bg-red-50 hover:text-red-500 px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase transition-all text-slate-400"
+                >
+                  ย้อนกลับ
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            id="report-content"
+            className="w-full flex flex-col items-center gap-8 print:gap-0 print:block print:w-full"
+          >
+            {(() => {
+              let pages: any[] = [];
+              const rowsPerPage = 15;
+
+              const safeReportData = Array.isArray(reportData)
+                ? reportData
+                : [];
+              const safeLeaveData = Array.isArray(leaveData) ? leaveData : [];
+
+              const isOTReport =
+                reportType === "overtime" ||
+                reportType === "ot" ||
+                safeReportData[0]?.generatedType === "overtime";
+
+              if (isOTReport) {
+                const userIds = Array.from(
+                  new Set(safeReportData.map((item: any) => item?.userId))
+                );
+
+                userIds.forEach((id) => {
+                  const userData = safeReportData.filter(
+                    (item: any) => item?.userId === id
+                  );
+
+                  const totalForUser = userData.reduce(
+                    (sum, item) =>
+                      sum +
+                      (Number(item?.otHours) ||
+                        Number(item?.overtimeByRequest) ||
+                        0),
+                    0
+                  );
+                  const totalPagesForUser = Math.ceil(
+                    userData.length / rowsPerPage
+                  );
+
+                  for (let i = 0; i < userData.length; i += rowsPerPage) {
+                    const isLastPageForUser =
+                      i + rowsPerPage >= userData.length;
+                    pages.push({
+                      items: userData.slice(i, i + rowsPerPage),
+                      totalOtMinutes: isLastPageForUser ? totalForUser : null,
+                      isLastPageForUser,
+                      currentUser: userData[0],
+                      currentPageForUser: Math.floor(i / rowsPerPage) + 1,
+                      totalPagesForUser,
+                      leaves: isLastPageForUser
+                        ? safeLeaveData.filter((l: any) => l.userId === id)
+                        : [],
+                    });
+                  }
+                });
+              } else {
+                for (let i = 0; i < safeReportData.length; i += rowsPerPage) {
+                  const isLastPage = i + rowsPerPage >= safeReportData.length;
+                  pages.push({
+                    items: safeReportData.slice(i, i + rowsPerPage),
+                    totalOtMinutes: null,
+                    isLastPageForUser: isLastPage,
+                    currentPageForUser: Math.floor(i / rowsPerPage) + 1,
+                    totalPagesForUser:
+                      Math.ceil(safeReportData.length / rowsPerPage) || 1,
+                    leaves: isLastPage ? safeLeaveData : [],
+                  });
+                }
+              }
+
+              return pages.map((pageObj: any, pageIndex: number) => {
+                const group = Array.isArray(pageObj.items) ? pageObj.items : [];
+
+                return (
+                  <div
+                    key={pageIndex}
+                    className="bg-white w-full max-w-[210mm] min-h-[297mm] shadow-2xl flex flex-col p-12 print:p-10 print:m-0 print:shadow-none print:w-[210mm] print:min-h-[297mm] relative page-break-after-always overflow-hidden font-sans"
+                  >
+                    {/* Header */}
+                    <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-start">
+                      <div>
+                        <h2 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
+                          {admin?.company || "COMPANY NAME"}
+                        </h2>
+                        <p className="text-slate-600 font-bold text-[12px] mt-1 uppercase">
+                          {!isOTReport
+                            ? "สรุปรายการการเข้างานพนักงาน"
+                            : `สรุปรายการการทำโอที (OT): ${group[0]?.firstName} ${group[0]?.lastName}`}
+                        </p>
+                        <p className="text-blue-600 font-bold text-[10px] mt-0.5">
+                          ประจำวันที่: {formattedStartDate} — {formattedEndDate}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] font-medium text-slate-400 leading-tight">
+                          พิมพ์เมื่อ: {reportDate} {reportTime} <br />
+                          Ref:{" "}
+                          {Math.random()
+                            .toString(36)
+                            .substring(2, 8)
+                            .toUpperCase()}
+                        </div>
+                        <div className="mt-2 text-[10px] font-bold text-slate-900 uppercase tracking-widest">
+                          หน้าที่ {pageObj.currentPageForUser} จาก{" "}
+                          {pageObj.totalPagesForUser}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Main Data Table */}
+                    <div className="flex-1">
+                      <table className="w-full text-left border-collapse border border-slate-300">
+                        <thead>
+                          <tr className="bg-slate-900 text-white">
+                            <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 w-24 text-center">
+                              วันที่
+                            </th>
+                            <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300">
+                              ชื่อ-นามสกุล / รหัส
+                            </th>
+                            {!isOTReport ? (
+                              <>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
+                                  กะงาน
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center">
+                                  จุดปฏิบัติงาน
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-32">
+                                  ลงเวลา
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-20">
+                                  สถานะ
+                                </th>
+                              </>
+                            ) : (
+                              <>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
+                                  เริ่ม (Time)
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
+                                  สิ้นสุด (Time)
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-24">
+                                  ชั่วโมงอนุมัติ
+                                </th>
+                                <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-24">
+                                  สถานะ/เหตุผล
+                                </th>
+                              </>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {group.map((a: any, i: number) => (
+                            <tr key={i} className="text-[10px] leading-tight">
+                              <td className="px-3 py-2 text-center border border-slate-200">
+                                {a.date}
+                              </td>
+                              <td className="px-3 py-2 border border-slate-200 uppercase font-bold text-slate-900">
+                                {a.firstName} {a.lastName}
+                              </td>
+                              {!isOTReport ? (
+                                <>
+                                  <td className="px-3 py-2 text-center border border-slate-200">
+                                    {a.shiftStartTimeSnapshot?.substring(0, 5)}-
+                                    {a.shiftEndTimeSnapshot?.substring(0, 5)}
+                                  </td>
+                                  <td className="px-3 py-2 text-center border border-slate-200 truncate max-w-[150px]">
+                                    {a.siteSnapName || "-"}
+                                  </td>
+                                  <td className="px-3 py-2 text-center border border-slate-200 font-bold">
+                                    {a.checkIn?.substring(0, 5) || "--:--"} -{" "}
+                                    {a.checkOut?.substring(0, 5) || "--:--"}
+                                  </td>
+                                  <td className="px-3 py-2 text-right border border-slate-200 font-black">
+                                    {a.statusText}
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="px-3 py-2 text-center border border-slate-200">
+                                    {a.timeStart?.substring(0, 5) || "-"}
+                                  </td>
+                                  <td className="px-3 py-2 text-center border border-slate-200">
+                                    {a.timeEnd?.substring(0, 5) || "-"}
+                                  </td>
+                                  <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
+                                    {(() => {
+                                      const totalMinutes =
+                                        Number(a.otHours) ||
+                                        Number(a.overtimeByRequest) ||
+                                        0;
+                                      const h = Math.floor(totalMinutes / 60);
+                                      const m = totalMinutes % 60;
+                                      return `${h}.${m.toString().padStart(2, "0")}`;
+                                    })()}{" "}
+                                    ชม.
+                                  </td>
+                                  <td className="px-3 py-2 text-right border border-slate-200 truncate max-w-[120px]">
+                                    {a.otRemark ||
+                                      a.reason ||
+                                      a.otStatus ||
+                                      "-"}
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      {/* --- Leave Information Section --- */}
+                      {pageObj.leaves && pageObj.leaves.length > 0 && (
+                        <div className="mt-4">
+                          <div className="flex items-center gap-2 mb-2 border-l-4 border-red-500 pl-3">
+                            <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-wider">
+                              รายการข้อมูลการลาที่ได้รับการอนุมัติ (Leave
+                              Records)
+                            </h3>
+                          </div>
+                          <table className="w-full border-collapse border border-slate-300">
+                            <thead className="bg-slate-50">
+                              <tr className="text-[9px] uppercase text-slate-500">
+                                <th className="px-3 py-1.5 border border-slate-300 text-center w-40">
+                                  ช่วงวันที่ลา (เริ่ม - สิ้นสุด)
+                                </th>
+                                <th className="px-3 py-1.5 border border-slate-300">
+                                  ชื่อ-นามสกุล ผู้ลา
+                                </th>
+                                <th className="px-3 py-1.5 border border-slate-300 text-center w-20">
+                                  จำนวน (วัน)
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {pageObj.leaves.map((l: any, li: number) => (
+                                <tr
+                                  key={li}
+                                  className="text-[9px] border-b border-slate-200"
+                                >
+                                  <td className="px-3 py-1.5 border border-slate-200 text-center font-medium">
+                                    {l.startDate} ถึง {l.endDate}
+                                  </td>
+                                  <td className="px-3 py-1.5 border border-slate-200 font-bold text-slate-700">
+                                    {l.fullName}
+                                  </td>
+                                  <td className="px-3 py-1.5 border border-slate-200 text-center font-bold text-red-600">
+                                    {l.totalDays}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* --- Footer (ส่วนลายเซ็นและสรุปผล) --- */}
+                    {pageObj.isLastPageForUser && (
+                      <div className="mt-auto border-t-2 border-slate-100 pt-4 print:pb-2">
+                        <div className="flex justify-between items-end">
+                          {/* ฝั่งซ้าย: สรุปตัวเลข */}
+                          <div className="space-y-1">
+                            {isOTReport && (
+                              <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
+                                <p className="text-[10px] font-bold text-blue-600 uppercase">
+                                  รวมเวลาโอทีทั้งหมด (สุทธิ)
+                                </p>
+                                <p className="text-xl font-black text-blue-900">
+                                  {(() => {
+                                    const totalMinutes =
+                                      Number(pageObj.totalOtMinutes) || 0;
+                                    const h = Math.floor(totalMinutes / 60);
+                                    const m = totalMinutes % 60;
+                                    return `${h}.${m.toString().padStart(2, "0")}`;
+                                  })()}{" "}
+                                  <span className="text-xs font-bold">
+                                    ชั่วโมง
+                                  </span>
+                                </p>
+                              </div>
+                            )}
+                            <p className="text-[9px] text-slate-400 italic">
+                              * เอกสารนี้จัดทำโดยระบบอัตโนมัติ
+                              ข้อมูลมีความถูกต้องตามการบันทึกในระบบ
+                            </p>
+                          </div>
+
+                          {/* ฝั่งขวา: ลายเซ็น */}
+                          <div className="flex gap-8">
+                            <div className="text-center w-40">
+                              <div className="h-10 border-b border-slate-300 mb-2"></div>
+                              <p className="text-[10px] font-bold text-slate-900 uppercase">
+                                ผู้จัดทำ/พนักงาน
+                              </p>
+                              <p className="text-[9px] text-slate-400">
+                                (...................................................)
+                              </p>
+                            </div>
+                            <div className="text-center w-40">
+                              <div className="h-10 border-b border-slate-300 mb-2 flex items-end justify-center">
+                                <span className="text-[10px] font-black text-slate-800 mb-1 uppercase italic">
+                                  {group.find(
+                                    (item: any) =>
+                                      item?.approvedByName &&
+                                      item.approvedByName !== "-"
+                                  )?.approvedByName || ""}
+                                </span>
+                              </div>
+                              <p className="text-[10px] font-bold text-slate-900 uppercase">
+                                ผู้อนุมัติ (Approver)
+                              </p>
+                              <p className="text-[9px] text-slate-400">
+                                วันที่: ...... / ...... / ......
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </div>
+      )}
       {/* --- 🖨️ MODAL: EDIT SITE & POSITION --- */}
       {showManageModal && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[600] flex items-center justify-center p-4">

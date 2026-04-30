@@ -11,7 +11,7 @@ import {
   addFeatureToLibraryAction,
 } from "./actions";
 
-import { clearSessionAction } from "../login/api/login-action";
+import { clearSessionAction } from "../login/login-actions";
 import {
   Building2,
   Users,

@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
-import { handleLoginServer, clearSessionAction } from "./api/login-action";
+import { handleLoginServer, clearSessionAction } from "./login-actions";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);

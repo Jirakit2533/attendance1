@@ -3,7 +3,7 @@ import { sitesTable,  usersTable } from "@/db/schema";
 import { and, eq, ne} from "drizzle-orm"; 
 
 // ปรับเป็นประมาณ 20 เมตร (0.00018) ตามความต้องการล่าสุด
-const OFFSET_30M = 0.00027; 
+const OFFSET_50M = 0.00045; 
 
 /**
  * 1. ฟังก์ชันสำหรับเช็คว่าพิกัดอยู่ในกรอบหรือไม่
@@ -23,10 +23,10 @@ export const isInsideBound = (
   if (isNaN(uLat) || isNaN(uLon) || isNaN(sLat) || isNaN(sLon)) return false;
 
   return (
-    uLat >= sLat - OFFSET_30M &&
-    uLat <= sLat + OFFSET_30M &&
-    uLon >= sLon - OFFSET_30M &&
-    uLon <= sLon + OFFSET_30M
+    uLat >= sLat - OFFSET_50M &&
+    uLat <= sLat + OFFSET_50M &&
+    uLon >= sLon - OFFSET_50M &&
+    uLon <= sLon + OFFSET_50M
   );
 };
 
