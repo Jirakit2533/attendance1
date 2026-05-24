@@ -85,6 +85,58 @@ const OffsiteConfirmPopup = ({
     </div>
   </div>
 );
+const LogoutConfirmPopup = ({
+  onConfirm,
+  onCancel,
+  siteName,
+}: {
+  onConfirm: () => void;
+  onCancel: () => void;
+  siteName: string;
+}) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl border border-amber-100">
+      <div className="text-center">
+        <div className="flex justify-center mb-4 text-amber-500">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-12 h-12"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+        </div>
+        <h3 className="text-lg font-bold text-red-900 mb-2">การยืนยันออกงาน</h3>
+        <p className="text-red-600 mb-6 text-sm">
+          คุณยืนยันหรือไม่ที่จะออกงานก่อนเวลา{" "}
+          <span className="font-semibold text-blue-600"></span> <br />
+          ต้องการยืนยันการบันทึกข้อมูลหรือไม่?
+        </p>
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={onCancel}
+          className="flex-1 px-4 py-2.5 font-semibold text-gray-700 bg-gray-100 rounded-xl active:scale-95 transition-transform"
+        >
+          ยกเลิก
+        </button>
+        <button
+          onClick={onConfirm}
+          className="flex-1 px-4 py-2.5 font-semibold text-white bg-amber-500 rounded-xl hover:bg-amber-600 shadow-md active:scale-95 transition-transform"
+        >
+          ยืนยัน
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
 interface Props {
   userProfile: any;
@@ -142,6 +194,7 @@ export default function EmployeeClientPage({
   );
   const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
 
+  const [showLogoutConfirmPopup, setShowLogoutConfirmPopup] = useState(false);
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [leaveSuccess, setLeaveSuccess] = useState(false);
   const [leaveType, setLeaveType] = useState("");
@@ -149,7 +202,8 @@ export default function EmployeeClientPage({
   const [leaveEnd, setLeaveEnd] = useState("");
   const [leaveReason, setLeaveReason] = useState("");
   const [leaveError, setLeaveError] = useState("");
-  const activeFeatures = userProfile?.company?.companyFeatureSelected?.featureSelectedArray || [];
+  const activeFeatures =
+    userProfile?.company?.companyFeatureSelected?.featureSelectedArray || [];
   const isRemarkActive = activeFeatures.includes("remarkAttendance");
   const [showOffsitePopup, setShowOffsitePopup] = useState(false);
   const [pendingData, setPendingData] = useState<any>(null);
@@ -402,11 +456,39 @@ export default function EmployeeClientPage({
 
   const handleCheckOut = () => {
     setIsCheckingOut(true);
-    startCamera();
+  
+    // --- Logic เช็คเงื่อนไข: เวลาที่กำลังออกงาน < เวลาเข้ากะ + 1 ชั่วโมง ---
+    const now = new Date();
+  
+    // 🚩 แก้ไขจุดนี้: เรียกใช้ผ่าน userProfile.startTime ที่ส่งมาจาก Server
+    const startTime = userProfile?.startTime; 
+  
+    if (startTime) {
+      const [hours, minutes] = startTime.split(":").map(Number);
+      const shiftInTime = new Date();
+      shiftInTime.setHours(hours, minutes, 0, 0);
+  
+      // คำนวณเวลา Shift In + 1 ชั่วโมง (60 นาที * 60 วินาที * 1000 มิลลิวินาที)
+      const shiftInPlusOneHour = new Date(
+        shiftInTime.getTime() + 1 * 60 * 60 * 1000
+      );
+  
+      if (now < shiftInPlusOneHour) {
+        // 🚩 ต่ำกว่า 1 ชม. -> เปิด Popup ยืนยันออกงานก่อนกำหนด
+        setShowLogoutConfirmPopup(true);
+        return;
+      }
+    }
+    
+    // 🚩 หากเกิน 1 ชม. แล้ว หรือไม่มีค่า startTime -> บันทึกออกงานปกติได้เลย โดยไม่ต้องเปิดกล้อง
+    executeAttendanceAction(false);
   };
 
   // ✅ ฟังก์ชันช่วยเรียก Action สำหรับงาน Attendance (รักษาโครงสร้างเดิม ปรับลำดับ UI ให้ Seamless)
-  const executeAttendanceAction = async (isConfirmed = false, remark: string = "") => {
+  const executeAttendanceAction = async (
+    isConfirmed = false,
+    remark: string = ""
+  ) => {
     setIsProcessing(true); // เริ่มหมุน Loading
     try {
       const { id, img, loc } = pendingData;
@@ -440,9 +522,11 @@ export default function EmployeeClientPage({
           // 🚩 ถ้าบันทึกสำเร็จ (และส่ง Remark เรียบร้อยแล้ว)
           alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
           setShowOffsitePopup(false);
-          
+
           // ปิด Modal Remark (ถ้ามันเปิดอยู่)
-          const modal = document.getElementById("remark_modal") as HTMLDialogElement;
+          const modal = document.getElementById(
+            "remark_modal"
+          ) as HTMLDialogElement;
           if (modal) modal.close();
 
           router.refresh();
@@ -499,14 +583,19 @@ export default function EmployeeClientPage({
       setPendingData(currentData);
 
       // 🚩 [FIXED] เช็คฟีเจอร์แบบปลอดภัยด้วย Optional Chaining และตรวจสอบ Array จริง
-      const featureArray = userProfile?.company?.companyFeatureSelected?.featureSelectedArray;
-      const isRemarkRequired = Array.isArray(featureArray) && featureArray.includes("remarkAttendance");
+      const featureArray =
+        userProfile?.company?.companyFeatureSelected?.featureSelectedArray;
+      const isRemarkRequired =
+        Array.isArray(featureArray) &&
+        featureArray.includes("remarkAttendance");
 
       if (isRemarkRequired) {
         // 🟢 กรณีต้องใส่ Remark: เปิด Modal ให้ User พิมพ์ก่อน (ยังไม่ยิง Action)
         console.log("Remark Required: Opening Modal...");
-        
-        const modal = document.getElementById("remark_modal") as HTMLDialogElement;
+
+        const modal = document.getElementById(
+          "remark_modal"
+        ) as HTMLDialogElement;
         if (modal) {
           // ใช้ setTimeout เล็กน้อยเพื่อให้แน่ใจว่า DOM อัปเดต state pendingData เสร็จแล้ว
           setTimeout(() => {
@@ -522,9 +611,19 @@ export default function EmployeeClientPage({
         // ⚪ กรณีไม่ต้องใส่ Remark: ยิง Action ทันทีเหมือนเดิม
         let res: any;
         if (isCheckingOut) {
-          res = await checkOutAction(currentData.id, currentData.img, currentData.loc, false);
+          res = await checkOutAction(
+            currentData.id,
+            currentData.img,
+            currentData.loc,
+            false
+          );
         } else {
-          res = await checkInAction(currentData.id, currentData.img, currentData.loc, false);
+          res = await checkInAction(
+            currentData.id,
+            currentData.img,
+            currentData.loc,
+            false
+          );
         }
 
         if (res.success) {
@@ -532,7 +631,11 @@ export default function EmployeeClientPage({
           router.refresh();
           setIsProcessing(false);
         } else {
-          if (res.offsite || res.OffsiteCheckOutConfirm || res.OffsiteCheckInConfirm) {
+          if (
+            res.offsite ||
+            res.OffsiteCheckOutConfirm ||
+            res.OffsiteCheckInConfirm
+          ) {
             setPendingData({ ...currentData, siteName: res.siteName });
             setShowOffsitePopup(true);
           } else {
@@ -545,7 +648,9 @@ export default function EmployeeClientPage({
       if (error.code === 1) {
         alert("กรุณาอนุญาตสิทธิ์การเข้าถึงตำแหน่งในเบราว์เซอร์");
       } else if (error.code === 2 || error.code === 3) {
-        alert("ไม่สามารถระบุตำแหน่งได้ กรุณาเปิด GPS และตรวจสอบว่าอยู่ในที่โล่ง");
+        alert(
+          "ไม่สามารถระบุตำแหน่งได้ กรุณาเปิด GPS และตรวจสอบว่าอยู่ในที่โล่ง"
+        );
       } else {
         alert(error.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูลหรือพิกัด");
       }
@@ -2152,6 +2257,22 @@ export default function EmployeeClientPage({
           siteName={pendingData?.siteName || "ไซต์งาน"}
           onCancel={() => setShowOffsitePopup(false)}
           onConfirm={() => executeAttendanceAction(true)}
+        />
+      )}
+      {/* --- 4. NEW: LogoutConfirm POPUP (ของนายที่นำมาต่อยอดเงื่อนไข < 1 ชม.) --- */}
+      {showLogoutConfirmPopup && (
+        <LogoutConfirmPopup
+          siteName={pendingData?.siteName || "ไซต์งาน"}
+          onCancel={() => {
+            // กรณียกเลิก: ปิด Popup และรีเซ็ตสถานะการออกงานกลับเป็นเท็จ
+            setShowLogoutConfirmPopup(false);
+            setIsCheckingOut(false);
+          }}
+          onConfirm={() => {
+            // กรณียืนยัน: ปิด Popup และสั่งบันทึกเวลาออกงานทันที
+            setShowLogoutConfirmPopup(false);
+            executeAttendanceAction(true); // ส่ง isConfirmed = true เข้าไปในระบบ
+          }}
         />
       )}
     </div>
