@@ -456,34 +456,34 @@ export default function EmployeeClientPage({
 
   const handleCheckOut = () => {
     setIsCheckingOut(true);
-  
+
     // --- Logic เช็คเงื่อนไข: เวลาที่กำลังออกงาน < เวลาเข้ากะ + 1 ชั่วโมง ---
     const now = new Date();
-  
-    // 🚩 แก้ไขจุดนี้: เรียกใช้ผ่าน userProfile.startTime ที่ส่งมาจาก Server
-    const startTime = userProfile?.startTime; 
-  
+
+    // ดึง startTime จากเรคคอร์ดล่าสุดที่มีการบันทึกไว้ในระบบ
+    const startTime = initialRecords?.[0]?.startTime || userProfile?.startTime;
+
     if (startTime) {
       const [hours, minutes] = startTime.split(":").map(Number);
       const shiftInTime = new Date();
       shiftInTime.setHours(hours, minutes, 0, 0);
-  
-      // คำนวณเวลา Shift In + 1 ชั่วโมง (60 นาที * 60 วินาที * 1000 มิลลิวินาที)
+
+      // คำนวณเวลา Shift In + 1 ชั่วโมง
       const shiftInPlusOneHour = new Date(
         shiftInTime.getTime() + 1 * 60 * 60 * 1000
       );
-  
+
       if (now < shiftInPlusOneHour) {
-        // 🚩 ต่ำกว่า 1 ชม. -> เปิด Popup ยืนยันออกงานก่อนกำหนด
+        // 🚩 ต่ำกว่า 1 ชม. -> เปิด Popup ยืนยันออกงานก่อนกำหนดของนาย
+        // ระบบจะหยุดรอตรงนี้ โดยยังไม่เปิดกล้องจนกว่าจะกดยืนยันความสมัครใจ
         setShowLogoutConfirmPopup(true);
         return;
       }
     }
-    
-    // 🚩 หากเกิน 1 ชม. แล้ว หรือไม่มีค่า startTime -> บันทึกออกงานปกติได้เลย โดยไม่ต้องเปิดกล้อง
-    executeAttendanceAction(false);
-  };
 
+    // 🚩 หากเกิน 1 ชม. แล้ว หรือไม่เข้าเงื่อนไข -> สั่งเปิดกล้องทันทีเพื่อดำเนินขั้นตอนถ่ายรูปออกงาน
+    startCamera();
+  };
   // ✅ ฟังก์ชันช่วยเรียก Action สำหรับงาน Attendance (รักษาโครงสร้างเดิม ปรับลำดับ UI ให้ Seamless)
   const executeAttendanceAction = async (
     isConfirmed = false,
@@ -2259,19 +2259,20 @@ export default function EmployeeClientPage({
           onConfirm={() => executeAttendanceAction(true)}
         />
       )}
-      {/* --- 4. NEW: LogoutConfirm POPUP (ของนายที่นำมาต่อยอดเงื่อนไข < 1 ชม.) --- */}
+      {/* --- 4. ปุ่มยืนยันออกงานก่อนกำหนด < 1 ชม. ของนาย --- */}
       {showLogoutConfirmPopup && (
         <LogoutConfirmPopup
           siteName={pendingData?.siteName || "ไซต์งาน"}
           onCancel={() => {
-            // กรณียกเลิก: ปิด Popup และรีเซ็ตสถานะการออกงานกลับเป็นเท็จ
             setShowLogoutConfirmPopup(false);
             setIsCheckingOut(false);
           }}
           onConfirm={() => {
-            // กรณียืนยัน: ปิด Popup และสั่งบันทึกเวลาออกงานทันที
-            setShowLogoutConfirmPopup(false);
-            executeAttendanceAction(true); // ส่ง isConfirmed = true เข้าไปในระบบ
+            setShowLogoutConfirmPopup(false); // ปิดป๊อปอัพเตือน
+
+            // 🚩 รันคำสั่งเปิดกล้องเพื่อให้พนักงานกดถ่ายรูปตาม Flow เดิมของนาย
+            // พอกดชัตเตอร์ถ่ายรูปเสร็จ ตัวปุ่มชัตเตอร์กล้องของนายจะเรียก executeAttendanceAction(true) ไปเองโดยอัตโนมัติ
+            startCamera();
           }}
         />
       )}
