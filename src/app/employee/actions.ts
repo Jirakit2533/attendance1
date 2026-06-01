@@ -8,7 +8,7 @@ import { uploadToDrive } from "@/lib/uploadthing-server";
 import { validateAndGetSite, isInsideBound, validateCheckOutLocation } from "@/lib/location-service";
 import { calculateOvertime } from "@/features/over-time/ot-calculate";
 import * as bcrypt from "bcryptjs";
-import { FeatureService } from "@/features/feature-service"; // 
+
 
 /* -------------------------------------------------------------------------- */
 /* CHECKIN ACTION (การเข้างาน)                                               */

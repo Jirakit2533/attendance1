@@ -7,22 +7,24 @@ import { revalidatePath } from "next/cache";
 import { isInsideBound, validateAndGetSite, validateCheckOutLocation } from "@/lib/location-service";
 import { calculateOvertime } from "@/features/over-time/ot-calculate";
 import { getCurrentUser } from "@/lib/auth";
+import { FeatureService } from "@/features/feature-service";
 import bcrypt from "bcryptjs";
 
+
 /**------------------------------------------------------------------
- * 1. บันทึกเวลาเข้า-ออก (Check-in / Check-out) พร้อมตรวจสอบสาย/ออกก่อน
- * ลอจิกเนียนกริ๊บ: รองรับกะดึก, ดักเข้าซ้อน, Snapshot ข้อมูล, และคำนวณ OT แม่นยำ
+ * 1. [REFACTORED FOR LEADER] บันทึกเวลาเข้า-ออก (Check-in / Check-out) 
+ * ปรับปรุงระบบคิวรีแบบ Join, ดึง Feature ตรวจสอบ Remark, และแก้ไขบั๊ก Object.entries ของ Drizzle
  --------------------------------------------------------------------*/
  export async function saveAttendanceAction(data: {
   userId: string;
   type: "IN" | "OUT";
-  image: string;
+  image: string; // รับเป็น base64 หรือ URL ตามหน้าบ้านเดิมของ Leader
   fileId?: string;
   location: string;
   departmentId: string;
   siteId: string | null;
   isConfirmed?: boolean;
-  remark?: string; // 🚩 เพิ่มพารามิเตอร์ remark
+  remark?: string; 
 }) {
   try {
     const now = new Date();
@@ -31,8 +33,16 @@ import bcrypt from "bcryptjs";
       hour12: false
     });
 
+    if (!data.location || typeof data.location !== 'string' || !data.location.includes(',')) {
+      throw new Error("พิกัดตำแหน่งไม่ถูกต้องหรือไม่ได้เปิด GPS");
+    }
+
+    const [lat, lon] = data.location.split(',').map(Number);
+    if (isNaN(lat) || isNaN(lon)) {
+      throw new Error("ข้อมูลพิกัดไม่ใช่ตัวเลขที่ถูกต้อง");
+    }
+
     const nowH = now.getHours();
-    // 🚩 ลอจิกกะดึก: ถ้าเข้างานช่วง 00:00 - 05:00 ให้ถอย lookupDate ไป 1 วันเพื่อหาตารางงานที่ถูกต้อง
     let lookupDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
     if (data.type === "IN" && nowH >= 0 && nowH < 5) {
       const yesterday = new Date(now);
@@ -41,39 +51,54 @@ import bcrypt from "bcryptjs";
     }
     const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(now);
 
-    const [userData, shiftData, tempShift] = await Promise.all([
-      db.select().from(usersTable).where(eq(usersTable.id, data.userId)).limit(1),
-      db.select().from(shiftsTable).where(eq(shiftsTable.userId, data.userId)).limit(1),
-      db.select().from(temporaryShiftsTable).where(and(
-        eq(temporaryShiftsTable.userId, data.userId),
-        eq(temporaryShiftsTable.targetDate, lookupDate),
-        eq(temporaryShiftsTable.status, "approved")
-      )).limit(1)
+    // 🚩 เปลี่ยนมาใช้ตระกูล Join เหมือนหน้า Employee เพื่อลดภาระ DB และป้องกันค่า Undefined
+    const [userData, tempShift] = await Promise.all([
+      db.select({
+        id: usersTable.id,
+        name: usersTable.firstName,
+        companyId: usersTable.companyId,
+        departmentId: usersTable.departmentId,
+        siteId: usersTable.site_id,
+        shiftId: shiftsTable.id,
+        startTime: shiftsTable.startTime,
+        endTime: shiftsTable.endTime,
+      })
+        .from(usersTable)
+        .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId))
+        .where(eq(usersTable.id, data.userId))
+        .limit(1),
+      db.select()
+        .from(temporaryShiftsTable)
+        .where(and(
+          eq(temporaryShiftsTable.userId, data.userId),
+          eq(temporaryShiftsTable.targetDate, lookupDate),
+          eq(temporaryShiftsTable.status, "approved")
+        ))
+        .limit(1)
     ]);
 
     const user = userData[0];
     if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
 
-    // 🚩 ดึงข้อมูล Company เพื่อเอา otRoundingOption และ featuresConfig (JSONB)
-    const [companyData] = await db
-      .select({
+    // 🚩 ดึงข้อมูล Company และเรียกใช้ระบบตรวจสอบ Feature ใหม่ล่าสุดที่ Knight เตรียมไว้
+    const [companyData, isRemarkActive] = await Promise.all([
+      db.select({
         otRoundingOption: companyTable.otRoundingOption,
-        featuresConfig: companyTable.featuresConfig
+        companyFeatureSelectedId: companyTable.companyFeatureSelectedId
       })
       .from(companyTable)
       .where(eq(companyTable.id, user.companyId || ""))
-      .limit(1);
-
-    // 🚩 ตรวจสอบ Feature remarkAttendance จาก Array ใน JSONB
-    const config = (companyData?.featuresConfig as any) || {};
-    const activeFeatures = Array.isArray(config.activeFeatures) ? config.activeFeatures : [];
-    const isRemarkActive = activeFeatures.includes("remarkAttendance");
+      .limit(1)
+      .then(res => res[0]),
+      FeatureService.isFeatureActive(user.companyId || "", "remarkAttendance")
+    ]);
 
     const companyRounding = (companyData?.otRoundingOption as OTRoundingOption) || "ACTUAL";
 
-    const shift = shiftData[0];
-    const activeStartTime = tempShift[0]?.startTime || shift?.startTime || null;
-    const activeEndTime = tempShift[0]?.endTime || shift?.endTime || null;
+    const activeStartTime = tempShift[0]?.startTime || user.startTime || null;
+    const activeEndTime = tempShift[0]?.endTime || user.endTime || null;
+    const activeShiftId = tempShift[0] ? null : user.shiftId;
+    const activeTempShiftId = tempShift[0]?.id || null;
 
     const toMin = (t: string | null) => {
       if (!t) return 0;
@@ -81,16 +106,22 @@ import bcrypt from "bcryptjs";
       return (h * 60) + (m || 0);
     };
 
-    let currentSiteName = "";
-    let currentSiteCoords = "";
-    let finalSiteId = data.siteId;
-    let isOffsiteIn = "0";
+    let currentWorkingStatus: "normal" | "extra" = "normal";
+    if (activeEndTime && activeStartTime) {
+      const nowMin = toMin(currentTimeStr);
+      let endMin = toMin(activeEndTime);
+      let startMin = toMin(activeStartTime);
+      if (endMin < startMin) endMin += 1440;
+      const adjustedNowMin = (nowMin < startMin && endMin > 1440) ? nowMin + 1440 : nowMin;
+      if (adjustedNowMin > endMin) currentWorkingStatus = "extra";
+    } else {
+      currentWorkingStatus = "extra";
+    }
 
     /* -------------------------------------------------------------------------- */
     /* CHECK-IN LOGIC (ขาเข้า)                                                    */
     /* -------------------------------------------------------------------------- */
     if (data.type === "IN") {
-      // 🚩 ดักพนักงานที่ยังไม่ลงชื่อออก ห้ามเข้าซ้อนเด็ดขาด (เหมือนชุดที่ 1)
       const existingActive = await db
         .select()
         .from(attendanceTable)
@@ -101,96 +132,77 @@ import bcrypt from "bcryptjs";
         throw new Error("คุณมีรายการลงชื่อเข้างานที่ยังไม่ได้ออก กรุณาลงชื่อออกก่อนเริ่มรอบใหม่");
       }
 
-      const [uLat, uLon] = data.location.split(',').map(Number);
-
-      // 🚩 ตรวจสอบพิกัดและไซต์ (อิงจาก user.site_id จาก DB)
-      const validated = await validateAndGetSite(
-        uLat.toString(),
-        uLon.toString(),
+      const validatedSite = await validateAndGetSite(
+        lat.toString(),
+        lon.toString(),
         user.companyId || "",
-        user.site_id || ""
+        user.siteId || ""
       );
 
-      currentSiteName = validated.name;
-      currentSiteCoords = validated.coordinates || "";
-      finalSiteId = validated.id;
-      isOffsiteIn = validated.isOffsiteIn || "0";
-
-      // 🚩 ดักคำยืนยันหากอยู่นอกพื้นที่ (Offsite Pop-up)
-      if (validated.OffsiteCheckInConfirm && !data.isConfirmed) {
+      if (validatedSite.OffsiteCheckInConfirm && !data.isConfirmed) {
         return {
           success: false,
-          siteName: currentSiteName,
           offsite: true,
+          siteName: validatedSite.name,
           OffsiteCheckInConfirm: true,
           OffsiteCheckOutConfirm: true
         };
       }
 
+      const finalIsOffsiteIn = validatedSite.isOffsiteIn || "0";
+
       let deptNameSnapshot = "";
-      if (data.departmentId) {
-        const [dept] = await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, data.departmentId)).limit(1);
+      if (user.departmentId) {
+        const [dept] = await db.select({ name: departmentsTable.name }).from(departmentsTable).where(eq(departmentsTable.id, user.departmentId)).limit(1);
         deptNameSnapshot = dept?.name || "";
       }
 
-      // 🚩 คำนวณสถานะการทำงาน (Normal หรือ Extra)
-      let currentWorkingStatus: "normal" | "extra" = "normal";
-      if (activeEndTime && activeStartTime) {
-        let nowM = toMin(currentTimeStr);
-        let endM = toMin(activeEndTime);
-        let startM = toMin(activeStartTime);
+      const finalRemark = isRemarkActive ? (data.remark?.trim() || "") : "";
 
-        if (endM < startM) endM += 1440;
-        const adjNowM = (nowM < startM && endM > 1440) ? nowM + 1440 : nowM;
+      // ปล่อยให้หน้าบ้านของผู้นำจัดการอัปโหลดภาพมาให้เรียบร้อยแล้วส่ง URL เข้ามาที่ data.image เผื่อกรณีใช้ Uploader คนละตัว
+      let finalImageUrl = data.image;
+      let finalImageId = data.fileId || null;
 
-        if (adjNowM > endM) currentWorkingStatus = "extra";
-      } else {
-        currentWorkingStatus = "extra"; // ไม่มีกะถือเป็น OT ทันที
+      // ถ้าหน้าบ้าน leader ส่งมาเป็น base64 ดิบ ให้ทำความสะอาดและแปลงก่อนอัปโหลดผ่านไดรฟ์ตามรอยพนักงาน
+      if (data.image.startsWith("data:image")) {
+        const base64Data = data.image.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const uploadRes = await uploadToDrive(buffer, `checkin_leader_${data.userId}_${Date.now()}.png`, "image/png");
+        finalImageUrl = uploadRes.url;
+        finalImageId = uploadRes.fileId;
       }
-
-      // 🚩 คำนวณความสาย (isLate)
-      let isLate = 0;
-      let lateMinutes = 0;
-      if (currentWorkingStatus === "normal" && activeStartTime) {
-        let nowM = toMin(currentTimeStr);
-        let startM = toMin(activeStartTime);
-        if (nowM < 300 && startM > 1000) nowM += 1440;
-
-        const diff = nowM - startM;
-        if (diff > 0) {
-          isLate = 1;
-          lateMinutes = diff;
-        }
-      }
-
-      // 🚩 ตรวจสอบ Remark ก่อนบันทึก
-      const finalRemark = isRemarkActive ? (data.remark?.trim() || null) : null;
 
       const [insertedAttendance] = await db.insert(attendanceTable).values({
         user_id: data.userId,
-        department_id: data.departmentId,
-        site_id: finalSiteId,
-        shift_id: tempShift[0] ? null : shift?.id,
-        temp_shift_id: tempShift[0]?.id || null,
-        siteInNameSnapshot: currentSiteName,
-        siteCoordinatesSnapshot: currentSiteCoords,
+        department_id: user.departmentId,
+        site_id: validatedSite.id,
+        siteInNameSnapshot: validatedSite.name || "",
+        siteCoordinatesSnapshot: validatedSite.coordinates || "", 
+        shift_id: activeShiftId,
+        temp_shift_id: activeTempShiftId,
         shiftStartTimeSnapshot: activeStartTime,
-        shiftEndTimeSnapshot: activeEndTime, // แก้ไข: ใช้ snapshot สิ้นสุดที่ถูกต้อง (เดิมเป็น StartTime)
+        shiftEndTimeSnapshot: activeEndTime,
         departmentNameSnapshot: deptNameSnapshot,
         date: dateStr,
         checkIn: currentTimeStr,
-        imageIn: data.image,
-        imageInId: data.fileId || null,
+        imageIn: finalImageUrl,
+        imageInId: finalImageId,
         locationIn: data.location,
+        isOffsiteIn: finalIsOffsiteIn,
+        isOffsiteInCoordinates: finalIsOffsiteIn === "1" ? data.location : null,
         workingStatusEnum: currentWorkingStatus,
-        isLate: isLate,
-        isOffsiteIn: isOffsiteIn,
-        isOffsiteInCoordinates: isOffsiteIn === "1" ? data.location : null,
-        lateMinutes: lateMinutes,
-        remark: finalRemark, // 🚩 บันทึก Remark ลงไปพร้อมกับการ Insert ทันที
+        remark: finalRemark,
+        isLate: currentWorkingStatus === "normal" && activeStartTime ? (toMin(currentTimeStr) > toMin(activeStartTime) ? 1 : 0) : 0,
+        lateMinutes: currentWorkingStatus === "normal" && activeStartTime ? (() => {
+          let nowM = toMin(currentTimeStr);
+          let startM = toMin(activeStartTime);
+          if (nowM < 300 && startM > 1000) nowM += 1440;
+          const diff = nowM - startM;
+          return diff > 0 ? diff : 0;
+        })() : 0,
       }).returning({ id: attendanceTable.id });
 
-      if (insertedAttendance) {
+      if (insertedAttendance?.id) {
         const otResult = calculateOvertime({
           checkIn: currentTimeStr,
           checkOut: currentTimeStr,
@@ -201,27 +213,28 @@ import bcrypt from "bcryptjs";
 
         await db.insert(overtimeTable).values({
           userId: data.userId,
-          userName: user?.firstName || "Unknown",
-          companyId: user?.companyId || "",
-          shiftId: tempShift[0] ? null : shift?.id,
-          attendanceId: insertedAttendance.id,
+          userName: user.name || "Unknown",
+          companyId: user.companyId || "",
+          shiftId: activeShiftId,
+          attendanceId: insertedAttendance.id, 
           date: dateStr,
-          overtimeBefore: otResult?.beforeMinutes || 0,
+          overtimeBefore: otResult.beforeMinutes ?? 0,
           otRoundingOption: companyRounding,
           status: "pending"
         });
+      } else {
+        throw new Error("บันทึกข้อมูลเข้างานล้มเหลว (No ID returned from database)");
       }
 
       revalidatePath("/", "layout");
       revalidatePath("/leader");
       revalidatePath("/employee");
-      
-      // 🚩 คืนค่า requiresRemark เพื่อเปิด Modal หน้าบ้าน
-      return { 
-        success: true, 
-        siteName: currentSiteName, 
-        offsite: isOffsiteIn === "1",
-        attendanceId: insertedAttendance?.id,
+
+      return {
+        success: true,
+        siteName: validatedSite.name,
+        offsite: finalIsOffsiteIn === "1",
+        attendanceId: insertedAttendance.id, 
         requiresRemark: isRemarkActive 
       };
 
@@ -239,35 +252,25 @@ import bcrypt from "bcryptjs";
         .orderBy(desc(attendanceTable.createdAt))
         .limit(1);
 
-      if (lastCheckIn.length === 0) {
+      if (!lastCheckIn || lastCheckIn.length === 0) {
         return { success: false, error: "ไม่พบข้อมูลการเช็คอินที่ค้างอยู่" };
       }
 
       const currentRecord = lastCheckIn[0];
-      const [uLatOut, uLonOut] = data.location.split(',').map(Number);
-
-      // 🚩 ตรวจสอบพิกัดขาออก (ห้ามประจำไซต์เช็คเอาท์นอกพื้นที่)
-      const locationValidation = await validateCheckOutLocation(
-        data.userId,
-        uLatOut,
-        uLonOut,
-        currentRecord,
-        user.site_id || ""
-      );
-
-      const isOffsiteOutValue = locationValidation.isOffsiteOut;
+      const locationValidation = await validateCheckOutLocation(data.userId, lat, lon, currentRecord);
+      const isOffsiteOutValue = locationValidation.isOffsiteOut === "1" ? "1" : "0";
 
       if (locationValidation.OffsiteCheckOutConfirm && !data.isConfirmed) {
         return {
           success: false,
-          siteName: locationValidation.siteOutName || currentRecord.siteInNameSnapshot || "",
           offsite: true,
-          OffsiteCheckInConfirm: false,
+          siteName: locationValidation.siteOutName,
           OffsiteCheckOutConfirm: true
         };
       }
 
-      const finalEndTime = currentRecord.shiftEndTimeSnapshot;
+      const checkInDate = currentRecord.date;
+      const cachedEndTime = currentRecord.shiftEndTimeSnapshot;
 
       let otResult;
       if (currentRecord.workingStatusEnum === "extra") {
@@ -283,62 +286,75 @@ import bcrypt from "bcryptjs";
           checkIn: currentRecord.checkIn || "00:00",
           checkOut: currentTimeStr,
           shiftStart: currentRecord.shiftStartTimeSnapshot,
-          shiftEnd: currentRecord.shiftEndTimeSnapshot,
+          shiftEnd: cachedEndTime,
           roundingMode: companyRounding,
         });
+      }
 
-        // 🚩 ลอจิกออกงานก่อนเวลา (Early Exit) แบบแม่นยำดักเคสข้ามคืน
-        if (finalEndTime) {
-          let currentTotalMinutes = toMin(currentTimeStr);
-          let endTotalMinutes = toMin(finalEndTime);
-          const checkInTotalMinutes = toMin(currentRecord.checkIn);
+      if (cachedEndTime && currentRecord.workingStatusEnum !== "extra") {
+        const [currH, currM] = currentTimeStr.split(':').map(Number);
+        const [endH, endM] = cachedEndTime.split(':').map(Number);
+        const [inH, inM] = (currentRecord.checkIn || "00:00").split(':').map(Number);
 
-          if (endTotalMinutes < checkInTotalMinutes) {
-            if (currentTotalMinutes < checkInTotalMinutes) currentTotalMinutes += 1440;
-            endTotalMinutes += 1440;
-          }
+        let currentTotalMinutes = currH * 60 + currM;
+        let endTotalMinutes = endH * 60 + endM;
+        const checkInTotalMinutes = inH * 60 + inM;
 
-          if (currentTotalMinutes < endTotalMinutes) {
-            isEarlyExit = 1;
-            earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
-          }
+        if (endTotalMinutes < checkInTotalMinutes) {
+          if (currentTotalMinutes < checkInTotalMinutes) currentTotalMinutes += 1440;
+          endTotalMinutes += 1440;
+        }
+        if (currentTotalMinutes < endTotalMinutes) {
+          isEarlyExit = 1;
+          earlyExitMinutes = endTotalMinutes - currentTotalMinutes;
         }
       }
 
-      await db.update(attendanceTable)
-        .set({
-          checkOut: currentTimeStr,
-          imageOut: data.image,
-          imageOutId: data.fileId || null,
-          locationOut: data.location,
-          isEarlyExit: isEarlyExit.toString(),
-          earlyExitMinutes: earlyExitMinutes,
-          isOffsiteOut: isOffsiteOutValue,
-          isOffsiteOutCoordinates: isOffsiteOutValue === "1" ? data.location : null,
-        })
-        .where(eq(attendanceTable.id, currentRecord.id));
+      let finalImageUrl = data.image;
+      let finalImageId = data.fileId || null;
 
-      await db.insert(overtimeTable).values({
-        userId: data.userId,
-        userName: user?.firstName || "Unknown",
-        companyId: user?.companyId || "",
-        shiftId: currentRecord.shift_id,
-        attendanceId: currentRecord.id,
-        date: currentRecord.date || dateStr,
-        overtimeBefore: otResult?.beforeMinutes || 0,
-        overtimeAfter: otResult?.afterMinutes || 0,
-        overtimeCollected: otResult?.totalMinutes || 0,
-        otRoundingOption: companyRounding,
-        status: "pending"
-      }).onConflictDoUpdate({
-        target: [overtimeTable.attendanceId],
-        set: {
-          overtimeBefore: otResult?.beforeMinutes || 0,
-          overtimeAfter: otResult?.afterMinutes || 0,
-          overtimeCollected: otResult?.totalMinutes || 0,
-          otRoundingOption: companyRounding
-        }
-      });
+      if (data.image.startsWith("data:image")) {
+        const base64Data = data.image.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const uploadRes = await uploadToDrive(buffer, `checkout_leader_${data.userId}_${Date.now()}.png`, "image/png");
+        finalImageUrl = uploadRes.ufsUrl || uploadRes.url;
+        finalImageId = uploadRes.fileId;
+      }
+
+      await db.update(attendanceTable).set({
+        checkOut: currentTimeStr,
+        imageOut: finalImageUrl,
+        imageOutId: finalImageId,
+        locationOut: data.location,
+        isEarlyExit: isEarlyExit.toString(),
+        earlyExitMinutes: earlyExitMinutes,
+        isOffsiteOut: isOffsiteOutValue,
+        isOffsiteOutCoordinates: isOffsiteOutValue === "1" ? data.location : null,
+      }).where(eq(attendanceTable.id, currentRecord.id));
+
+      if (checkInDate) {
+        await db.insert(overtimeTable).values({
+          userId: data.userId,
+          userName: user.name || "Unknown",
+          companyId: user.companyId || "",
+          shiftId: currentRecord.shift_id || null,
+          attendanceId: currentRecord.id,
+          date: checkInDate,
+          overtimeBefore: otResult.beforeMinutes ?? 0,
+          overtimeAfter: otResult.afterMinutes ?? 0,
+          overtimeCollected: otResult.totalMinutes ?? 0,
+          otRoundingOption: companyRounding,
+          status: "pending"
+        }).onConflictDoUpdate({
+          target: overtimeTable.attendanceId, // ✨ มั่นใจ 100% ว่าระบุ Target ตรงกลุ่ม Index ไม่แครช
+          set: {
+            overtimeBefore: otResult.beforeMinutes ?? 0,
+            overtimeAfter: otResult.afterMinutes ?? 0,
+            overtimeCollected: otResult.totalMinutes ?? 0,
+            otRoundingOption: companyRounding
+          }
+        });
+      }
 
       revalidatePath("/", "layout");
       revalidatePath("/leader");
@@ -346,16 +362,15 @@ import bcrypt from "bcryptjs";
 
       return {
         success: true,
-        siteName: locationValidation.siteOutName || currentRecord.siteInNameSnapshot || "",
         offsite: isOffsiteOutValue === "1",
-        OffsiteCheckOutConfirm: false,
-        otTotal: otResult?.totalMinutes || 0,
+        siteName: locationValidation.siteOutName || currentRecord.siteInNameSnapshot || "",
+        otTotal: otResult.totalMinutes,
         attendanceId: currentRecord.id,
-        requiresRemark: isRemarkActive // ขาออกก็ตรวจสอบ Feature นี้เช่นกัน
+        requiresRemark: isRemarkActive
       };
     }
   } catch (error: any) {
-    console.error("Attendance error:", error);
+    console.error("Leader attendance error:", error);
     return {
       success: false,
       error: error.message || "เกิดข้อผิดพลาดภายในระบบ"
@@ -531,7 +546,7 @@ export async function changePasswordAction(data: {
 }
 
 /* -------------------------------------------------------------------------- */
-/* PERSONAL OT ACTIONS (OT ส่วนตัว)                                               */
+/* PERSONAL OT ACTIONS (OT ส่วนตัว)                                              */
 /* -------------------------------------------------------------------------- */
 
 export async function createPersonalOTAction(payload: {
@@ -637,7 +652,7 @@ export async function createPersonalOTAction(payload: {
 }
 
 /* -------------------------------------------------------------------------- */
-/* LEADER OT ACTIONS (จัดการอนุมัติ/ปฏิเสธ OT)                                     */
+/* LEADER OT ACTIONS (จัดการอนุมัติ/ปฏิเสธ OT)                                      */
 /* -------------------------------------------------------------------------- */
 
 export async function updateOTStatusAction(
