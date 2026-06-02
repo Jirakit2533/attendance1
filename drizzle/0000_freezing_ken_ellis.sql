@@ -1,5 +1,7 @@
-CREATE TYPE "public"."leave_status" AS ENUM('pending', 'approved', 'rejected');--> statement-breakpoint
+CREATE TYPE "public"."leave_status" AS ENUM('pending', 'approved', 'rejected', 'expired');--> statement-breakpoint
+CREATE TYPE "public"."ot_status" AS ENUM('pending', 'approved', 'rejected', 'expired', 'executed');--> statement-breakpoint
 CREATE TYPE "public"."role" AS ENUM('super_admin', 'admin', 'leader', 'employee');--> statement-breakpoint
+CREATE TYPE "public"."working_status" AS ENUM('normal', 'extra');--> statement-breakpoint
 CREATE TABLE "admins" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid,
@@ -42,7 +44,36 @@ CREATE TABLE "attendance" (
 	"is_offsite_in_coordinates" text,
 	"is_offsite_out" text,
 	"is_offsite_out_coordinates" text,
-	"created_at" timestamp with time zone DEFAULT timezone('UTC', now()) NOT NULL
+	"working_status" "working_status" DEFAULT 'normal',
+	"created_at" timestamp with time zone DEFAULT timezone('UTC', now()) NOT NULL,
+	"remark" text
+);
+--> statement-breakpoint
+CREATE TABLE "automation_logs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"job_name" varchar(255) NOT NULL,
+	"date" date NOT NULL,
+	"start_at" timestamp with time zone DEFAULT timezone('UTC', now()),
+	"end_at" timestamp with time zone,
+	"duration_ms" integer,
+	"read_count" integer DEFAULT 0 NOT NULL,
+	"change_count" integer DEFAULT 0 NOT NULL,
+	"executed_count" integer DEFAULT 0 NOT NULL,
+	"deleted_count" integer DEFAULT 0 NOT NULL,
+	"status" varchar(50) DEFAULT 'success' NOT NULL,
+	"retry_count" integer DEFAULT 0 NOT NULL,
+	"details" jsonb
+);
+--> statement-breakpoint
+CREATE TABLE "company_feature_selected" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"company_id" uuid,
+	"feature_selected_array" jsonb DEFAULT '[]'::jsonb,
+	"created_by_id" uuid,
+	"created_at" timestamp with time zone DEFAULT timezone('UTC', now()) NOT NULL,
+	"update_by_id" uuid,
+	"updated_at" timestamp with time zone,
+	CONSTRAINT "company_feature_selected_company_id_unique" UNIQUE("company_id")
 );
 --> statement-breakpoint
 CREATE TABLE "company" (
@@ -56,6 +87,8 @@ CREATE TABLE "company" (
 	"phone" varchar(255),
 	"email" varchar(255),
 	"logo_url" text,
+	"ot_rounding_option" varchar(30) NOT NULL,
+	"company_feature_selected_id" uuid,
 	"created_by_name" varchar(255),
 	"created_at" timestamp with time zone DEFAULT timezone('UTC', now()) NOT NULL,
 	"update_by_name" varchar(255),
@@ -78,6 +111,12 @@ CREATE TABLE "departments" (
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
+CREATE TABLE "feature_library" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" varchar(255) NOT NULL,
+	"description" text
+);
+--> statement-breakpoint
 CREATE TABLE "leave" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid,
@@ -86,7 +125,10 @@ CREATE TABLE "leave" (
 	"type" varchar(255) NOT NULL,
 	"start_date" date NOT NULL,
 	"end_date" date NOT NULL,
+	"start_time" time,
+	"end_time" time,
 	"reason" text NOT NULL,
+	"total_hours" double precision DEFAULT 0 NOT NULL,
 	"status" "leave_status" DEFAULT 'pending' NOT NULL,
 	"approved_by_id" uuid,
 	"approved_at" timestamp with time zone,
@@ -99,6 +141,20 @@ CREATE TABLE "leave" (
 	"created_at" timestamp with time zone DEFAULT timezone('UTC', now()) NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "logs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" text,
+	"user_name" varchar(255) NOT NULL,
+	"role" varchar(50),
+	"action" varchar(50) NOT NULL,
+	"ip_address" varchar(45),
+	"user_agent" text,
+	"details" jsonb,
+	"login_at" timestamp with time zone,
+	"logout_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT timezone('UTC', now()) NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "overtime_requests" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid,
@@ -108,16 +164,20 @@ CREATE TABLE "overtime_requests" (
 	"site_id" uuid,
 	"shift_id" uuid,
 	"overtime_by_request" integer NOT NULL,
+	"time_start" time NOT NULL,
+	"time_end" time NOT NULL,
+	"date" date NOT NULL,
 	"requested_workers" jsonb DEFAULT '[]'::jsonb,
+	"reason" text NOT NULL,
 	"remarks" text,
-	"status" "leave_status" DEFAULT 'pending' NOT NULL,
+	"status" "ot_status" DEFAULT 'pending' NOT NULL,
+	"approved_at" timestamp with time zone DEFAULT timezone('UTC', now()),
 	"approved_by" uuid,
-	"approved_at" timestamp,
+	"rejected_at" timestamp with time zone DEFAULT timezone('UTC', now()),
 	"rejected_by" uuid,
-	"rejected_at" timestamp,
 	"created_at" timestamp with time zone DEFAULT timezone('UTC', now()),
 	"created_by" uuid,
-	"deleted_at" timestamp,
+	"deleted_at" timestamp with time zone,
 	"deleted_by" uuid
 );
 --> statement-breakpoint
@@ -128,14 +188,14 @@ CREATE TABLE "overtime" (
 	"company_id" uuid,
 	"shift_id" uuid,
 	"attendance_id" uuid,
-	"status" varchar(20) DEFAULT 'pending',
+	"status" "ot_status" DEFAULT 'pending' NOT NULL,
 	"date" date NOT NULL,
-	"overtime_today" integer DEFAULT 0 NOT NULL,
-	"overtime_collected" integer DEFAULT 0 NOT NULL,
+	"overtime_before" integer DEFAULT 0 NOT NULL,
+	"overtime_after" integer DEFAULT 0 NOT NULL,
 	"overtime_approved" integer DEFAULT 0 NOT NULL,
 	"overtime_rejected" integer DEFAULT 0 NOT NULL,
-	"total_overtime_approved" integer DEFAULT 0 NOT NULL,
-	"ot_rounding_option" varchar(30) NOT NULL
+	"ot_rounding_option" varchar(30) NOT NULL,
+	CONSTRAINT "overtime_attendance_id_unique" UNIQUE("attendance_id")
 );
 --> statement-breakpoint
 CREATE TABLE "positions" (
@@ -221,51 +281,55 @@ CREATE TABLE "users" (
 ALTER TABLE "admins" ADD CONSTRAINT "admins_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "admins" ADD CONSTRAINT "admins_creator_id_super_admins_id_fk" FOREIGN KEY ("creator_id") REFERENCES "public"."super_admins"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "admins" ADD CONSTRAINT "admins_company_id_company_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."company"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "attendance" ADD CONSTRAINT "attendance_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "attendance" ADD CONSTRAINT "attendance_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attendance" ADD CONSTRAINT "attendance_department_id_departments_id_fk" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attendance" ADD CONSTRAINT "attendance_shift_id_shifts_id_fk" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "attendance" ADD CONSTRAINT "attendance_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "attendance" ADD CONSTRAINT "attendance_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attendance" ADD CONSTRAINT "attendance_temp_shift_id_temporary_shifts_id_fk" FOREIGN KEY ("temp_shift_id") REFERENCES "public"."temporary_shifts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "company_feature_selected" ADD CONSTRAINT "company_feature_selected_company_id_company_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."company"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "company_feature_selected" ADD CONSTRAINT "company_feature_selected_created_by_id_super_admins_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."super_admins"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "company_feature_selected" ADD CONSTRAINT "company_feature_selected_update_by_id_super_admins_id_fk" FOREIGN KEY ("update_by_id") REFERENCES "public"."super_admins"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "company" ADD CONSTRAINT "company_superAdminCreator_id_super_admins_id_fk" FOREIGN KEY ("superAdminCreator_id") REFERENCES "public"."super_admins"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "company" ADD CONSTRAINT "company_company_feature_selected_id_company_feature_selected_id_fk" FOREIGN KEY ("company_feature_selected_id") REFERENCES "public"."company_feature_selected"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "departments" ADD CONSTRAINT "departments_company_id_company_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."company"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "departments" ADD CONSTRAINT "departments_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "departments" ADD CONSTRAINT "departments_update_by_id_users_id_fk" FOREIGN KEY ("update_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "departments" ADD CONSTRAINT "departments_deleted_by_id_users_id_fk" FOREIGN KEY ("deleted_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "leave" ADD CONSTRAINT "leave_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "departments" ADD CONSTRAINT "departments_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "departments" ADD CONSTRAINT "departments_update_by_id_users_id_fk" FOREIGN KEY ("update_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "departments" ADD CONSTRAINT "departments_deleted_by_id_users_id_fk" FOREIGN KEY ("deleted_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "leave" ADD CONSTRAINT "leave_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "leave" ADD CONSTRAINT "leave_department_id_departments_id_fk" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "leave" ADD CONSTRAINT "leave_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "leave" ADD CONSTRAINT "leave_approved_by_id_users_id_fk" FOREIGN KEY ("approved_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "leave" ADD CONSTRAINT "leave_rejected_by_id_users_id_fk" FOREIGN KEY ("rejected_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "leave" ADD CONSTRAINT "leave_approved_by_id_users_id_fk" FOREIGN KEY ("approved_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "leave" ADD CONSTRAINT "leave_rejected_by_id_users_id_fk" FOREIGN KEY ("rejected_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_company_id_company_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."company"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_department_id_departments_id_fk" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_shift_id_shifts_id_fk" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_approved_by_users_id_fk" FOREIGN KEY ("approved_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_rejected_by_users_id_fk" FOREIGN KEY ("rejected_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_deleted_by_users_id_fk" FOREIGN KEY ("deleted_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "overtime" ADD CONSTRAINT "overtime_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_approved_by_users_id_fk" FOREIGN KEY ("approved_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_rejected_by_users_id_fk" FOREIGN KEY ("rejected_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "overtime_requests" ADD CONSTRAINT "overtime_requests_deleted_by_users_id_fk" FOREIGN KEY ("deleted_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "overtime" ADD CONSTRAINT "overtime_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "overtime" ADD CONSTRAINT "overtime_company_id_company_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."company"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "overtime" ADD CONSTRAINT "overtime_shift_id_shifts_id_fk" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "overtime" ADD CONSTRAINT "overtime_attendance_id_attendance_id_fk" FOREIGN KEY ("attendance_id") REFERENCES "public"."attendance"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "positions" ADD CONSTRAINT "positions_company_id_company_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."company"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "positions" ADD CONSTRAINT "positions_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "shifts" ADD CONSTRAINT "shifts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "positions" ADD CONSTRAINT "positions_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "shifts" ADD CONSTRAINT "shifts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shifts" ADD CONSTRAINT "shifts_company_id_company_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."company"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shifts" ADD CONSTRAINT "shifts_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sites" ADD CONSTRAINT "sites_company_id_company_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."company"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sites" ADD CONSTRAINT "sites_department_id_departments_id_fk" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sites" ADD CONSTRAINT "sites_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sites" ADD CONSTRAINT "sites_update_by_id_users_id_fk" FOREIGN KEY ("update_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sites" ADD CONSTRAINT "sites_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sites" ADD CONSTRAINT "sites_update_by_id_users_id_fk" FOREIGN KEY ("update_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "temporary_shifts" ADD CONSTRAINT "temporary_shifts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "temporary_shifts" ADD CONSTRAINT "temporary_shifts_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "temporary_shifts" ADD CONSTRAINT "temporary_shifts_overtime_id_overtime_id_fk" FOREIGN KEY ("overtime_id") REFERENCES "public"."overtime"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "temporary_shifts" ADD CONSTRAINT "temporary_shifts_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "temporary_shifts" ADD CONSTRAINT "temporary_shifts_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_company_id_company_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."company"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_department_id_departments_id_fk" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_position_id_positions_id_fk" FOREIGN KEY ("position_id") REFERENCES "public"."positions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_update_by_id_users_id_fk" FOREIGN KEY ("update_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_deleted_by_id_users_id_fk" FOREIGN KEY ("deleted_by_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "users" ADD CONSTRAINT "users_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_update_by_id_users_id_fk" FOREIGN KEY ("update_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_deleted_by_id_users_id_fk" FOREIGN KEY ("deleted_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;

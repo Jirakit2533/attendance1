@@ -149,19 +149,19 @@ export default async function AdminDashboardPage() {
         )
         .orderBy(desc(leaveTable.createdAt)),
 
-      // --- ข้อมูลพื้นฐาน ---
+      // --- ข้อมูลพื้นฐาน (เพิ่มเงื่อนไข isNull(deletedAt)) ---
       db
         .select()
         .from(sitesTable)
-        .where(eq(sitesTable.companyId, companyId || "")),
+        .where(and(eq(sitesTable.companyId, companyId || ""), isNull(sitesTable.deletedAt))),
       db
         .select()
         .from(positionsTable)
-        .where(eq(positionsTable.company_id, companyId || "")),
+        .where(and(eq(positionsTable.company_id, companyId || ""), isNull(positionsTable.deletedAt))),
       db
         .select()
         .from(departmentsTable)
-        .where(eq(departmentsTable.companyId, companyId || "")),
+        .where(and(eq(departmentsTable.companyId, companyId || ""), isNull(departmentsTable.deletedAt))),
 
       db
         .select({
@@ -215,7 +215,7 @@ export default async function AdminDashboardPage() {
         .orderBy(desc(overtimeRequestsTable.createdAt)),
     ]);
 
-    // 4. Mapping ข้อมูล
+    // ... (ส่วน Mapping ข้อมูลด้านล่างยังคงเหมือนเดิมทุกประการ)
     const employees = (rawEmployees || []).map((emp) => {
       const isUuid = emp?.userName && emp.userName.length > 30;
       const finalUserName = isUuid
@@ -231,9 +231,9 @@ export default async function AdminDashboardPage() {
         employeeName: `${emp?.firstName || ""} ${emp?.lastName || ""}`.trim() || "ไม่ระบุชื่อ",
         role: String(emp?.role || "employee"),
         departmentId: emp?.departmentId ? String(emp.departmentId) : null,
-        departmentName: emp?.departmentName || "ไม่ระบุแผนก", // Map เพิ่มให้สอดคล้องกับฟิลเตอร์
+        departmentName: emp?.departmentName || "ไม่ระบุแผนก",
         positionId: emp?.positionId ? String(emp.positionId) : null,
-        positionName: emp?.positionName || "พนักงาน", // Map เพิ่มให้สอดคล้องกับฟิลเตอร์
+        positionName: emp?.positionName || "พนักงาน",
         siteId: emp?.siteId ? String(emp.siteId) : null,
         site: String(emp?.siteName || "ไม่ระบุ"),
         siteName: emp?.siteName || "ไม่ระบุ",
@@ -323,8 +323,8 @@ export default async function AdminDashboardPage() {
         type: String(l?.type || "ลากิจ"),
         startDate: l?.startDate ? String(l.startDate) : "",
         endDate: l?.endDate ? String(l.endDate) : "",
-        startTime: l?.startTime || null, // Map ข้อมูล startTime
-        endTime: l?.endTime || null,     // Map ข้อมูล endTime
+        startTime: l?.startTime || null,
+        endTime: l?.endTime || null,
         status: String(l?.status || "pending"),
         reason: String(l?.reason || ""),
         remark: String(l?.remark || ""),

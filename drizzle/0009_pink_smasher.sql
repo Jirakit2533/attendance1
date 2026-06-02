@@ -1,1 +1,0 @@
-ALTER TABLE "overtime" ADD COLUMN "overtime_rejected" integer DEFAULT 0 NOT NULL;

@@ -18,7 +18,6 @@ import { alias } from "drizzle-orm/pg-core";
 
 export const dynamic = "force-dynamic"; // บังคับให้เป็น Dynamic ตลอดเวลา
 
-
 export default async function Page() {
   // 1. ดึงข้อมูล User จาก Session/Cookie เบื้องต้น
   const userFromAuth = await getCurrentUser();
@@ -49,12 +48,13 @@ export default async function Page() {
       companyDescription: companyTable.description,
     })
     .from(usersTable)
-    .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
-    .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
+    // 🚩 เพิ่ม isNull(sitesTable.deletedAt) เพื่อไม่ดึงไซต์ที่ถูก Soft Delete
+    .leftJoin(positionsTable, and(eq(usersTable.positionId, positionsTable.id), isNull(positionsTable.deletedAt)))
+    .leftJoin(sitesTable, and(eq(usersTable.site_id, sitesTable.id), isNull(sitesTable.deletedAt)))
     // ✅ ต้อง Join ตารางแผนกเพิ่มเพื่อให้ได้ชื่อแผนก (ไม่ใช่แค่ ID)
     .leftJoin(
       departmentsTable,
-      eq(usersTable.departmentId, departmentsTable.id)
+      and(eq(usersTable.departmentId, departmentsTable.id), isNull(departmentsTable.deletedAt))
     )
     // ✅ เพิ่ม Join shiftsTable เพื่อเอาข้อมูลเวลา
     .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId))

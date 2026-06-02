@@ -1,6 +1,6 @@
 import { db } from "@/db/db"; 
 import { sitesTable,  usersTable } from "@/db/schema"; 
-import { and, eq, ne} from "drizzle-orm"; 
+import { and, eq, ne, isNull } from "drizzle-orm"; 
 
 // ปรับเป็นประมาณ 20 เมตร (0.00018) ตามความต้องการล่าสุด
 const OFFSET_50M = 0.00045; 
@@ -47,7 +47,11 @@ export const validateAndGetSite = async (
   // --- ขั้นตอนที่ 1: ตรวจสอบสถานะ User (ทุกไซต์?) ---
   if (fixedSiteId && fixedSiteId !== "") {
     const site = await db.query.sitesTable.findFirst({
-      where: and(eq(sitesTable.id, fixedSiteId), eq(sitesTable.companyId, companyId)),
+      where: and(
+        eq(sitesTable.id, fixedSiteId), 
+        eq(sitesTable.companyId, companyId),
+        isNull(sitesTable.deletedAt)
+      ),
     });
 
     if (site?.name === "ทุกไซต์") {
@@ -59,7 +63,8 @@ export const validateAndGetSite = async (
   const allActualSites = await db.query.sitesTable.findMany({
     where: and(
       ne(sitesTable.name, "ทุกไซต์"),
-      eq(sitesTable.companyId, companyId)
+      eq(sitesTable.companyId, companyId),
+      isNull(sitesTable.deletedAt)
     )
   }); 
 
@@ -86,7 +91,7 @@ export const validateAndGetSite = async (
   } else {
     if (fixedSiteId) {
       const site = await db.query.sitesTable.findFirst({ 
-        where: eq(sitesTable.id, fixedSiteId) 
+        where: and(eq(sitesTable.id, fixedSiteId), isNull(sitesTable.deletedAt)) 
       });
       
       if (site && site.coordinates && site.coordinates.includes(',')) {
@@ -128,13 +133,14 @@ export const validateCheckOutLocation = async (
   currentRecord: any 
 ) => {
   const userProfile = await db.query.usersTable.findFirst({
-    where: eq(usersTable.id, userId),
+    where: and(eq(usersTable.id, userId), isNull(usersTable.deletedAt)),
   });
 
   const mainSite = await db.query.sitesTable.findFirst({
     where: and(
         eq(sitesTable.id, userProfile?.site_id || ""),
-        eq(sitesTable.companyId, userProfile?.companyId || "")
+        eq(sitesTable.companyId, userProfile?.companyId || ""),
+        isNull(sitesTable.deletedAt)
     ),
   });
   
@@ -148,7 +154,8 @@ export const validateCheckOutLocation = async (
     const allActualSites = await db.query.sitesTable.findMany({
       where: and(
         ne(sitesTable.name, "ทุกไซต์"),
-        eq(sitesTable.companyId, userProfile?.companyId || "")
+        eq(sitesTable.companyId, userProfile?.companyId || ""),
+        isNull(sitesTable.deletedAt)
       )
     });
 
@@ -174,7 +181,7 @@ export const validateCheckOutLocation = async (
   }
 
   const siteInDb = await db.query.sitesTable.findFirst({
-    where: eq(sitesTable.id, targetSiteId),
+    where: and(eq(sitesTable.id, targetSiteId), isNull(sitesTable.deletedAt)),
   });
 
   if (siteInDb && siteInDb.coordinates && siteInDb.coordinates.includes(',')) {

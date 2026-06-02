@@ -1,1 +1,0 @@
-ALTER TABLE "company_feature_selected" ADD CONSTRAINT "company_feature_selected_company_id_unique" UNIQUE("company_id");

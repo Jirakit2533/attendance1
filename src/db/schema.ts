@@ -89,6 +89,8 @@ export const sitesTable = pgTable("sites", {
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
   updateBy: uuid("update_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`), 
+  deletedBy: uuid("deleted_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export const positionsTable = pgTable("positions", {
@@ -97,6 +99,10 @@ export const positionsTable = pgTable("positions", {
   company_id: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }), 
   createdBy: uuid("created_by_id").references(() => usersTable.id, { onDelete: "set null" }), 
   created_at: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(), 
+  updateBy: uuid("update_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`), 
+  deletedBy: uuid("deleted_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export const shiftsTable = pgTable("shifts", {
@@ -105,9 +111,13 @@ export const shiftsTable = pgTable("shifts", {
   startTime: time("start_time").notNull(), 
   endTime: time("end_time").notNull(),     
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),          
-  siteId: uuid("site_id").references(() => sitesTable.id),
+  siteId: uuid("site_id").references(() => sitesTable.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow(),
+  createdBy: uuid("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at").defaultNow(),
+  updateBy: uuid("update_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: uuid("deleted_by_id").references(() => usersTable.id, { onDelete: "set null" }),
 });
 
 export const overtimeTable = pgTable("overtime", {
@@ -132,7 +142,7 @@ export const overtimeRequestsTable = pgTable("overtime_requests", {
   userName: varchar("user_name", { length: 255 }).notNull(),
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
   departmentId: uuid("department_id").references(() => departmentsTable.id),
-  siteId: uuid("site_id").references(() => sitesTable.id),
+  siteId: uuid("site_id").references(() => sitesTable.id, { onDelete: "cascade" }),
   shiftId: uuid("shift_id").references(() => shiftsTable.id),
   overtimeByRequest: integer("overtime_by_request").notNull(),
   timeStart: time("time_start").notNull(),
@@ -159,7 +169,7 @@ export const temporaryShiftsTable = pgTable("temporary_shifts", {
   name: varchar("name", { length: 100 }).notNull(),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
-  siteId: uuid("site_id").references(() => sitesTable.id),
+  siteId: uuid("site_id").references(() => sitesTable.id, { onDelete: "cascade" }),
   status: varchar("status", { length: 20 }).default("pending").notNull(), 
   overtimeId: uuid("overtime_id").references(() => overtimeTable.id),
   remark: text("remark"),
@@ -178,7 +188,7 @@ export const usersTable = pgTable("users", {
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
   departmentId: uuid("department_id").references(() => departmentsTable.id),
   positionId: uuid("position_id").references(() => positionsTable.id), 
-  site_id: uuid("site_id").references(() => sitesTable.id, { onDelete: "set null" }),
+  site_id: uuid("site_id").references(() => sitesTable.id, { onDelete: "cascade" }),
   avatarUrl: text("avatar_url"), 
   avatarId: text("avatar_id"),
   createdBy: uuid("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
@@ -194,7 +204,7 @@ export const attendanceTable = pgTable("attendance", {
   user_id: uuid("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   department_id: uuid("department_id").references(() => departmentsTable.id),
   shift_id: uuid("shift_id").references(() => shiftsTable.id),
-  site_id: uuid("site_id").references(() => sitesTable.id),
+  site_id: uuid("site_id").references(() => sitesTable.id, { onDelete: "cascade" }),
   temp_shift_id: uuid("temp_shift_id").references(() => temporaryShiftsTable.id),
   siteInNameSnapshot: varchar("site_in_name_snapshot", { length: 255 }),
   siteOutNameSnapshot: varchar("site_out_name_snapshot", { length: 255 }),

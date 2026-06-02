@@ -137,15 +137,12 @@ export default function LeaderClientPage({
     setTeamAttendance(initialAttendance);
   }, [initialAttendance]);
 
+  const currentInitialOTString = JSON.stringify(initialOT);
   useEffect(() => {
-    // ตรวจสอบว่าข้อมูลข้างในเปลี่ยนจริงหรือไม่ ก่อนจะสั่ง Set State
-    const isChanged =
-      JSON.stringify(overtimeRequests) !== JSON.stringify(initialOT);
-
-    if (isChanged) {
-      setOvertimeRequests(initialOT);
+    if (currentInitialOTString !== JSON.stringify(overtimeRequests)) {
+      setOvertimeRequests(initialOT || []);
     }
-  }, [initialOT]);
+  }, [currentInitialOTString]);
 
   const { startUpload: uploadAttendance } = useUploadThing("imageUploader");
   const { startUpload: uploadLeave } = useUploadThing("leaveFileUploader");
@@ -170,8 +167,6 @@ export default function LeaderClientPage({
   const [searchLeave, setSearchLeave] = useState("");
   const [leaveRemarks, setLeaveRemarks] = useState<Record<string, string>>({});
   const [viewRemarkId, setViewRemarkId] = useState<string | null>(null);
-
-  const [showOffsitePopup, setShowOffsitePopup] = useState(false);
   const [pendingData, setPendingData] = useState<any>(null);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -186,7 +181,8 @@ export default function LeaderClientPage({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [viewImage, setViewImage] = useState<string | null>(null);
-
+  const [showOffsitePopup, setShowOffsitePopup] = useState<boolean>(false);
+  const [showLogoutConfirmPopup, setShowLogoutConfirmPopup] = useState<boolean>(false);
   const [showOTModal, setShowOTModal] = useState(false);
   const [otError, setOtError] = useState("");
   const [otSuccess, setOtSuccess] = useState(false);
@@ -658,6 +654,47 @@ export default function LeaderClientPage({
     }
   };
 
+  // ==========================================
+  // [ADDED/MODIFIED FOR POPUP FLOW] ฟังก์ชันคุมการเริ่มต้นลงเวลา (ก่อนเปิดกล้อง)
+  // ==========================================
+  const handleCheckInOrOut = async (type: "IN" | "OUT") => {
+    setIsCheckingOut(type === "OUT");
+
+    if (type === "OUT") {
+      // 🚩 ดึงเวลาปัจจุบันมาเช็คเงื่อนไขออกงานก่อนกำหนด (ถอดแบบตัวอย่างของนาย)
+      const now = new Date();
+      const currentMin = now.getHours() * 60 + now.getMinutes();
+      
+      // ดึงเวลาเลิกงานจาก profile / shift snapshot (ถ้ามี) ตัวอย่างเช่น "17:00"
+      const shiftEndTime = userProfile?.endTime || null; 
+      
+      if (shiftEndTime) {
+        const [endH, endM] = shiftEndTime.split(":").map(Number);
+        const endTotalMin = endH * 60 + endM;
+        
+        // ถ้าเวลาปัจจุบันยังไม่ถึงเวลาเลิกงาน และห่างกันไม่เกิน 60 นาที ให้เปิดป๊อปอัพเตือนออกก่อนกำหนด
+        if (currentMin < endTotalMin && (endTotalMin - currentMin) <= 60) {
+          setPendingData({
+            userId: userProfile.id,
+            type: "OUT",
+            image: "",
+            fileId: undefined,
+            location: "",
+            departmentId: userProfile.departmentId || "",
+            siteId: userProfile.site_id || null,
+            isConfirmed: false,
+            siteName: "ไซต์งานปัจจุบัน"
+          });
+          setShowLogoutConfirmPopup(true);
+          return; // เบรกไว้ก่อน รอให้กดยืนยันใน Popup แล้วค่อยเรียก startCamera()
+        }
+      }
+    }
+
+    // หากเป็นขาเข้า (IN) หรือ ขาออกปกติที่ไม่อยู่ในเงื่อนไขเตือน ให้เปิดกล้องตาม Flow เดิมของนายทันที
+    startCamera();
+  };
+
   const handleCapture = async () => {
     if (!videoRef.current || !streamRef.current) return;
     setIsProcessing(true);
@@ -723,17 +760,20 @@ export default function LeaderClientPage({
       // 4. เรียก Action บันทึกข้อมูล
       const result = await saveAttendanceAction(attendancePayload);
 
+      // ป้องกันกรณี Server Crash แล้วส่ง result กลับมาเป็น undefined / null
+      if (!result) {
+        throw new Error("เซิร์ฟเวอร์ไม่ได้ส่งข้อมูลตอบกลับ กรุณาลองใหม่อีกครั้ง");
+      }
+
       if (result.success) {
         alert(isCheckingOut ? "บันทึกออกงานสำเร็จ" : "บันทึกเข้างานสำเร็จ");
         router.refresh();
       } else {
-        // ✅ ปรับ Logic: ถ้าไม่มี site_id (กลุ่มทุกไซต์) และได้รับสัญญาณให้ยืนยัน ให้เปิด Pop-up
-        // แต่ถ้าเป็นพนักงานประจำไซต์ (มี site_id) จะตกลงไปที่ else เพื่อ alert error ทันที
+        // ✅ ปรับ Logic: ถ้าได้รับสัญญาณยืนยันหรือสถานะ offsite จากเซิร์ฟเวอร์ ให้เปิด Pop-up ทันที
         if (
-          !userProfile.site_id &&
-          (result.OffsiteCheckInConfirm ||
-            result.OffsiteCheckOutConfirm ||
-            result.offsite)
+          result.OffsiteCheckInConfirm ||
+          result.OffsiteCheckOutConfirm ||
+          result.offsite
         ) {
           setPendingData({
             ...attendancePayload,
@@ -741,8 +781,8 @@ export default function LeaderClientPage({
           });
           setShowOffsitePopup(true);
         } else {
-          // พนักงานประจำไซต์ที่พิกัดไม่ตรง จะแจ้งเตือนข้อผิดพลาดตรงนี้เลย
-          alert("ข้อผิดพลาดจากระบบ: " + result.error);
+          // กรณีที่ไม่มีสัญญาณยืนยัน และไม่ผ่าน (เช่น error อื่นๆ) ให้แจ้งเตือน
+          alert("ข้อผิดพลาดจากระบบ: " + (result.error || "ไม่สามารถบันทึกเวลาได้เด้อ"));
         }
       }
     } catch (err: any) {
@@ -3622,11 +3662,43 @@ export default function LeaderClientPage({
           animation: scan 3s linear infinite;
         }
       `}</style>
-      {showOffsitePopup && (
-        <OffsiteConfirmPopup
+       {showOffsitePopup && (
+  <OffsiteConfirmPopup
+    siteName={pendingData?.siteName || "ไซต์งาน"}
+    onCancel={() => setShowOffsitePopup(false)}
+    onConfirm={() => {
+      // แก้ไขให้เรียกใช้ฟังก์ชันที่ถูกต้องตามที่ประกาศไว้ใน Server Action
+      // โดยส่ง isConfirmed: true เข้าไปเพื่อข้ามขั้นตอนเช็คพิกัดซ้ำ
+      saveAttendanceAction({
+        ...pendingData!,
+        isConfirmed: true, 
+      }).then((result) => {
+        if (result.success) {
+          alert(isCheckingOut ? "บันทึกออกงานสำเร็จ" : "บันทึกเข้างานสำเร็จ");
+          setShowOffsitePopup(false);
+          router.refresh();
+        } else {
+          alert("ข้อผิดพลาด: " + (result.error || "ไม่สามารถบันทึกเวลาได้"));
+        }
+      });
+    }}
+  />
+)}
+      {/* --- 4. ปุ่มยืนยันออกงานก่อนกำหนด < 1 ชม. ของนาย --- */}
+      {showLogoutConfirmPopup && (
+        <LogoutConfirmPopup
           siteName={pendingData?.siteName || "ไซต์งาน"}
-          onCancel={() => setShowOffsitePopup(false)}
-          onConfirm={() => handleConfirmOffsite(true)}
+          onCancel={() => {
+            setShowLogoutConfirmPopup(false);
+            setIsCheckingOut(false);
+          }}
+          onConfirm={() => {
+            setShowLogoutConfirmPopup(false); // ปิดป๊อปอัพเตือน
+
+            // 🚩 รันคำสั่งเปิดกล้องเพื่อให้พนักงานกดถ่ายรูปตาม Flow เดิมของนาย
+            // พอกดชัตเตอร์ถ่ายรูปเสร็จ ตัวปุ่มชัตเตอร์กล้องของนายจะเรียก executeAttendanceAction(true) ไปเองโดยอัตโนมัติ
+            startCamera();
+          }}
         />
       )}
     </div>

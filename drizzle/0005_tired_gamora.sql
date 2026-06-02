@@ -1,1 +1,0 @@
-ALTER TABLE "overtime" DROP COLUMN "overtime_rejected";

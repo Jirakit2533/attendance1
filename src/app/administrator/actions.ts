@@ -67,11 +67,12 @@ export async function saveSiteAction(data: { name: string; address: string; lat:
     const admin = await getAdminContext();
     if (!admin || !admin.companyId) return { success: false, error: "เซสชันหมดอายุ" };
 
-    // ตรวจสอบว่ามีชื่อไซต์นี้อยู่ในบริษัทแล้วหรือไม่
+    // ตรวจสอบว่ามีชื่อไซต์นี้อยู่ในบริษัทแล้วหรือไม่ (โดยต้องไม่ถูก Soft Delete)
     const existingSite = await db.query.sitesTable.findFirst({
-      where: (sites, { and, eq }) => and(
+      where: (sites, { and, eq, isNull }) => and(
         eq(sites.name, data.name),
-        eq(sites.companyId, admin.companyId)
+        eq(sites.companyId, admin.companyId),
+        isNull(sites.deletedAt)
       ),
     });
 
@@ -106,11 +107,12 @@ export async function savePositionAction(data: { name: string }) {
     const admin = await getAdminContext();
     if (!admin || !admin.companyId) return { success: false, error: "เซสชันหมดอายุ" };
 
-    // ตรวจสอบชื่อตำแหน่งซ้ำ
+    // ตรวจสอบชื่อตำแหน่งซ้ำ (โดยต้องไม่ถูก Soft Delete)
     const existingPos = await db.query.positionsTable.findFirst({
-      where: (pos, { and, eq }) => and(
+      where: (pos, { and, eq, isNull }) => and(
         eq(pos.name, data.name),
-        eq(pos.company_id, admin.companyId)
+        eq(pos.company_id, admin.companyId),
+        isNull(pos.deletedAt)
       ),
     });
 
@@ -140,11 +142,12 @@ export async function createDepartmentAction(name: string) {
     const admin = await getAdminContext();
     if (!admin || !admin.companyId) return { success: false, error: "เซสชันหมดอายุ" };
 
-    // ตรวจสอบชื่อแผนกซ้ำ
+    // ตรวจสอบชื่อแผนกซ้ำ (โดยต้องไม่ถูก Soft Delete)
     const existingDept = await db.query.departmentsTable.findFirst({
-      where: (dept, { and, eq }) => and(
+      where: (dept, { and, eq, isNull }) => and(
         eq(dept.name, name),
-        eq(dept.companyId, admin.companyId)
+        eq(dept.companyId, admin.companyId),
+        isNull(dept.deletedAt)
       ),
     });
 
@@ -486,17 +489,29 @@ export async function getAttendanceAction() {
 
 /** * ลบไซต์งาน 
  */
+/** * ลบไซต์งาน 
+ */
+/** * ลบไซต์งาน (ปรับปรุงเป็น Soft Delete)
+ */
 export async function deleteSiteAction(id: string) {
   try {
     const admin = await getAdminContext();
     if (!admin) return { success: false, error: "Unauthorized" };
 
-    await db.delete(sitesTable).where(eq(sitesTable.id, id));
+    // เปลี่ยนจาก db.delete เป็นการทำ Soft Delete แสตมป์เวลาและผู้ลบ
+    await db
+      .update(sitesTable)
+      .set({
+        deletedAt: new Date(),
+        deletedBy: admin.id, // บันทึก ID ของผู้ลบ (อ้างอิงจากความสัมพันธ์ตาราง users/admins)
+      })
+      .where(eq(sitesTable.id, id));
 
     revalidatePath("/administrator");
     return { success: true, message: "ลบไซต์งานสำเร็จ" };
   } catch (error) {
-    return { success: false, error: "ไม่สามารถลบได้ เนื่องจากมีการใช้งานไซต์งานนี้อยู่" };
+    console.error("Delete Site Error:", error);
+    return { success: false, error: "เกิดข้อผิดพลาดจากระบบ ไม่สามารถลบไซต์งานได้" };
   }
 }
 
@@ -543,19 +558,32 @@ export async function deleteDepartmentAction(id: string) {
   }
 }
 
-/** * ลบตำแหน่ง 
+/** * ลบตำแหน่ง (ปรับปรุงเป็น Soft Delete)
  */
 export async function deletePositionAction(id: string) {
   try {
     const admin = await getAdminContext();
     if (!admin) return { success: false, error: "Unauthorized" };
 
-    await db.delete(positionsTable).where(eq(positionsTable.id, id));
+    // เปลี่ยนจาก db.delete เป็นการทำ Soft Delete ตามที่มีฟิลด์รองรับใน Schema
+    await db
+      .update(positionsTable)
+      .set({
+        deletedAt: new Date(),
+        deletedBy: admin.id,
+      })
+      .where(
+        and(
+          eq(positionsTable.id, id),
+          eq(positionsTable.company_id, admin.companyId)
+        )
+      );
 
     revalidatePath("/administrator");
     return { success: true, message: "ลบตำแหน่งสำเร็จ" };
   } catch (error) {
-    return { success: false, error: "ไม่สามารถลบได้ เนื่องจากมีพนักงานใช้ตำแหน่งนี้อยู่" };
+    console.error("Delete Position Error:", error);
+    return { success: false, error: "เกิดข้อผิดพลาดจากระบบ ไม่สามารถลบตำแหน่งได้" };
   }
 }
 

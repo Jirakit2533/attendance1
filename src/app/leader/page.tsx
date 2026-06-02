@@ -76,11 +76,11 @@ export default async function LeaderPage() {
       companyDescription: companyTable.description,
     })
     .from(usersTable)
-    .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
-    .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
+    .leftJoin(positionsTable, and(eq(usersTable.positionId, positionsTable.id), isNull(positionsTable.deletedAt)))
+    .leftJoin(sitesTable, and(eq(usersTable.site_id, sitesTable.id), isNull(sitesTable.deletedAt)))
     .leftJoin(
       departmentsTable,
-      eq(usersTable.departmentId, departmentsTable.id)
+      and(eq(usersTable.departmentId, departmentsTable.id), isNull(departmentsTable.deletedAt))
     )
     .leftJoin(shiftsTable, eq(usersTable.id, shiftsTable.userId))
     .leftJoin(companyTable, eq(usersTable.companyId, companyTable.id))
@@ -173,9 +173,9 @@ export default async function LeaderPage() {
             .innerJoin(usersTable, eq(leaveTable.user_id, usersTable.id))
             .leftJoin(
               positionsTable,
-              eq(usersTable.positionId, positionsTable.id)
+              and(eq(usersTable.positionId, positionsTable.id), isNull(positionsTable.deletedAt))
             )
-            .leftJoin(sitesTable, eq(usersTable.site_id, sitesTable.id))
+            .leftJoin(sitesTable, and(eq(usersTable.site_id, sitesTable.id), isNull(sitesTable.deletedAt)))
             .leftJoin(
               approverUser,
               or(
@@ -185,7 +185,7 @@ export default async function LeaderPage() {
             )
             .leftJoin(
               approverPosition,
-              eq(approverUser.positionId, approverPosition.id)
+              and(eq(approverUser.positionId, approverPosition.id), isNull(approverPosition.deletedAt))
             )
             .where(teamFilter)
             .orderBy(desc(leaveTable.createdAt))
@@ -224,7 +224,7 @@ export default async function LeaderPage() {
             .leftJoin(usersTable, eq(attendanceTable.user_id, usersTable.id))
             .leftJoin(
               positionsTable,
-              eq(usersTable.positionId, positionsTable.id)
+              and(eq(usersTable.positionId, positionsTable.id), isNull(positionsTable.deletedAt))
             )
             .where(teamFilter)
             .orderBy(desc(attendanceTable.date), desc(attendanceTable.checkIn))
@@ -261,7 +261,7 @@ export default async function LeaderPage() {
         )
         .leftJoin(
           approverPosition,
-          eq(approverUser.positionId, approverPosition.id)
+          and(eq(approverUser.positionId, approverPosition.id), isNull(approverPosition.deletedAt))
         )
         .where(eq(leaveTable.user_id, user.id))
         .orderBy(desc(leaveTable.createdAt))
@@ -292,9 +292,9 @@ export default async function LeaderPage() {
             })
             .from(overtimeRequestsTable)
             .innerJoin(usersTable, eq(overtimeRequestsTable.userId, usersTable.id))
-            .leftJoin(otEmployeePosition, eq(usersTable.positionId, otEmployeePosition.id))
+            .leftJoin(otEmployeePosition, and(eq(usersTable.positionId, otEmployeePosition.id), isNull(otEmployeePosition.deletedAt)))
             .leftJoin(otApproverUser, or(eq(overtimeRequestsTable.approvedBy, otApproverUser.id), eq(overtimeRequestsTable.rejectedBy, otApproverUser.id)))
-            .leftJoin(otApproverPosition, eq(otApproverUser.positionId, otApproverPosition.id))
+            .leftJoin(otApproverPosition, and(eq(otApproverUser.positionId, otApproverPosition.id), isNull(otApproverPosition.deletedAt)))
             .where(teamFilter)
             .orderBy(desc(overtimeRequestsTable.createdAt))
             .limit(50)
@@ -319,7 +319,7 @@ export default async function LeaderPage() {
         })
         .from(overtimeRequestsTable)
         .leftJoin(otApproverUser, or(eq(overtimeRequestsTable.approvedBy, otApproverUser.id), eq(overtimeRequestsTable.rejectedBy, otApproverUser.id)))
-        .leftJoin(otApproverPosition, eq(otApproverUser.positionId, otApproverPosition.id))
+        .leftJoin(otApproverPosition, and(eq(otApproverUser.positionId, otApproverPosition.id), isNull(otApproverPosition.deletedAt)))
         .where(eq(overtimeRequestsTable.userId, user.id))
         .orderBy(desc(overtimeRequestsTable.createdAt))
         .limit(30),
