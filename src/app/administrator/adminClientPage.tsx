@@ -13,9 +13,9 @@ import {
   handleRemarkChangeAction,
   saveStaffAction,
   deleteStaffAction,
-  deleteSiteAction, 
-  deletePositionAction, 
-  updateSiteAction, 
+  deleteSiteAction,
+  deletePositionAction,
+  updateSiteAction,
   updatePositionAction,
   updateAdminProfileAction,
   updateCompanyAction,
@@ -189,7 +189,7 @@ export default function AdminClientPage({
   const [searchTerm, setSearchTerm] = useState(""); // ช่องค้นหาชื่อพนักงานใน Modal
   const [selectedEmployees, setSelectedEmployees] = useState<any[]>([]); // รายชื่อพนักงานที่ถูกติ๊กเลือก
   const [exportFormat, setExportFormat] = useState("excel"); // รูปแบบไฟล์ที่จะโหลด ('excel' | 'pdf')
-  const [reportType, setReportType] = useState<"attendance" | "overtime">( "attendance" );
+  const [reportType, setReportType] = useState<"attendance" | "overtime">("attendance");
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -206,17 +206,17 @@ export default function AdminClientPage({
   // --- 📝 3. [VARIABLES] ตัวแปรสำหรับแสดงผลบนหัวเอกสาร (ไม่ต้องใช้ State) ---
   const formattedStartDate = startDate
     ? new Date(startDate).toLocaleDateString("th-TH", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
     : "-";
   const formattedEndDate = endDate
     ? new Date(endDate).toLocaleDateString("th-TH", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
     : "-";
   const reportDate = new Date().toLocaleDateString("th-TH"); // วันที่พิมพ์
   const reportTime = new Date().toLocaleTimeString("th-TH", {
@@ -536,11 +536,11 @@ export default function AdminClientPage({
           prev.map((item) =>
             item.id === otId
               ? {
-                  ...item,
-                  status: "approved",
-                  remarks: remark,
-                  approvedBy: currentAdminId,
-                }
+                ...item,
+                status: "approved",
+                remarks: remark,
+                approvedBy: currentAdminId,
+              }
               : item
           )
         );
@@ -574,11 +574,11 @@ export default function AdminClientPage({
           prev.map((item) =>
             item.id === otId
               ? {
-                  ...item,
-                  status: "rejected",
-                  remarks: remark,
-                  rejectedBy: currentAdminId,
-                }
+                ...item,
+                status: "rejected",
+                remarks: remark,
+                rejectedBy: currentAdminId,
+              }
               : item
           )
         );
@@ -763,10 +763,10 @@ export default function AdminClientPage({
         const finalLeaveData =
           result.leaveData && Array.isArray(result.leaveData)
             ? result.leaveData.map((leave: any) => ({
-                ...leave,
-                // ประกันว่า key ชื่อผู้อนุมัติจะถูกส่งต่อไปยัง UI อย่างถูกต้อง
-                approvedByName: leave.approvedByName ?? "ไม่ระบุผู้อนุมัติ",
-              }))
+              ...leave,
+              // ประกันว่า key ชื่อผู้อนุมัติจะถูกส่งต่อไปยัง UI อย่างถูกต้อง
+              approvedByName: leave.approvedByName ?? "ไม่ระบุผู้อนุมัติ",
+            }))
             : [];
 
         if (reportType === "overtime") {
@@ -817,7 +817,7 @@ export default function AdminClientPage({
       } else {
         alert(
           result.message ||
-            `ไม่พบข้อมูล${reportType === "attendance" ? "การลงเวลา" : "การทำงานล่วงเวลา"}ในช่วงวันที่เลือก`
+          `ไม่พบข้อมูล${reportType === "attendance" ? "การลงเวลา" : "การทำงานล่วงเวลา"}ในช่วงวันที่เลือก`
         );
       }
     } catch (error) {
@@ -1271,8 +1271,7 @@ export default function AdminClientPage({
         setShowAddPosition(false);
         setShowManageModal(true);
         alert(
-          `✅ ${
-            editingPos ? "แก้ไข" : "เพิ่ม"
+          `✅ ${editingPos ? "แก้ไข" : "เพิ่ม"
           }ตำแหน่งงาน "${name}" เรียบร้อยแล้ว`
         );
       } else {
@@ -1328,10 +1327,10 @@ export default function AdminClientPage({
           prev.map((l) =>
             l.id === id
               ? {
-                  ...l,
-                  status,
-                  remark: status !== "pending" ? remark || l.remark : l.remark,
-                }
+                ...l,
+                status,
+                remark: status !== "pending" ? remark || l.remark : l.remark,
+              }
               : l
           )
         );
@@ -1520,23 +1519,20 @@ export default function AdminClientPage({
 
         {/* --- SIDEBAR OVERLAY & PANEL --- */}
         <div
-          className={`fixed inset-0 z-[1000] print:hidden transition-all duration-300 ${
-            isSidebarOpen ? "visible" : "invisible"
-          }`}
+          className={`fixed inset-0 z-[1000] print:hidden transition-all duration-300 ${isSidebarOpen ? "visible" : "invisible"
+            }`}
         >
           {/* Background Overlay */}
           <div
-            className={`absolute inset-0 bg-slate-900/40 backdrop-blur-[3px] transition-opacity duration-300 ${
-              isSidebarOpen ? "opacity-100" : "opacity-0"
-            }`}
+            className={`absolute inset-0 bg-slate-900/40 backdrop-blur-[3px] transition-opacity duration-300 ${isSidebarOpen ? "opacity-100" : "opacity-0"
+              }`}
             onClick={() => setIsSidebarOpen(false)}
           />
 
           {/* Sidebar Panel - Animation Slide */}
           <aside
-            className={`absolute left-0 top-0 h-full w-full max-w-[300px] md:max-w-[340px] bg-white shadow-2xl flex flex-col transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) transform ${
-              isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-            }`}
+            className={`absolute left-0 top-0 h-full w-full max-w-[300px] md:max-w-[340px] bg-white shadow-2xl flex flex-col transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) transform ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+              }`}
           >
             {/* Sidebar Header - ปรับการจัดวางเป็น justify-between */}
             <div className="p-5 md:p-7 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
@@ -1746,13 +1742,12 @@ export default function AdminClientPage({
             >
               <div className="flex justify-between items-start md:mb-4">
                 <div
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform ${
-                    s.color === "blue"
-                      ? "bg-blue-50 text-blue-600"
-                      : s.color === "emerald"
-                        ? "bg-emerald-50 text-emerald-600"
-                        : "bg-orange-50 text-orange-600"
-                  }`}
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform ${s.color === "blue"
+                    ? "bg-blue-50 text-blue-600"
+                    : s.color === "emerald"
+                      ? "bg-emerald-50 text-emerald-600"
+                      : "bg-orange-50 text-orange-600"
+                    }`}
                 >
                   {s.icon}
                 </div>
@@ -1855,10 +1850,9 @@ export default function AdminClientPage({
               onClick={() => setActiveTab(tab.id)}
               className={`
                 relative flex items-center justify-center gap-2 px-3 py-2 md:px-6 md:py-2.5 rounded-full md:rounded-[1.5rem] text-xs md:text-sm font-bold transition-all duration-300 flex-1 sm:flex-none whitespace-nowrap
-                ${
-                  activeTab === tab.id
-                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50 scale-[1.02]"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+                ${activeTab === tab.id
+                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50 scale-[1.02]"
+                  : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
                 }
               `}
             >
@@ -1916,8 +1910,8 @@ export default function AdminClientPage({
                                 <Image
                                   src={
                                     e.avatarUrl &&
-                                    typeof e.avatarUrl === "string" &&
-                                    e.avatarUrl.trim() !== ""
+                                      typeof e.avatarUrl === "string" &&
+                                      e.avatarUrl.trim() !== ""
                                       ? e.avatarUrl
                                       : "https://utfs.io/f/default-avatar-placeholder.png"
                                   }
@@ -1936,11 +1930,10 @@ export default function AdminClientPage({
                                 </div>
                                 <div className="mt-1">
                                   <span
-                                    className={`inline-block font-black text-[9px] uppercase px-2 py-0.5 rounded-md ${
-                                      e.role === "leader"
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-slate-100 text-slate-400"
-                                    }`}
+                                    className={`inline-block font-black text-[9px] uppercase px-2 py-0.5 rounded-md ${e.role === "leader"
+                                      ? "bg-blue-600 text-white"
+                                      : "bg-slate-100 text-slate-400"
+                                      }`}
                                   >
                                     {e.role === "leader"
                                       ? "หัวหน้า"
@@ -2007,9 +2000,9 @@ export default function AdminClientPage({
                                 <span className="text-xs font-bold text-slate-800">
                                   {e.startTime && e.endTime
                                     ? `${e.startTime.slice(
-                                        0,
-                                        5
-                                      )} - ${e.endTime.slice(0, 5)}`
+                                      0,
+                                      5
+                                    )} - ${e.endTime.slice(0, 5)}`
                                     : "ยังไม่ระบุ"}
                                 </span>
                               </div>
@@ -2056,11 +2049,10 @@ export default function AdminClientPage({
                                 <button
                                   key={i}
                                   onClick={() => setCurrentPage(i)}
-                                  className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
-                                    currentPage === i
-                                      ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
-                                      : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
-                                  }`}
+                                  className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${currentPage === i
+                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
+                                    : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                                    }`}
                                 >
                                   {i}
                                 </button>
@@ -2143,8 +2135,8 @@ export default function AdminClientPage({
                                   <Image
                                     src={
                                       e.avatarUrl &&
-                                      typeof e.avatarUrl === "string" &&
-                                      e.avatarUrl.trim() !== ""
+                                        typeof e.avatarUrl === "string" &&
+                                        e.avatarUrl.trim() !== ""
                                         ? e.avatarUrl
                                         : "https://utfs.io/f/default-avatar-placeholder.png"
                                     }
@@ -2194,11 +2186,10 @@ export default function AdminClientPage({
                               </td>
                               <td className="py-4 px-6">
                                 <span
-                                  className={`font-black text-[10px] uppercase px-3 py-1 rounded-lg ${
-                                    e.role === "leader"
-                                      ? "bg-blue-600 text-white"
-                                      : "bg-slate-100 text-slate-400"
-                                  }`}
+                                  className={`font-black text-[10px] uppercase px-3 py-1 rounded-lg ${e.role === "leader"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-slate-100 text-slate-400"
+                                    }`}
                                 >
                                   {e.role === "leader" ? "หัวหน้า" : "พนักงาน"}
                                 </span>
@@ -2313,20 +2304,20 @@ export default function AdminClientPage({
                           // Logic สำหรับแสดงตัวคั่นวันที่ (เหมือน Line)
                           const currentDate = a.date
                             ? new Date(a.date).toLocaleDateString("th-TH", {
-                                day: "2-digit",
-                                month: "long",
-                                year: "numeric",
-                              })
+                              day: "2-digit",
+                              month: "long",
+                              year: "numeric",
+                            })
                             : "";
                           const prevDate =
                             index > 0 && filteredAttendance[index - 1].date
                               ? new Date(
-                                  filteredAttendance[index - 1].date
-                                ).toLocaleDateString("th-TH", {
-                                  day: "2-digit",
-                                  month: "long",
-                                  year: "numeric",
-                                })
+                                filteredAttendance[index - 1].date
+                              ).toLocaleDateString("th-TH", {
+                                day: "2-digit",
+                                month: "long",
+                                year: "numeric",
+                              })
                               : null;
                           const showDivider = currentDate !== prevDate;
 
@@ -2372,13 +2363,13 @@ export default function AdminClientPage({
                                 <td className="py-4 px-6 font-bold text-slate-500 italic">
                                   {a.date
                                     ? new Date(a.date).toLocaleDateString(
-                                        "th-TH",
-                                        {
-                                          day: "2-digit",
-                                          month: "short",
-                                          year: "2-digit",
-                                        }
-                                      )
+                                      "th-TH",
+                                      {
+                                        day: "2-digit",
+                                        month: "short",
+                                        year: "2-digit",
+                                      }
+                                    )
                                     : "-"}
                                 </td>
                                 <td className="py-4 px-6">
@@ -2431,9 +2422,9 @@ export default function AdminClientPage({
                                 <td className="py-4 px-6 text-center font-black text-rose-600 text-lg">
                                   {a.checkOut
                                     ? a.checkOut
-                                        .split(":")
-                                        .slice(0, 2)
-                                        .join(":")
+                                      .split(":")
+                                      .slice(0, 2)
+                                      .join(":")
                                     : "-"}
                                 </td>
                                 <td className="py-4 px-6">
@@ -2660,8 +2651,8 @@ export default function AdminClientPage({
                                     <td className="py-4 px-6 text-center font-bold text-blue-600">
                                       {l.createdAt
                                         ? new Date(l.createdAt).toLocaleString(
-                                            "th-TH"
-                                          )
+                                          "th-TH"
+                                        )
                                         : "-"}
                                     </td>
                                     <td className="py-3 px-4 text-center">
@@ -2723,23 +2714,22 @@ export default function AdminClientPage({
 
                                             return (
                                               <span
-                                                className={`${baseClass} ${
-                                                  isDayUnit
-                                                    ? "bg-orange-50 text-orange-600 border-orange-100"
-                                                    : "bg-blue-50 text-blue-600 border-blue-100"
-                                                }`}
+                                                className={`${baseClass} ${isDayUnit
+                                                  ? "bg-orange-50 text-orange-600 border-orange-100"
+                                                  : "bg-blue-50 text-blue-600 border-blue-100"
+                                                  }`}
                                               >
                                                 {isDayUnit
                                                   ? `${(hrs / 24).toFixed(1).replace(".0", "")}\u00A0วัน`
                                                   : (() => {
-                                                      const fullHours =
-                                                        Math.floor(hrs);
-                                                      const minutes =
-                                                        Math.round(
-                                                          (hrs - fullHours) * 60
-                                                        );
-                                                      return `${fullHours}.${minutes.toString().padStart(2, "0")}\u00A0ชม.`;
-                                                    })()}
+                                                    const fullHours =
+                                                      Math.floor(hrs);
+                                                    const minutes =
+                                                      Math.round(
+                                                        (hrs - fullHours) * 60
+                                                      );
+                                                    return `${fullHours}.${minutes.toString().padStart(2, "0")}\u00A0ชม.`;
+                                                  })()}
                                               </span>
                                             );
                                           })()}
@@ -2784,13 +2774,12 @@ export default function AdminClientPage({
                                     <td className="py-4 px-2 text-center">
                                       <div className="flex justify-center">
                                         <span
-                                          className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${
-                                            l.status === "pending"
-                                              ? "bg-orange-50 text-orange-600 border-orange-200"
-                                              : l.status === "approved"
-                                                ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                                                : "bg-red-50 text-red-600 border-red-200"
-                                          }`}
+                                          className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${l.status === "pending"
+                                            ? "bg-orange-50 text-orange-600 border-orange-200"
+                                            : l.status === "approved"
+                                              ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                                              : "bg-red-50 text-red-600 border-red-200"
+                                            }`}
                                         >
                                           {l.status === "pending"
                                             ? "รออนุมัติ"
@@ -2844,11 +2833,10 @@ export default function AdminClientPage({
                                         <input
                                           type="text"
                                           placeholder="ระบุหมายเหตุ..."
-                                          className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${
-                                            l.status !== "pending"
-                                              ? "bg-slate-50 text-slate-500 border-slate-100"
-                                              : "bg-white border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                                          }`}
+                                          className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${l.status !== "pending"
+                                            ? "bg-slate-50 text-slate-500 border-slate-100"
+                                            : "bg-white border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                                            }`}
                                           value={
                                             l.status === "pending"
                                               ? (leaveRemarks[l.id] ??
@@ -2873,11 +2861,10 @@ export default function AdminClientPage({
                                                   : l.id
                                               )
                                             }
-                                            className={`p-2 rounded-lg border transition-all ${
-                                              viewRemarkId === l.id
-                                                ? "bg-blue-600 text-white border-blue-600"
-                                                : "bg-blue-50 text-blue-600 border-blue-100"
-                                            }`}
+                                            className={`p-2 rounded-lg border transition-all ${viewRemarkId === l.id
+                                              ? "bg-blue-600 text-white border-blue-600"
+                                              : "bg-blue-50 text-blue-600 border-blue-100"
+                                              }`}
                                           >
                                             🔍
                                           </button>
@@ -2947,13 +2934,12 @@ export default function AdminClientPage({
                               className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden text-left"
                             >
                               <div
-                                className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${
-                                  l.status === "pending"
-                                    ? "bg-orange-100 text-orange-600"
-                                    : l.status === "approved"
-                                      ? "bg-emerald-100 text-emerald-600"
-                                      : "bg-red-100 text-red-600"
-                                }`}
+                                className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${l.status === "pending"
+                                  ? "bg-orange-100 text-orange-600"
+                                  : l.status === "approved"
+                                    ? "bg-emerald-100 text-emerald-600"
+                                    : "bg-red-100 text-red-600"
+                                  }`}
                               >
                                 {l.status === "pending"
                                   ? "รออนุมัติ"
@@ -3068,13 +3054,12 @@ export default function AdminClientPage({
                                     <p
                                       className={`
                                         px-3 py-1 rounded-lg font-black text-[11px] border uppercase tracking-wider w-fit shadow-sm
-                                            ${
-                                              isHalfDay
-                                                ? "bg-purple-50 text-purple-600 border-purple-100"
-                                                : isDayUnit
-                                                  ? "bg-orange-50 text-orange-600 border-orange-100"
-                                                  : "bg-blue-50 text-blue-600 border-blue-100"
-                                            }
+                                            ${isHalfDay
+                                          ? "bg-purple-50 text-purple-600 border-purple-100"
+                                          : isDayUnit
+                                            ? "bg-orange-50 text-orange-600 border-orange-100"
+                                            : "bg-blue-50 text-blue-600 border-blue-100"
+                                        }
                                           `}
                                     >
                                       {durationLabel}
@@ -3160,11 +3145,10 @@ export default function AdminClientPage({
                             <button
                               key={i + 1}
                               onClick={() => setCurrentPage(i + 1)}
-                              className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
-                                currentPage === i + 1
-                                  ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
-                                  : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
-                              }`}
+                              className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${currentPage === i + 1
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
+                                : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                                }`}
                             >
                               {i + 1}
                             </button>
@@ -3302,8 +3286,8 @@ export default function AdminClientPage({
                                     <td className="py-4 px-6 text-center text-gray-500 text-[11px] font-bold leading-tight">
                                       {l.requestDate
                                         ? new Date(
-                                            l.requestDate
-                                          ).toLocaleDateString("th-TH")
+                                          l.requestDate
+                                        ).toLocaleDateString("th-TH")
                                         : "-"}
                                     </td>
 
@@ -3311,12 +3295,12 @@ export default function AdminClientPage({
                                     <td className="py-4 px-6 text-center text-gray-800 font-bold text-sm">
                                       {l.workingDate
                                         ? new Date(
-                                            l.workingDate
-                                          ).toLocaleDateString("th-TH", {
-                                            day: "numeric",
-                                            month: "short",
-                                            year: "numeric",
-                                          })
+                                          l.workingDate
+                                        ).toLocaleDateString("th-TH", {
+                                          day: "numeric",
+                                          month: "short",
+                                          year: "numeric",
+                                        })
                                         : "-"}
                                     </td>
 
@@ -3339,15 +3323,14 @@ export default function AdminClientPage({
                                     {/* 7. สถานะ */}
                                     <td className="py-4 px-6 text-center">
                                       <span
-                                        className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${
-                                          l.status === "pending"
-                                            ? "bg-orange-100 text-orange-600 border-orange-200"
-                                            : l.status === "approved"
-                                              ? "bg-emerald-100 text-emerald-600 border-emerald-200"
-                                              : l.status === "executed"
-                                                ? "bg-blue-100 text-blue-600 border-blue-200"
-                                                : "bg-red-100 text-red-600 border-red-200"
-                                        }`}
+                                        className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${l.status === "pending"
+                                          ? "bg-orange-100 text-orange-600 border-orange-200"
+                                          : l.status === "approved"
+                                            ? "bg-emerald-100 text-emerald-600 border-emerald-200"
+                                            : l.status === "executed"
+                                              ? "bg-blue-100 text-blue-600 border-blue-200"
+                                              : "bg-red-100 text-red-600 border-red-200"
+                                          }`}
                                       >
                                         {l.status === "pending"
                                           ? "รออนุมัติ"
@@ -3405,11 +3388,10 @@ export default function AdminClientPage({
                                         <input
                                           type="text"
                                           placeholder="ระบุหมายเหตุ..."
-                                          className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${
-                                            l.status !== "pending"
-                                              ? "bg-slate-50 text-slate-500 border-slate-100"
-                                              : "bg-white border-slate-200 focus:border-blue-400"
-                                          }`}
+                                          className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${l.status !== "pending"
+                                            ? "bg-slate-50 text-slate-500 border-slate-100"
+                                            : "bg-white border-slate-200 focus:border-blue-400"
+                                            }`}
                                           value={currentRemark}
                                           onChange={(e) =>
                                             handleOTRemarkChange(
@@ -3451,7 +3433,7 @@ export default function AdminClientPage({
                           const dDays =
                             Math.ceil(
                               Math.abs(end.getTime() - start.getTime()) /
-                                (1000 * 60 * 60 * 24)
+                              (1000 * 60 * 60 * 24)
                             ) + 1;
 
                           return (
@@ -3461,13 +3443,12 @@ export default function AdminClientPage({
                             >
                               {/* Status Badge */}
                               <div
-                                className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${
-                                  l.status === "pending"
-                                    ? "bg-orange-100 text-orange-600"
-                                    : l.status === "approved"
-                                      ? "bg-emerald-100 text-emerald-600"
-                                      : "bg-red-100 text-red-600"
-                                }`}
+                                className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${l.status === "pending"
+                                  ? "bg-orange-100 text-orange-600"
+                                  : l.status === "approved"
+                                    ? "bg-emerald-100 text-emerald-600"
+                                    : "bg-red-100 text-red-600"
+                                  }`}
                               >
                                 {l.status === "pending"
                                   ? "รออนุมัติ"
@@ -3657,11 +3638,10 @@ export default function AdminClientPage({
                             <button
                               key={i + 1}
                               onClick={() => setCurrentPage(i + 1)}
-                              className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
-                                currentPage === i + 1
-                                  ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
-                                  : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
-                              }`}
+                              className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${currentPage === i + 1
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
+                                : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                                }`}
                             >
                               {i + 1}
                             </button>
@@ -3706,9 +3686,8 @@ export default function AdminClientPage({
                 placeholder="ระบุชื่อแผนก..."
                 required
                 defaultValue={editingDept?.name || ""}
-                className={`w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 ${
-                  editingDept ? "focus:ring-blue-500" : "focus:ring-amber-500"
-                }`}
+                className={`w-full border p-4 rounded-2xl bg-slate-50 font-bold outline-none focus:ring-2 ${editingDept ? "focus:ring-blue-500" : "focus:ring-amber-500"
+                  }`}
               />
               <div className="flex gap-2 pt-2">
                 <button
@@ -3726,13 +3705,11 @@ export default function AdminClientPage({
                 <button
                   type="submit"
                   disabled={isProcessing}
-                  className={`flex-1 py-4 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all ${
-                    isProcessing ? "opacity-50" : ""
-                  } ${
-                    editingDept
+                  className={`flex-1 py-4 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all ${isProcessing ? "opacity-50" : ""
+                    } ${editingDept
                       ? "bg-blue-600 shadow-blue-100"
                       : "bg-amber-600 shadow-amber-100"
-                  }`}
+                    }`}
                 >
                   {isProcessing ? "กำลังประมวลผล..." : "บันทึก"}
                 </button>
@@ -3748,11 +3725,10 @@ export default function AdminClientPage({
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
             <h3 className="text-xl font-black text-slate-900 mb-6 uppercase italic flex items-center gap-2">
               <span
-                className={`${
-                  editingSite
-                    ? "bg-blue-100 text-blue-600"
-                    : "bg-emerald-100 text-emerald-600"
-                } p-2 rounded-lg text-sm not-italic`}
+                className={`${editingSite
+                  ? "bg-blue-100 text-blue-600"
+                  : "bg-emerald-100 text-emerald-600"
+                  } p-2 rounded-lg text-sm not-italic`}
               >
                 {editingSite ? "✏️" : "📍"}
               </span>
@@ -3768,11 +3744,10 @@ export default function AdminClientPage({
                   readOnly={isAllSite}
                   placeholder="ชื่อไซต์งาน..."
                   required
-                  className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${
-                    isAllSite
-                      ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                      : "bg-slate-50"
-                  }`}
+                  className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${isAllSite
+                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                    : "bg-slate-50"
+                    }`}
                 />
 
                 {/* ✅ ส่วน Logic ตรวจสอบและแสดงสถานะ "ทุกไซต์" */}
@@ -3826,11 +3801,10 @@ export default function AdminClientPage({
                   }
                   readOnly={isAllSite}
                   placeholder="ที่อยู่ไซต์งาน..."
-                  className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${
-                    isAllSite
-                      ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                      : "bg-slate-50"
-                  }`}
+                  className={`w-full border-none p-4 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-300 ${isAllSite
+                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                    : "bg-slate-50"
+                    }`}
                 />
               </div>
 
@@ -3840,11 +3814,10 @@ export default function AdminClientPage({
                   disabled={isProcessing || isAllSite}
                   onClick={handleGetCurrentLocation}
                   className={`w-full py-4 relative overflow-hidden text-white rounded-2xl font-black uppercase text-[12px] shadow-lg transition-all flex items-center justify-center gap-3 border-b-4 
-              ${
-                isProcessing || isAllSite
-                  ? "bg-slate-400 border-slate-500 cursor-not-allowed"
-                  : "bg-blue-600 border-blue-800 hover:bg-blue-700 active:scale-95 shadow-blue-100"
-              }`}
+              ${isProcessing || isAllSite
+                      ? "bg-slate-400 border-slate-500 cursor-not-allowed"
+                      : "bg-blue-600 border-blue-800 hover:bg-blue-700 active:scale-95 shadow-blue-100"
+                    }`}
                 >
                   {isProcessing ? (
                     <>
@@ -3879,14 +3852,12 @@ export default function AdminClientPage({
                 </button>
 
                 <div
-                  className={`flex gap-2 transition-opacity duration-300 ${
-                    isProcessing || isAllSite ? "opacity-30" : "opacity-60"
-                  }`}
+                  className={`flex gap-2 transition-opacity duration-300 ${isProcessing || isAllSite ? "opacity-30" : "opacity-60"
+                    }`}
                 >
                   <div
-                    className={`flex-1 rounded-xl border border-slate-200 p-2 ${
-                      isAllSite ? "bg-slate-200" : "bg-slate-50"
-                    }`}
+                    className={`flex-1 rounded-xl border border-slate-200 p-2 ${isAllSite ? "bg-slate-200" : "bg-slate-50"
+                      }`}
                   >
                     <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">
                       Lat
@@ -3901,9 +3872,8 @@ export default function AdminClientPage({
                     />
                   </div>
                   <div
-                    className={`flex-1 rounded-xl border border-slate-200 p-2 ${
-                      isAllSite ? "bg-slate-200" : "bg-slate-50"
-                    }`}
+                    className={`flex-1 rounded-xl border border-slate-200 p-2 ${isAllSite ? "bg-slate-200" : "bg-slate-50"
+                      }`}
                   >
                     <span className="block text-[8px] text-slate-400 uppercase font-bold ml-1">
                       Lng
@@ -3939,11 +3909,10 @@ export default function AdminClientPage({
                 <button
                   type="submit"
                   disabled={isProcessing}
-                  className={`flex-[2] py-4 ${
-                    editingSite
-                      ? "bg-blue-600 shadow-blue-100"
-                      : "bg-emerald-600 shadow-emerald-100"
-                  } text-white rounded-2xl font-black uppercase text-[10px] shadow-xl disabled:bg-slate-300`}
+                  className={`flex-[2] py-4 ${editingSite
+                    ? "bg-blue-600 shadow-blue-100"
+                    : "bg-emerald-600 shadow-emerald-100"
+                    } text-white rounded-2xl font-black uppercase text-[10px] shadow-xl disabled:bg-slate-300`}
                 >
                   {isProcessing
                     ? "กำลังบันทึก..."
@@ -4216,22 +4185,20 @@ export default function AdminClientPage({
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className={`w-full p-4 pr-12 rounded-2xl font-bold border outline-none transition-all focus:ring-4 
-          ${
-            isMismatch
-              ? "bg-red-50 border-red-500 focus:ring-red-500/10 text-red-600 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
-              : "bg-white border-slate-200 focus:border-blue-500 focus:ring-blue-500/5"
-          }`}
+          ${isMismatch
+                          ? "bg-red-50 border-red-500 focus:ring-red-500/10 text-red-600 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                          : "bg-white border-slate-200 focus:border-blue-500 focus:ring-blue-500/5"
+                        }`}
                       placeholder="ระบุรหัสใหม่อีกครั้ง"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPass(!showPass)}
                       className={`absolute right-4 top-1/2 -translate-y-1/2 transition-colors z-10 
-          ${
-            isMismatch
-              ? "text-red-400 hover:text-red-600"
-              : "text-slate-300 hover:text-blue-500"
-          }`}
+          ${isMismatch
+                          ? "text-red-400 hover:text-red-600"
+                          : "text-slate-300 hover:text-blue-500"
+                        }`}
                     >
                       {showPass ? "ปิด" : "เปิด"}
                     </button>
@@ -4261,11 +4228,10 @@ export default function AdminClientPage({
               <button
                 type="submit"
                 disabled={isProcessing}
-                className={`px-10 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl transition-all ${
-                  isProcessing
-                    ? "bg-slate-400 cursor-not-allowed"
-                    : "bg-slate-900 text-white active:scale-95 hover:bg-blue-600"
-                }`}
+                className={`px-10 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl transition-all ${isProcessing
+                  ? "bg-slate-400 cursor-not-allowed"
+                  : "bg-slate-900 text-white active:scale-95 hover:bg-blue-600"
+                  }`}
               >
                 {isProcessing ? "⏳ กำลังบันทึก..." : "💾 บันทึกข้อมูล"}
               </button>
@@ -4310,11 +4276,10 @@ export default function AdminClientPage({
                   type="button"
                   disabled={isResetting} // ป้องกันการกดซ้ำขณะกำลังทำงาน
                   onClick={() => handleDirectReset(editingEmployee.id)}
-                  className={`text-[10px] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors ${
-                    isResetting
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                  }`}
+                  className={`text-[10px] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors ${isResetting
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                    }`}
                 >
                   {isResetting
                     ? "⏳ กำลังรีเซ็ต..."
@@ -4371,11 +4336,10 @@ export default function AdminClientPage({
                       .replace(/[^a-zA-Z0-9]/g, "")
                       .toLowerCase();
                   }}
-                  className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${
-                    editingEmployee
-                      ? "bg-slate-100 text-slate-400 border-transparent"
-                      : "bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white"
-                  }`}
+                  className={`w-full p-4 rounded-2xl font-bold border outline-none transition-all ${editingEmployee
+                    ? "bg-slate-100 text-slate-400 border-transparent"
+                    : "bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white"
+                    }`}
                 />
               </div>
 
@@ -4711,22 +4675,20 @@ export default function AdminClientPage({
                     <button
                       type="button"
                       onClick={() => setReportType("attendance")}
-                      className={`p-3.5 rounded-2xl text-[11px] font-black uppercase border transition-all flex items-center gap-3 ${
-                        reportType === "attendance"
-                          ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100"
-                          : "bg-slate-50 border-slate-100 text-slate-400 hover:border-blue-200"
-                      }`}
+                      className={`p-3.5 rounded-2xl text-[11px] font-black uppercase border transition-all flex items-center gap-3 ${reportType === "attendance"
+                        ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100"
+                        : "bg-slate-50 border-slate-100 text-slate-400 hover:border-blue-200"
+                        }`}
                     >
                       <span className="text-base">📅</span> รายงานการเข้างาน
                     </button>
                     <button
                       type="button"
                       onClick={() => setReportType("overtime")}
-                      className={`p-3.5 rounded-2xl text-[11px] font-black uppercase border transition-all flex items-center gap-3 ${
-                        reportType === "overtime"
-                          ? "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-100"
-                          : "bg-slate-50 border-slate-100 text-slate-400 hover:border-orange-200"
-                      }`}
+                      className={`p-3.5 rounded-2xl text-[11px] font-black uppercase border transition-all flex items-center gap-3 ${reportType === "overtime"
+                        ? "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-100"
+                        : "bg-slate-50 border-slate-100 text-slate-400 hover:border-orange-200"
+                        }`}
                     >
                       <span className="text-base">⏰</span> รายงาน OT
                     </button>
@@ -4740,21 +4702,19 @@ export default function AdminClientPage({
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setExportFormat("excel")}
-                      className={`p-4 rounded-xl text-xs font-black uppercase border transition-all ${
-                        exportFormat === "excel"
-                          ? "bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-500/10"
-                          : "bg-slate-50 border-slate-100 text-slate-400"
-                      }`}
+                      className={`p-4 rounded-xl text-xs font-black uppercase border transition-all ${exportFormat === "excel"
+                        ? "bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-500/10"
+                        : "bg-slate-50 border-slate-100 text-slate-400"
+                        }`}
                     >
                       📗 Excel
                     </button>
                     <button
                       onClick={() => setExportFormat("pdf")}
-                      className={`p-4 rounded-xl text-xs font-black uppercase border transition-all ${
-                        exportFormat === "pdf"
-                          ? "bg-red-50 border-red-500 text-red-700 ring-2 ring-red-500/10"
-                          : "bg-slate-50 border-slate-100 text-slate-400"
-                      }`}
+                      className={`p-4 rounded-xl text-xs font-black uppercase border transition-all ${exportFormat === "pdf"
+                        ? "bg-red-50 border-red-500 text-red-700 ring-2 ring-red-500/10"
+                        : "bg-slate-50 border-slate-100 text-slate-400"
+                        }`}
                     >
                       📕 PDF
                     </button>
@@ -4934,7 +4894,7 @@ export default function AdminClientPage({
                   className="w-full sm:w-auto whitespace-nowrap px-6 lg:px-8 py-3 lg:py-4 bg-white border border-slate-200 rounded-2xl text-[10px] lg:text-xs font-black text-slate-600 uppercase hover:bg-slate-900 hover:text-white shadow-sm transition-all active:scale-95"
                 >
                   {selectedEmployees.length ===
-                  (filteredEmpSuggestions?.length || 0)
+                    (filteredEmpSuggestions?.length || 0)
                     ? "ล้างการเลือก"
                     : "เลือกทั้งหมด"}
                 </button>
@@ -4972,11 +4932,10 @@ export default function AdminClientPage({
                                 emp.id,
                               ]);
                           }}
-                          className={`relative flex flex-col lg:flex-row items-center gap-2 lg:gap-4 p-3 lg:p-5 rounded-3xl lg:rounded-[2.2rem] border-2 transition-all cursor-pointer select-none ${
-                            isSelected
-                              ? "bg-blue-50 border-blue-500 shadow-lg shadow-blue-100 ring-2 ring-blue-500/10"
-                              : "bg-white border-slate-100 shadow-sm hover:border-blue-200"
-                          }`}
+                          className={`relative flex flex-col lg:flex-row items-center gap-2 lg:gap-4 p-3 lg:p-5 rounded-3xl lg:rounded-[2.2rem] border-2 transition-all cursor-pointer select-none ${isSelected
+                            ? "bg-blue-50 border-blue-500 shadow-lg shadow-blue-100 ring-2 ring-blue-500/10"
+                            : "bg-white border-slate-100 shadow-sm hover:border-blue-200"
+                            }`}
                         >
                           <div className="w-10 h-10 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl overflow-hidden bg-blue-100 flex-shrink-0 border border-slate-100">
                             {emp.avatarUrl ? (
@@ -4994,9 +4953,8 @@ export default function AdminClientPage({
 
                           <div className="min-w-0 flex-1 text-center lg:text-left">
                             <p
-                              className={`text-[10px] lg:text-sm font-black uppercase truncate ${
-                                isSelected ? "text-blue-700" : "text-slate-900"
-                              }`}
+                              className={`text-[10px] lg:text-sm font-black uppercase truncate ${isSelected ? "text-blue-700" : "text-slate-900"
+                                }`}
                             >
                               {emp.firstName}
                             </p>
@@ -5028,11 +4986,10 @@ export default function AdminClientPage({
               <div className="p-4 lg:p-8 bg-white border-t border-slate-200 shadow-[0_-10px_40px_rgba(0,0,0,0.06)] fixed bottom-0 left-0 right-0 lg:relative z-[540]">
                 <div className="max-w-7xl mx-auto flex flex-col items-center gap-3 lg:gap-6">
                   <div
-                    className={`px-6 py-2 rounded-full text-white text-[10px] font-black transition-all transform ${
-                      selectedEmployees.length > 0
-                        ? "bg-blue-600 scale-105 shadow-xl shadow-blue-200"
-                        : "bg-slate-300"
-                    }`}
+                    className={`px-6 py-2 rounded-full text-white text-[10px] font-black transition-all transform ${selectedEmployees.length > 0
+                      ? "bg-blue-600 scale-105 shadow-xl shadow-blue-200"
+                      : "bg-slate-300"
+                      }`}
                   >
                     เลือกแล้ว {selectedEmployees.length} ท่าน
                   </div>
@@ -5054,13 +5011,12 @@ export default function AdminClientPage({
                       disabled={isProcessing || selectedEmployees.length === 0}
                       type="button"
                       onClick={handleGenerateReport}
-                      className={`flex-[2.5] py-3.5 lg:py-5 rounded-2xl lg:rounded-[1.5rem] font-black uppercase text-[10px] lg:text-sm tracking-widest shadow-2xl transition-all flex items-center justify-center gap-2 active:scale-95 ${
-                        selectedEmployees.length === 0
-                          ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                          : reportType === "overtime"
-                            ? "bg-orange-500 text-white hover:bg-orange-600 shadow-orange-200"
-                            : "bg-slate-900 text-white hover:bg-blue-600"
-                      }`}
+                      className={`flex-[2.5] py-3.5 lg:py-5 rounded-2xl lg:rounded-[1.5rem] font-black uppercase text-[10px] lg:text-sm tracking-widest shadow-2xl transition-all flex items-center justify-center gap-2 active:scale-95 ${selectedEmployees.length === 0
+                        ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        : reportType === "overtime"
+                          ? "bg-orange-500 text-white hover:bg-orange-600 shadow-orange-200"
+                          : "bg-slate-900 text-white hover:bg-blue-600"
+                        }`}
                     >
                       {isProcessing ? "กำลังประมวลผล..." : "แสดงเอกสาร"}
                     </button>
@@ -5071,442 +5027,460 @@ export default function AdminClientPage({
           </div>
         </div>
       )}
-      {/* --- 🖨️ MODAL: REPORT PREVIEW --- */}
-      {showReport && (
-  <div className="fixed inset-0 bg-slate-900/95 flex flex-col items-center z-[600] p-4 overflow-y-auto custom-scrollbar font-sans print:overflow-visible print:bg-white print:p-0 print:relative">
-    {/* สไตล์สำหรับคุมขนาด PDF/A4 ตอนสั่งพิมพ์ */}
-    <style
-      dangerouslySetInnerHTML={{
-        __html: `
+{/* --- 🖨️ MODAL: REPORT PREVIEW --- */}
+{showReport && (
+        <div className="fixed inset-0 bg-slate-900/95 flex flex-col items-center z-[600] p-2 sm:p-4 overflow-y-auto custom-scrollbar font-sans print:overflow-visible print:bg-white print:p-0 print:relative">
+          {/* สไตล์สำหรับคุมขนาด PDF/A4 ตอนสั่งพิมพ์ */}
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
         @media print {
           @page { 
             size: A4; 
             margin: 0; 
           }
+          html, body {
+            width: 210mm;
+            height: 297mm;
+            background: #fff;
+          }
           body { 
             -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact;
           }
           #report-content {
             width: 210mm !important;
+            transform: scale(1) !important;
+            transform-origin: top left !important;
+            padding: 0 !important;
+            margin: 0 !important;
           }
           .page-break-after-always {
             page-break-after: always;
             page-break-inside: avoid;
+            margin: 0 !important;
+            padding: 10mm !important;
+            box-shadow: none !important;
+            width: 210mm !important;
+            min-h-[297mm] !important;
           }
         }
         `,
-      }}
-    />
-
-    {/* --- Header Controller (ซ่อนเมื่อพิมพ์) --- */}
-    <div className="w-full max-w-[210mm] bg-white mb-4 p-4 rounded-2xl shadow-xl flex justify-between items-center print:hidden border-b border-slate-100">
-      <div className="flex items-center gap-3">
-        <div
-          className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm ${exportFormat === "excel" ? "bg-emerald-500" : "bg-red-500"} text-white`}
-        >
-          {exportFormat === "excel" ? "📗" : "📕"}
-        </div>
-        <div>
-          <h2 className="font-bold text-lg text-slate-800 uppercase leading-none">
-            {exportFormat === "excel"
-              ? "เอกสารประเภท Excel"
-              : "เอกสารประเภท PDF"}
-          </h2>
-          <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase">
-            {reportType === "attendance"
-              ? "รายงานการเข้างาน"
-              : "รายงานการทำโอที (OT)"}{" "}
-            • {Array.isArray(reportData) ? reportData.length : 0} รายการ
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-          <span className="text-[10px] font-bold text-slate-500 uppercase">
-            จำนวนเอกสาร:{" "}
-          </span>
-          <span className="text-[11px] font-black text-blue-600">
-            {(() => {
-              const safeData = Array.isArray(reportData) ? reportData : [];
-              const userIds = [...new Set(safeData.map((item: any) => item?.userId))];
-              let totalPages = 0;
-              userIds.forEach((id) => {
-                const userRows = safeData.filter((item: any) => item?.userId === id).length;
-                totalPages += Math.ceil(userRows / 15);
-              });
-              return totalPages || 1;
-            })()}{" "}
-            หน้า
-          </span>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() =>
-              exportFormat === "pdf"
-                ? window.print()
-                : handleDownloadExcel(
-                    Array.isArray(reportData) ? reportData : []
-                  )
-            }
-            className={`px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase shadow-lg transition-all active:scale-95 text-white ${exportFormat === "excel" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-slate-900 hover:bg-blue-600"}`}
-          >
-            {exportFormat === "pdf"
-              ? "พิมพ์รายงาน / Save PDF"
-              : "ดาวน์โหลด Excel"}
-          </button>
-          <button
-            onClick={() => {
-              setShowReport(false);
-              setShowFilterModal(true);
-              setIsMobileFilterOpen(false);
             }}
-            className="bg-slate-100 hover:bg-red-50 hover:text-red-500 px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase transition-all text-slate-400"
-          >
-            ย้อนกลับ
-          </button>
-        </div>
-      </div>
-    </div>
+          />
 
-    <div
-      id="report-content"
-      className="w-full flex flex-col items-center gap-8 print:gap-0 print:block print:w-full"
-    >
-      {(() => {
-        let pages: any[] = [];
-        const rowsPerPage = 15;
-        const safeReportData = Array.isArray(reportData) ? reportData : [];
-        const safeLeaveData = Array.isArray(leaveData) ? leaveData : [];
-
-        const isOTReport =
-          reportType === "overtime" ||
-          reportType === "ot" ||
-          safeReportData[0]?.generatedType === "overtime";
-
-        // Logic แยกรายคน (ใช้ทั้ง Attendance และ OT)
-        const userIds = Array.from(
-          new Set(safeReportData.map((item: any) => item?.userId))
-        );
-
-        userIds.forEach((id) => {
-          const userData = safeReportData.filter(
-            (item: any) => item?.userId === id
-          );
-
-          // คำนวณยอดรวม OT (เฉพาะกรณี OT Report)
-          const totalOtForUser = userData.reduce(
-            (sum, item) =>
-              sum + (Number(item?.otHours) || Number(item?.overtimeByRequest) || 0),
-            0
-          );
-
-          // คำนวณจำนวนวันที่ Check-in/Out ครบ (เฉพาะ Attendance)
-          const completeAttendanceCount = userData.filter(
-            (a) => a.checkIn && a.checkOut && a.checkIn !== "" && a.checkOut !== ""
-          ).length;
-
-          const totalPagesForUser = Math.ceil(userData.length / rowsPerPage);
-
-          for (let i = 0; i < userData.length; i += rowsPerPage) {
-            const isLastPageForUser = i + rowsPerPage >= userData.length;
-            pages.push({
-              items: userData.slice(i, i + rowsPerPage),
-              totalOtMinutes: isLastPageForUser ? totalOtForUser : null,
-              completeCount: isLastPageForUser ? completeAttendanceCount : null,
-              isLastPageForUser,
-              currentUser: userData[0],
-              currentPageForUser: Math.floor(i / rowsPerPage) + 1,
-              totalPagesForUser,
-              leaves: isLastPageForUser
-                ? safeLeaveData.filter((l: any) => l.userId === id)
-                : [],
-            });
-          }
-        });
-
-        return pages.map((pageObj: any, pageIndex: number) => {
-          const group = Array.isArray(pageObj.items) ? pageObj.items : [];
-
-          return (
-            <div
-              key={pageIndex}
-              className="bg-white w-full max-w-[210mm] min-h-[297mm] shadow-2xl flex flex-col p-12 print:p-10 print:m-0 print:shadow-none print:w-[210mm] print:min-h-[297mm] relative page-break-after-always overflow-hidden font-sans"
-            >
-              {/* Header */}
-              <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
-                    {admin?.company || "COMPANY NAME"}
-                  </h2>
-                  <p className="text-slate-600 font-bold text-[12px] mt-1 uppercase">
-                    {!isOTReport
-                      ? `สรุปรายการการเข้างาน: ${group[0]?.firstName} ${group[0]?.lastName}`
-                      : `สรุปรายการการทำโอที (OT): ${group[0]?.firstName} ${group[0]?.lastName}`}
-                  </p>
-                  <p className="text-blue-600 font-bold text-[10px] mt-0.5">
-                    ประจำวันที่: {formattedStartDate} — {formattedEndDate}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-[9px] font-medium text-slate-400 leading-tight">
-                    พิมพ์เมื่อ: {reportDate} {reportTime} <br />
-                    Ref:{" "}
-                    {Math.random()
-                      .toString(36)
-                      .substring(2, 8)
-                      .toUpperCase()}
-                  </div>
-                  <div className="mt-2 text-[10px] font-bold text-slate-900 uppercase tracking-widest">
-                    หน้าที่ {pageObj.currentPageForUser} จาก{" "}
-                    {pageObj.totalPagesForUser}
-                  </div>
-                </div>
+          {/* --- Header Controller (ซ่อนเมื่อพิมพ์) --- */}
+          <div className="w-full max-w-[210mm] bg-white mb-4 p-4 rounded-2xl shadow-xl flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center print:hidden border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm ${exportFormat === "excel" ? "bg-emerald-500" : "bg-red-500"} text-white`}
+              >
+                {exportFormat === "excel" ? "📗" : "📕"}
               </div>
-
-              {/* Main Data Table */}
-              <div className="flex-1">
-                <table className="w-full text-left border-collapse border border-slate-300">
-                  <thead>
-                    <tr className="bg-slate-900 text-white">
-                      <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 w-24 text-center">
-                        วันที่
-                      </th>
-                      <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300">
-                        ชื่อ-นามสกุล / รหัส
-                      </th>
-                      {!isOTReport ? (
-                        <>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
-                            กะงาน
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center">
-                            จุดปฏิบัติงาน
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-32">
-                            ลงเวลา
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-20">
-                            สถานะ
-                          </th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
-                            เริ่ม (Time)
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
-                            สิ้นสุด (Time)
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-24">
-                            ชั่วโมงอนุมัติ
-                          </th>
-                          <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-24">
-                            สถานะ/เหตุผล
-                          </th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {group.map((a: any, i: number) => (
-                      <tr key={i} className="text-[10px] leading-tight">
-                        <td className="px-3 py-2 text-center border border-slate-200">
-                          {a.date}
-                        </td>
-                        <td className="px-3 py-2 border border-slate-200 uppercase font-bold text-slate-900">
-                          {a.firstName} {a.lastName}
-                        </td>
-                        {!isOTReport ? (
-                          <>
-                            <td className="px-3 py-2 text-center border border-slate-200">
-                              {a.shiftStartTimeSnapshot?.substring(0, 5)}-
-                              {a.shiftEndTimeSnapshot?.substring(0, 5)}
-                            </td>
-                            <td className="px-3 py-2 text-center border border-slate-200 truncate max-w-[150px]">
-                              {a.siteSnapName || "-"}
-                            </td>
-                            <td className="px-3 py-2 text-center border border-slate-200 font-bold">
-                              {/* 1. ส่วนแสดงผลเวลาเข้างาน (Check-in) */}
-                              <span
-                                className={
-                                  a.checkIn && a.shiftStartTimeSnapshot && a.checkIn.substring(0, 5) > a.shiftStartTimeSnapshot.substring(0, 5)
-                                    ? "text-red-600 animate-pulse" // 🔴 ถ้าเวลาเข้างาน เกิน เวลาเริ่มกะ -> สีแดง (สาย)
-                                    : "text-slate-700"              // 🟢 เวลาปกติ
-                                }
-                              >
-                                {a.checkIn?.substring(0, 5) || "--:--"}
-                              </span>
-                              
-                              <span className="text-slate-400 mx-1">-</span>
-                              
-                              {/* 2. ส่วนแสดงผลเวลาออกงาน (Check-out) */}
-                              <span
-                                className={
-                                  a.checkOut && a.shiftEndTimeSnapshot && a.checkOut.substring(0, 5) < a.shiftEndTimeSnapshot.substring(0, 5)
-                                    ? "text-red-600 animate-pulse" // 🔴 ถ้าเวลาออกงาน น้อยกว่า เวลาเลิกกะ -> สีแดง (ออกก่อนเวลา)
-                                    : "text-slate-700"              // 🟢 เวลาปกติ
-                                }
-                              >
-                                {a.checkOut?.substring(0, 5) || "--:--"}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-right border border-slate-200 font-black">
-                              {a.statusText}
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="px-3 py-2 text-center border border-slate-200">
-                              {a.timeStart?.substring(0, 5) || "-"}
-                            </td>
-                            <td className="px-3 py-2 text-center border border-slate-200">
-                              {a.timeEnd?.substring(0, 5) || "-"}
-                            </td>
-                            <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
-                              {(() => {
-                                const totalMinutes =
-                                  Number(a.otHours) ||
-                                  Number(a.overtimeByRequest) ||
-                                  0;
-                                const h = Math.floor(totalMinutes / 60);
-                                const m = totalMinutes % 60;
-                                return `${h}.${m.toString().padStart(2, "0")}`;
-                              })()}{" "}
-                              ชม.
-                            </td>
-                            <td className="px-3 py-2 text-right border border-slate-200 truncate max-w-[120px]">
-                              {a.otRemark || a.reason || a.otStatus || "-"}
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {/* --- Leave Information Section (ย้ำ: คงเดิม) --- */}
-                {pageObj.leaves && pageObj.leaves.length > 0 && (
-                  <div className="mt-4">
-                    <div className="flex items-center gap-2 mb-2 border-l-4 border-red-500 pl-3">
-                      <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-wider">
-                        รายการข้อมูลการลาที่ได้รับการอนุมัติ (Leave Records)
-                      </h3>
-                    </div>
-                    <table className="w-full border-collapse border border-slate-300">
-                      <thead className="bg-slate-50">
-                        <tr className="text-[9px] uppercase text-slate-500">
-                          <th className="px-3 py-1.5 border border-slate-300 text-center w-40">
-                            ช่วงวันที่ลา (เริ่ม - สิ้นสุด)
-                          </th>
-                          <th className="px-3 py-1.5 border border-slate-300">
-                            ชื่อ-นามสกุล ผู้ลา
-                          </th>
-                          <th className="px-3 py-1.5 border border-slate-300 text-center w-20">
-                            จำนวน (วัน)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pageObj.leaves.map((l: any, li: number) => (
-                          <tr
-                            key={li}
-                            className="text-[9px] border-b border-slate-200"
-                          >
-                            <td className="px-3 py-1.5 border border-slate-200 text-center font-medium">
-                              {l.startDate} ถึง {l.endDate}
-                            </td>
-                            <td className="px-3 py-1.5 border border-slate-200 font-bold text-slate-700">
-                              {l.fullName}
-                            </td>
-                            <td className="px-3 py-1.5 border border-slate-200 text-center font-bold text-red-600">
-                              {l.totalDays}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+              <div>
+                <h2 className="font-bold text-lg text-slate-800 uppercase leading-none">
+                  {exportFormat === "excel"
+                    ? "เอกสารประเภท Excel"
+                    : "เอกสารประเภท PDF"}
+                </h2>
+                <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase">
+                  {reportType === "attendance"
+                    ? "รายงานการเข้างาน"
+                    : "รายงานการทำโอที (OT)"}{" "}
+                  • {Array.isArray(reportData) ? reportData.length : 0} รายการ
+                </p>
               </div>
-
-              {/* --- Footer (ส่วนลายเซ็นและสรุปผล) --- */}
-              {pageObj.isLastPageForUser && (
-                <div className="mt-auto border-t-2 border-slate-100 pt-4 print:pb-2">
-                  <div className="flex justify-between items-end">
-                    {/* ฝั่งซ้าย: สรุปตัวเลข */}
-                    <div className="space-y-1">
-                      {isOTReport ? (
-                        <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
-                          <p className="text-[10px] font-bold text-blue-600 uppercase">
-                            รวมเวลาโอทีทั้งหมด (สุทธิ)
-                          </p>
-                          <p className="text-xl font-black text-blue-900">
-                            {(() => {
-                              const totalMinutes = Number(pageObj.totalOtMinutes) || 0;
-                              const h = Math.floor(totalMinutes / 60);
-                              const m = totalMinutes % 60;
-                              return `${h}.${m.toString().padStart(2, "0")}`;
-                            })()}{" "}
-                            <span className="text-xs font-bold">ชั่วโมง</span>
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100">
-                          <p className="text-[10px] font-bold text-emerald-600 uppercase">
-                            จำนวนวันที่มาทำงาน (นับรายการที่สมบูรณ์เท่านั้น)
-                          </p>
-                          <p className="text-xl font-black text-emerald-900">
-                            {pageObj.completeCount}{" "}
-                            <span className="text-xs font-bold">วัน</span>
-                          </p>
-                        </div>
-                      )}
-                      <p className="text-[9px] text-slate-400 italic">
-                        * เอกสารนี้จัดทำโดยระบบอัตโนมัติ ข้อมูลมีความถูกต้องตามการบันทึกในระบบ
-                      </p>
-                    </div>
-
-                    {/* ฝั่งขวา: ลายเซ็น */}
-                    <div className="flex gap-8">
-                      <div className="text-center w-40">
-                        <div className="h-10 border-b border-slate-300 mb-2"></div>
-                        <p className="text-[10px] font-bold text-slate-900 uppercase">
-                          ผู้จัดทำ/พนักงาน
-                        </p>
-                        <p className="text-[9px] text-slate-400">
-                          (...................................................)
-                        </p>
-                      </div>
-                      <div className="text-center w-40">
-                        <div className="h-10 border-b border-slate-300 mb-2 flex items-end justify-center">
-                          <span className="text-[10px] font-black text-slate-800 mb-1 uppercase italic">
-                            {group.find(
-                              (item: any) =>
-                                item?.approvedByName &&
-                                item.approvedByName !== "-"
-                            )?.approvedByName || ""}
-                          </span>
-                        </div>
-                        <p className="text-[10px] font-bold text-slate-900 uppercase">
-                          ผู้อนุมัติ (Approver)
-                        </p>
-                        <p className="text-[9px] text-slate-400">
-                          วันที่: ...... / ...... / ......
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
-          );
-        });
-      })()}
-    </div>
-  </div>
-)}
+
+            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 sm:gap-4">
+              <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                  จำนวนเอกสาร:{" "}
+                </span>
+                <span className="text-[11px] font-black text-blue-600">
+                  {(() => {
+                    const safeData = Array.isArray(reportData) ? reportData : [];
+                    const userIds = [...new Set(safeData.map((item: any) => item?.userId))];
+                    let totalPages = 0;
+                    userIds.forEach((id) => {
+                      const userRows = safeData.filter((item: any) => item?.userId === id).length;
+                      totalPages += Math.ceil(userRows / 15);
+                    });
+                    return totalPages || 1;
+                  })()}{" "}
+                  หน้า
+                </span>
+              </div>
+
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button
+                  onClick={() =>
+                    exportFormat === "pdf"
+                      ? window.print()
+                      : handleDownloadExcel(
+                        Array.isArray(reportData) ? reportData : []
+                      )
+                  }
+                  className={`flex-1 sm:flex-none text-center px-4 sm:px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase shadow-lg transition-all active:scale-95 text-white ${exportFormat === "excel" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-slate-900 hover:bg-blue-600"}`}
+                >
+                  {exportFormat === "pdf"
+                    ? "พิมพ์รายงาน / Save PDF"
+                    : "ดาวน์โหลด Excel"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowReport(false);
+                    setShowFilterModal(true);
+                    setIsMobileFilterOpen(false);
+                  }}
+                  className="bg-slate-100 hover:bg-red-50 hover:text-red-500 px-4 sm:px-6 py-2.5 rounded-xl font-bold text-[11px] uppercase transition-all text-slate-400"
+                >
+                  ย้อนกลับ
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Wrapper ควบคุมขนาดพรีวิวบนจอมือถือ ไม่ให้ตารางแตกกระจุย */}
+          <div className="w-full overflow-x-auto sm:overflow-visible flex justify-center print:p-0 print:overflow-visible">
+            <div
+              id="report-content"
+              className="w-[210mm] flex flex-col items-center gap-8 print:gap-0 print:block print:w-full origin-top scale-[0.45] xs:scale-[0.55] sm:scale-100 my-[-240mm] xs:my-[-190mm] sm:my-0 transition-transform duration-200"
+            >
+              {(() => {
+                let pages: any[] = [];
+                const rowsPerPage = 15;
+                const safeReportData = Array.isArray(reportData) ? reportData : [];
+                const safeLeaveData = Array.isArray(leaveData) ? leaveData : [];
+
+                const isOTReport =
+                  reportType === "overtime" ||
+                  reportType === "ot" ||
+                  safeReportData[0]?.generatedType === "overtime";
+
+                // Logic แยกรายคน (ใช้ทั้ง Attendance และ OT)
+                const userIds = Array.from(
+                  new Set(safeReportData.map((item: any) => item?.userId))
+                );
+
+                userIds.forEach((id) => {
+                  const userData = safeReportData.filter(
+                    (item: any) => item?.userId === id
+                  );
+
+                  // คำนวณยอดรวม OT (เฉพาะกรณี OT Report)
+                  const totalOtForUser = userData.reduce(
+                    (sum, item) =>
+                      sum + (Number(item?.otHours) || Number(item?.overtimeByRequest) || 0),
+                    0
+                  );
+
+                  // คำนวณจำนวนวันที่ Check-in/Out ครบ (เฉพาะ Attendance)
+                  const completeAttendanceCount = userData.filter(
+                    (a) => a.checkIn && a.checkOut && a.checkIn !== "" && a.checkOut !== ""
+                  ).length;
+
+                  const totalPagesForUser = Math.ceil(userData.length / rowsPerPage);
+
+                  for (let i = 0; i < userData.length; i += rowsPerPage) {
+                    const isLastPageForUser = i + rowsPerPage >= userData.length;
+                    pages.push({
+                      items: userData.slice(i, i + rowsPerPage),
+                      totalOtMinutes: isLastPageForUser ? totalOtForUser : null,
+                      completeCount: isLastPageForUser ? completeAttendanceCount : null,
+                      isLastPageForUser,
+                      currentUser: userData[0],
+                      currentPageForUser: Math.floor(i / rowsPerPage) + 1,
+                      totalPagesForUser,
+                      leaves: isLastPageForUser
+                        ? safeLeaveData.filter((l: any) => l.userId === id)
+                        : [],
+                    });
+                  }
+                });
+
+                return pages.map((pageObj: any, pageIndex: number) => {
+                  const group = Array.isArray(pageObj.items) ? pageObj.items : [];
+
+                  return (
+                    <div
+                      key={pageIndex}
+                      className="bg-white w-[210mm] min-h-[297mm] shadow-2xl flex flex-col p-12 print:p-10 print:m-0 print:shadow-none print:w-[210mm] print:min-h-[297mm] relative page-break-after-always overflow-hidden font-sans shrink-0"
+                    >
+                      {/* Header */}
+                      <div className="border-b-4 border-slate-900 pb-4 mb-4 flex justify-between items-start">
+                        <div>
+                          <h2 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
+                            {admin?.company || "COMPANY NAME"}
+                          </h2>
+                          <p className="text-slate-600 font-bold text-[12px] mt-1 uppercase">
+                            {!isOTReport
+                              ? `สรุปรายการการเข้างาน: ${group[0]?.firstName} ${group[0]?.lastName}`
+                              : `สรุปรายการการทำโอที (OT): ${group[0]?.firstName} ${group[0]?.lastName}`}
+                          </p>
+                          <p className="text-blue-600 font-bold text-[10px] mt-0.5">
+                            ประจำวันที่: {formattedStartDate} — {formattedEndDate}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[9px] font-medium text-slate-400 leading-tight">
+                            พิมพ์เมื่อ: {reportDate} {reportTime} <br />
+                            Ref:{" "}
+                            {Math.random()
+                              .toString(36)
+                              .substring(2, 8)
+                              .toUpperCase()}
+                          </div>
+                          <div className="mt-2 text-[10px] font-bold text-slate-900 uppercase tracking-widest">
+                            หน้าที่ {pageObj.currentPageForUser} จาก{" "}
+                            {pageObj.totalPagesForUser}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Main Data Table */}
+                      <div className="flex-1">
+                        <table className="w-full text-left border-collapse border border-slate-300">
+                          <thead>
+                            <tr className="bg-slate-900 text-white">
+                              <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 w-24 text-center">
+                                วันที่
+                              </th>
+                              <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300">
+                                ชื่อ-นามสกุล / รหัส
+                              </th>
+                              {!isOTReport ? (
+                                <>
+                                  <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
+                                    กะงาน
+                                  </th>
+                                  <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center">
+                                    จุดปฏิบัติงาน
+                                  </th>
+                                  <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-32">
+                                    ลงเวลา
+                                  </th>
+                                  <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-20">
+                                    สถานะ
+                                  </th>
+                                </>
+                              ) : (
+                                <>
+                                  <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
+                                    เริ่ม (Time)
+                                  </th>
+                                  <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
+                                    สิ้นสุด (Time)
+                                  </th>
+                                  <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-24">
+                                    ชั่วโมงอนุมัติ
+                                  </th>
+                                  <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-right w-24">
+                                    สถานะ/เหตุผล
+                                  </th>
+                                </>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200">
+                            {group.map((a: any, i: number) => (
+                              <tr key={i} className="text-[10px] leading-tight">
+                                <td className="px-3 py-2 text-center border border-slate-200">
+                                  {a.date}
+                                </td>
+                                <td className="px-3 py-2 border border-slate-200 uppercase font-bold text-slate-900">
+                                  {a.firstName} {a.lastName}
+                                </td>
+                                {!isOTReport ? (
+                                  <>
+                                    <td className="px-3 py-2 text-center border border-slate-200">
+                                      {a.shiftStartTimeSnapshot?.substring(0, 5)}-
+                                      {a.shiftEndTimeSnapshot?.substring(0, 5)}
+                                    </td>
+                                    <td className="px-3 py-2 text-center border border-slate-200 truncate max-w-[150px]">
+                                      {a.siteSnapName || "-"}
+                                    </td>
+                                    <td className="px-3 py-2 text-center border border-slate-200 font-bold">
+                                      {/* 1. ส่วนแสดงผลเวลาเข้างาน (Check-in) */}
+                                      <span
+                                        className={
+                                          a.checkIn && a.shiftStartTimeSnapshot && a.checkIn.substring(0, 5) > a.shiftStartTimeSnapshot.substring(0, 5)
+                                            ? "text-red-600 animate-pulse" // 🔴 ถ้าเวลาเข้างาน เกิน เวลาเริ่มกะ -> สีแดง (สาย)
+                                            : "text-slate-700"              // 🟢 เวลาปกติ
+                                        }
+                                      >
+                                        {a.checkIn?.substring(0, 5) || "--:--"}
+                                      </span>
+
+                                      <span className="text-slate-400 mx-1">-</span>
+
+                                      {/* 2. ส่วนแสดงผลเวลาออกงาน (Check-out) */}
+                                      <span
+                                        className={
+                                          a.checkOut && a.shiftEndTimeSnapshot && a.checkOut.substring(0, 5) < a.shiftEndTimeSnapshot.substring(0, 5)
+                                            ? "text-red-600 animate-pulse" // 🔴 ถ้าเวลาออกงาน น้อยกว่า เวลาเลิกกะ -> สีแดง (ออกก่อนเวลา)
+                                            : "text-slate-700"              // 🟢 เวลาปกติ
+                                        }
+                                      >
+                                        {a.checkOut?.substring(0, 5) || "--:--"}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2 text-right border border-slate-200 font-black">
+                                      {a.statusText}
+                                    </td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td className="px-3 py-2 text-center border border-slate-200">
+                                      {a.timeStart?.substring(0, 5) || "-"}
+                                    </td>
+                                    <td className="px-3 py-2 text-center border border-slate-200">
+                                      {a.timeEnd?.substring(0, 5) || "-"}
+                                    </td>
+                                    <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
+                                      {(() => {
+                                        const totalMinutes =
+                                          Number(a.otHours) ||
+                                          Number(a.overtimeByRequest) ||
+                                          0;
+                                        const h = Math.floor(totalMinutes / 60);
+                                        const m = totalMinutes % 60;
+                                        return `${h}.${m.toString().padStart(2, "0")}`;
+                                      })()}{" "}
+                                      ชม.
+                                    </td>
+                                    <td className="px-3 py-2 text-right border border-slate-200 truncate max-w-[120px]">
+                                      {a.otRemark || a.reason || a.otStatus || "-"}
+                                    </td>
+                                  </>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+
+                        {/* --- Leave Information Section (ย้ำ: คงเดิม) --- */}
+                        {pageObj.leaves && pageObj.leaves.length > 0 && (
+                          <div className="mt-4">
+                            <div className="flex items-center gap-2 mb-2 border-l-4 border-red-500 pl-3">
+                              <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-wider">
+                                รายการข้อมูลการลาที่ได้รับการอนุมัติ (Leave Records)
+                              </h3>
+                            </div>
+                            <table className="w-full border-collapse border border-slate-300">
+                              <thead className="bg-slate-50">
+                                <tr className="text-[9px] uppercase text-slate-500">
+                                  <th className="px-3 py-1.5 border border-slate-300 text-center w-40">
+                                    ช่วงวันที่ลา (เริ่ม - สิ้นสุด)
+                                  </th>
+                                  <th className="px-3 py-1.5 border border-slate-300">
+                                    ชื่อ-นามสกุล ผู้ลา
+                                  </th>
+                                  <th className="px-3 py-1.5 border border-slate-300 text-center w-20">
+                                    จำนวน (วัน)
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {pageObj.leaves.map((l: any, li: number) => (
+                                  <tr
+                                    key={li}
+                                    className="text-[9px] border-b border-slate-200"
+                                  >
+                                    <td className="px-3 py-1.5 border border-slate-200 text-center font-medium">
+                                      {l.startDate} ถึง {l.endDate}
+                                    </td>
+                                    <td className="px-3 py-1.5 border border-slate-200 font-bold text-slate-700">
+                                      {l.fullName}
+                                    </td>
+                                    <td className="px-3 py-1.5 border border-slate-200 text-center font-bold text-red-600">
+                                      {l.totalDays}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* --- Footer (ส่วนลายเซ็นและสรุปผล) --- */}
+                      {pageObj.isLastPageForUser && (
+                        <div className="mt-auto border-t-2 border-slate-100 pt-4 print:pb-2">
+                          <div className="flex justify-between items-end">
+                            {/* ฝั่งซ้าย: สรุปตัวเลข */}
+                            <div className="space-y-1">
+                              {isOTReport ? (
+                                <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
+                                  <p className="text-[10px] font-bold text-blue-600 uppercase">
+                                    รวมเวลาโอทีทั้งหมด (สุทธิ)
+                                  </p>
+                                  <p className="text-xl font-black text-blue-900">
+                                    {(() => {
+                                      const totalMinutes = Number(pageObj.totalOtMinutes) || 0;
+                                      const h = Math.floor(totalMinutes / 60);
+                                      const m = totalMinutes % 60;
+                                      return `${h}.${m.toString().padStart(2, "0")}`;
+                                    })()}{" "}
+                                    <span className="text-xs font-bold">ชั่วโมง</span>
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100">
+                                  <p className="text-[10px] font-bold text-emerald-600 uppercase">
+                                    จำนวนวันที่มาทำงาน (นับรายการที่สมบูรณ์เท่านั้น)
+                                  </p>
+                                  <p className="text-xl font-black text-emerald-900">
+                                    {pageObj.completeCount}{" "}
+                                    <span className="text-xs font-bold">วัน</span>
+                                  </p>
+                                </div>
+                              )}
+                              <p className="text-[9px] text-slate-400 italic">
+                                * เอกสารนี้จัดทำโดยระบบอัตโนมัติ ข้อมูลมีความถูกต้องตามการบันทึกในระบบ
+                              </p>
+                            </div>
+
+                            {/* ฝั่งขวา: ลายเซ็น */}
+                            <div className="flex gap-8">
+                              <div className="text-center w-40">
+                                <div className="h-10 border-b border-slate-300 mb-2"></div>
+                                <p className="text-[10px] font-bold text-slate-900 uppercase">
+                                  ผู้จัดทำ/พนักงาน
+                                </p>
+                                <p className="text-[9px] text-slate-400">
+                                  (...................................................)
+                                </p>
+                              </div>
+                              <div className="text-center w-40">
+                                <div className="h-10 border-b border-slate-300 mb-2 flex items-end justify-center">
+                                  <span className="text-[10px] font-black text-slate-800 mb-1 uppercase italic">
+                                    {group.find(
+                                      (item: any) =>
+                                        item?.approvedByName &&
+                                        item.approvedByName !== "-"
+                                    )?.approvedByName || ""}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-900 uppercase">
+                                  ผู้อนุมัติ (Approver)
+                                </p>
+                                <p className="text-[9px] text-slate-400">
+                                  วันที่: ...... / ...... / ......
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
       {/* --- 🖨️ MODAL: EDIT SITE & POSITION --- */}
       {showManageModal && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[600] flex items-center justify-center p-4">
@@ -5545,18 +5519,16 @@ export default function AdminClientPage({
                       {allSites.map((site) => (
                         <tr
                           key={site.id}
-                          className={`transition-colors group ${
-                            site.name === "ทุกไซต์"
-                              ? "bg-orange-50 hover:bg-orange-100"
-                              : "hover:bg-white"
-                          }`}
+                          className={`transition-colors group ${site.name === "ทุกไซต์"
+                            ? "bg-orange-50 hover:bg-orange-100"
+                            : "hover:bg-white"
+                            }`}
                         >
                           <td
-                            className={`p-4 ${
-                              site.name === "ทุกไซต์"
-                                ? "text-orange-700"
-                                : "text-slate-700"
-                            }`}
+                            className={`p-4 ${site.name === "ทุกไซต์"
+                              ? "text-orange-700"
+                              : "text-slate-700"
+                              }`}
                           >
                             {site.name}
                           </td>
@@ -5810,11 +5782,10 @@ export default function AdminClientPage({
               <button
                 type="submit"
                 disabled={isSavingCompany}
-                className={`px-10 py-4 text-white rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all flex items-center gap-2 ${
-                  isSavingCompany
-                    ? "bg-slate-400 cursor-not-allowed"
-                    : "bg-blue-600 hover:bg-blue-700"
-                }`}
+                className={`px-10 py-4 text-white rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all flex items-center gap-2 ${isSavingCompany
+                  ? "bg-slate-400 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700"
+                  }`}
               >
                 {isSavingCompany ? (
                   <>
