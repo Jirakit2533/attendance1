@@ -5054,6 +5054,7 @@ export default function AdminClientPage({
             transform-origin: top left !important;
             padding: 0 !important;
             margin: 0 !important;
+            display: block !important;
           }
           .page-break-after-always {
             page-break-after: always;
@@ -5142,10 +5143,13 @@ export default function AdminClientPage({
           </div>
 
           {/* Wrapper ควบคุมขนาดพรีวิวบนจอมือถือ ไม่ให้ตารางแตกกระจุย */}
-          <div className="w-full overflow-x-auto sm:overflow-visible flex justify-center print:p-0 print:overflow-visible">
+          <div className="w-full flex justify-center print:p-0 print:overflow-visible pb-12">
             <div
               id="report-content"
-              className="w-[210mm] flex flex-col items-center gap-8 print:gap-0 print:block print:w-full origin-top scale-[0.45] xs:scale-[0.55] sm:scale-100 my-[-240mm] xs:my-[-190mm] sm:my-0 transition-transform duration-200"
+              className="w-full max-w-[210mm] sm:w-[210mm] flex flex-col items-center gap-8 print:gap-0 print:block print:w-full origin-top scale-[0.45] xs:scale-[0.55] sm:scale-100 transition-transform duration-200"
+              style={{
+                height: "max-content"
+              }}
             >
               {(() => {
                 let pages: any[] = [];
@@ -5180,8 +5184,6 @@ export default function AdminClientPage({
                     (a) => a.checkIn && a.checkOut && a.checkIn !== "" && a.checkOut !== ""
                   ).length;
 
-                  const totalPagesForUser = Math.ceil(userData.length / rowsPerPage);
-
                   for (let i = 0; i < userData.length; i += rowsPerPage) {
                     const isLastPageForUser = i + rowsPerPage >= userData.length;
                     pages.push({
@@ -5190,8 +5192,6 @@ export default function AdminClientPage({
                       completeCount: isLastPageForUser ? completeAttendanceCount : null,
                       isLastPageForUser,
                       currentUser: userData[0],
-                      currentPageForUser: Math.floor(i / rowsPerPage) + 1,
-                      totalPagesForUser,
                       leaves: isLastPageForUser
                         ? safeLeaveData.filter((l: any) => l.userId === id)
                         : [],
@@ -5232,8 +5232,7 @@ export default function AdminClientPage({
                               .toUpperCase()}
                           </div>
                           <div className="mt-2 text-[10px] font-bold text-slate-900 uppercase tracking-widest">
-                            หน้าที่ {pageObj.currentPageForUser} จาก{" "}
-                            {pageObj.totalPagesForUser}
+                            หน้าที่ {pageIndex + 1} จาก {pages.length}
                           </div>
                         </div>
                       </div>
@@ -5359,7 +5358,7 @@ export default function AdminClientPage({
                           </tbody>
                         </table>
 
-                        {/* --- Leave Information Section (ย้ำ: คงเดิม) --- */}
+                        {/* --- Leave Information Section --- */}
                         {pageObj.leaves && pageObj.leaves.length > 0 && (
                           <div className="mt-4">
                             <div className="flex items-center gap-2 mb-2 border-l-4 border-red-500 pl-3">
