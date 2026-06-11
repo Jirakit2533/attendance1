@@ -5328,8 +5328,29 @@ export default function AdminClientPage({
                               {a.siteSnapName || "-"}
                             </td>
                             <td className="px-3 py-2 text-center border border-slate-200 font-bold">
-                              {a.checkIn?.substring(0, 5) || "--:--"} -{" "}
-                              {a.checkOut?.substring(0, 5) || "--:--"}
+                              {/* 1. ส่วนแสดงผลเวลาเข้างาน (Check-in) */}
+                              <span
+                                className={
+                                  a.checkIn && a.shiftStartTimeSnapshot && a.checkIn.substring(0, 5) > a.shiftStartTimeSnapshot.substring(0, 5)
+                                    ? "text-red-600 animate-pulse" // 🔴 ถ้าเวลาเข้างาน เกิน เวลาเริ่มกะ -> สีแดง (สาย)
+                                    : "text-slate-700"              // 🟢 เวลาปกติ
+                                }
+                              >
+                                {a.checkIn?.substring(0, 5) || "--:--"}
+                              </span>
+                              
+                              <span className="text-slate-400 mx-1">-</span>
+                              
+                              {/* 2. ส่วนแสดงผลเวลาออกงาน (Check-out) */}
+                              <span
+                                className={
+                                  a.checkOut && a.shiftEndTimeSnapshot && a.checkOut.substring(0, 5) < a.shiftEndTimeSnapshot.substring(0, 5)
+                                    ? "text-red-600 animate-pulse" // 🔴 ถ้าเวลาออกงาน น้อยกว่า เวลาเลิกกะ -> สีแดง (ออกก่อนเวลา)
+                                    : "text-slate-700"              // 🟢 เวลาปกติ
+                                }
+                              >
+                                {a.checkOut?.substring(0, 5) || "--:--"}
+                              </span>
                             </td>
                             <td className="px-3 py-2 text-right border border-slate-200 font-black">
                               {a.statusText}
