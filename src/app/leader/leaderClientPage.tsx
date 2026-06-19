@@ -664,14 +664,14 @@ export default function LeaderClientPage({
       // 🚩 ดึงเวลาปัจจุบันมาเช็คเงื่อนไขออกงานก่อนกำหนด (ถอดแบบตัวอย่างของนาย)
       const now = new Date();
       const currentMin = now.getHours() * 60 + now.getMinutes();
-      
+
       // ดึงเวลาเลิกงานจาก profile / shift snapshot (ถ้ามี) ตัวอย่างเช่น "17:00"
-      const shiftEndTime = userProfile?.endTime || null; 
-      
+      const shiftEndTime = userProfile?.endTime || null;
+
       if (shiftEndTime) {
         const [endH, endM] = shiftEndTime.split(":").map(Number);
         const endTotalMin = endH * 60 + endM;
-        
+
         // ถ้าเวลาปัจจุบันยังไม่ถึงเวลาเลิกงาน และห่างกันไม่เกิน 60 นาที ให้เปิดป๊อปอัพเตือนออกก่อนกำหนด
         if (currentMin < endTotalMin && (endTotalMin - currentMin) <= 60) {
           setPendingData({
@@ -969,8 +969,7 @@ export default function LeaderClientPage({
               src={
                 userProfile?.avatarUrl ||
                 userProfile?.profileImage ||
-                `https://ui-avatars.com/api/?name=${
-                  userProfile?.firstName || "User"
+                `https://ui-avatars.com/api/?name=${userProfile?.firstName || "User"
                 }`
               }
               alt="Profile"
@@ -1031,7 +1030,7 @@ export default function LeaderClientPage({
           <div className="flex flex-col gap-4 mt-8 w-full md:w-64">
             {/* 1. เช็คว่ายังไม่ได้เข้างาน หรือ (เป็นกลุ่ม "ทุกไซต์" และเพิ่งเช็คเอาท์ไป) ให้โชว์ปุ่ม CHECK-IN */}
             {!todayStatus.hasCheckedIn ||
-            (userProfile.site === "ทุกไซต์" && todayStatus.hasCheckedOut) ? (
+              (userProfile.site === "ทุกไซต์" && todayStatus.hasCheckedOut) ? (
               <button
                 onClick={() => {
                   setIsCheckingOut(false);
@@ -1139,10 +1138,11 @@ export default function LeaderClientPage({
                   </h2>
                 </div>
 
-                <div className="overflow-x-auto rounded-[1.5rem] -mx-6 px-6 sm:mx-0 sm:px-0">
+                {/* ปรับเพิ่ม max-h และ overflow-y-auto เพื่อให้ scroll ลงเมื่อเกิน 5 รายการ */}
+                <div className="overflow-x-auto overflow-y-auto max-h-[460px] rounded-[1.5rem] -mx-6 px-6 sm:mx-0 sm:px-0 scrollbar-thin">
                   {/* ปรับ min-w เป็น 1100px เพื่อให้มีพื้นที่กว้างขึ้น ไม่ทับซ้อน */}
                   <table className="w-full text-sm min-w-[1100px] border-collapse">
-                    <thead className="bg-gray-50/50 text-gray-600 uppercase text-[11px] font-black tracking-widest">
+                    <thead className="bg-gray-50/50 text-gray-600 uppercase text-[11px] font-black tracking-widest sticky top-0 z-10 backdrop-blur-md">
                       <tr>
                         <th className="p-4 text-left">วันที่</th>
                         <th className="p-4 text-left">รอบเข้างาน</th>
@@ -1192,13 +1192,13 @@ export default function LeaderClientPage({
                               <td className="p-4 font-bold text-gray-800 whitespace-nowrap">
                                 {r.date
                                   ? new Date(r.date).toLocaleDateString(
-                                      "th-TH",
-                                      {
-                                        day: "2-digit",
-                                        month: "2-digit",
-                                        year: "numeric",
-                                      }
-                                    )
+                                    "th-TH",
+                                    {
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                      year: "numeric",
+                                    }
+                                  )
                                   : "-"}
                               </td>
 
@@ -1250,26 +1250,6 @@ export default function LeaderClientPage({
                                   </span>
                                 )}
                               </td>
-                              {/* <td className="p-4 font-bold whitespace-nowrap">
-                                  {String(r.isOffsiteIn) === "1" ? (
-                                    <span className="text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm text-sm">
-                                      ⚠️ เข้าไม่ตรง
-                                    </span>
-                                  ) : (
-                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
-                                      ✅ ปกติ
-                                    </span>
-                                  )}
-                                  {String(r.isOffsiteOut) === "1" ? (
-                                    <span className="text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 shadow-sm text-sm">
-                                      🏃 ออกไม่ตรง
-                                    </span>
-                                  ) : (
-                                    <span className="text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm text-sm">
-                                      ✅ ปกติ
-                                    </span>
-                                  )}
-                                </td>       */}
                               {/* เช็คอิน */}
                               <td className="p-4 whitespace-nowrap">
                                 <div className="flex items-center gap-3">
@@ -1531,22 +1511,21 @@ export default function LeaderClientPage({
                               <td className="p-4 sm:p-6 text-center">
                                 <span
                                   className={`px-2.5 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-tighter shadow-sm border whitespace-nowrap
-                  ${
-                    l.status === "approved" || l.status === "อนุมัติแล้ว"
-                      ? "bg-green-50 text-green-600 border-green-100"
-                      : l.status === "rejected" || l.status === "ปฏิเสธ"
-                        ? "bg-red-50 text-red-600 border-red-100"
-                        : "bg-amber-50 text-amber-600 border-amber-100"
-                  }`}
+                  ${l.status === "approved" || l.status === "อนุมัติแล้ว"
+                                      ? "bg-green-50 text-green-600 border-green-100"
+                                      : l.status === "rejected" || l.status === "ปฏิเสธ"
+                                        ? "bg-red-50 text-red-600 border-red-100"
+                                        : "bg-amber-50 text-amber-600 border-amber-100"
+                                    }`}
                                 >
                                   {l.status === "pending" ||
-                                  l.status === "รออนุมัติ"
+                                    l.status === "รออนุมัติ"
                                     ? "รออนุมัติ"
                                     : l.status === "approved" ||
-                                        l.status === "อนุมัติแล้ว"
+                                      l.status === "อนุมัติแล้ว"
                                       ? "อนุมัติแล้ว"
                                       : l.status === "rejected" ||
-                                          l.status === "ปฏิเสธ"
+                                        l.status === "ปฏิเสธ"
                                         ? "ปฏิเสธ"
                                         : l.status}
                                 </span>
@@ -1575,11 +1554,10 @@ export default function LeaderClientPage({
                                                 : l.id
                                             )
                                           }
-                                          className={`flex-shrink-0 p-1.5 rounded-lg transition-all border ${
-                                            viewRemarkId === l.id
-                                              ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200"
-                                              : "bg-white text-indigo-500 border-gray-200 hover:border-indigo-200 hover:bg-indigo-50"
-                                          }`}
+                                          className={`flex-shrink-0 p-1.5 rounded-lg transition-all border ${viewRemarkId === l.id
+                                            ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200"
+                                            : "bg-white text-indigo-500 border-gray-200 hover:border-indigo-200 hover:bg-indigo-50"
+                                            }`}
                                         >
                                           <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -1666,8 +1644,8 @@ export default function LeaderClientPage({
                               </td>
                               <td className="p-4 sm:p-6 text-center">
                                 {l.status !== "pending" &&
-                                l.status !== "รออนุมัติ" &&
-                                (l.approverFirst || l.approverName) ? (
+                                  l.status !== "รออนุมัติ" &&
+                                  (l.approverFirst || l.approverName) ? (
                                   <div className="inline-flex flex-col items-center">
                                     <span className="text-[11px] sm:text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
                                       {l.approverName ||
@@ -1748,13 +1726,13 @@ export default function LeaderClientPage({
                                   <div className="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-black text-[13px] w-fit uppercase">
                                     {ot.date
                                       ? new Date(ot.date).toLocaleDateString(
-                                          "th-TH",
-                                          {
-                                            day: "2-digit",
-                                            month: "2-digit",
-                                            year: "numeric",
-                                          }
-                                        )
+                                        "th-TH",
+                                        {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          year: "numeric",
+                                        }
+                                      )
                                       : "-"}
                                   </div>
                                   <div className="text-[10px] sm:text-[11px] text-gray-500 font-bold">
@@ -1792,13 +1770,12 @@ export default function LeaderClientPage({
                               <td className="p-4 sm:p-6 text-center">
                                 <span
                                   className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-tighter shadow-sm border whitespace-nowrap
-                                  ${
-                                    ot.status === "approved"
+                                  ${ot.status === "approved"
                                       ? "bg-green-50 text-green-600 border-green-100"
                                       : ot.status === "rejected"
                                         ? "bg-red-50 text-red-600 border-red-100"
                                         : "bg-amber-50 text-amber-600 border-amber-100"
-                                  }`}
+                                    }`}
                                 >
                                   {ot.status === "pending"
                                     ? "รออนุมัติ"
@@ -1811,8 +1788,8 @@ export default function LeaderClientPage({
                               {/* 6. ผู้จัดการคำขอ */}
                               <td className="p-4 sm:p-6 text-center">
                                 {ot.status !== "pending" &&
-                                ot.approverName &&
-                                ot.approverName !== "-" ? (
+                                  ot.approverName &&
+                                  ot.approverName !== "-" ? (
                                   <div className="inline-flex flex-col items-center">
                                     <span className="text-[11px] sm:text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
                                       {ot.approverName}
@@ -1928,13 +1905,13 @@ export default function LeaderClientPage({
                                 <td className="py-5 px-6 font-bold text-slate-600 whitespace-nowrap">
                                   {a.date
                                     ? new Date(a.date).toLocaleDateString(
-                                        "th-TH",
-                                        {
-                                          day: "2-digit",
-                                          month: "2-digit",
-                                          year: "numeric",
-                                        }
-                                      )
+                                      "th-TH",
+                                      {
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                      }
+                                    )
                                     : "-"}
                                 </td>
                                 <td className="p-4 font-bold text-gray-600 whitespace-nowrap">
@@ -2046,11 +2023,10 @@ export default function LeaderClientPage({
                                             />
                                           </div>
                                           <span
-                                            className={`absolute -bottom-2 -right-1 text-white text-[8px] px-1 rounded font-bold uppercase ${
-                                              img.label === "In"
-                                                ? "bg-green-500"
-                                                : "bg-red-500"
-                                            }`}
+                                            className={`absolute -bottom-2 -right-1 text-white text-[8px] px-1 rounded font-bold uppercase ${img.label === "In"
+                                              ? "bg-green-500"
+                                              : "bg-red-500"
+                                              }`}
                                           >
                                             {img.label}
                                           </span>
@@ -2147,9 +2123,9 @@ export default function LeaderClientPage({
                                 Math.ceil(
                                   Math.abs(
                                     new Date(l.endDate).getTime() -
-                                      new Date(l.startDate).getTime()
+                                    new Date(l.startDate).getTime()
                                   ) /
-                                    (1000 * 60 * 60 * 24)
+                                  (1000 * 60 * 60 * 24)
                                 ) + 1;
                               return (
                                 <tr
@@ -2242,9 +2218,9 @@ export default function LeaderClientPage({
                                         // 3. กรณีปกติ (ชั่วโมง หรือ วัน): แสดงค่าตัวเลขพร้อมหน่วย
                                         const displayValue = isDayUnit
                                           ? (totalHrs / 24).toLocaleString(
-                                              undefined,
-                                              { maximumFractionDigits: 1 }
-                                            )
+                                            undefined,
+                                            { maximumFractionDigits: 1 }
+                                          )
                                           : totalHrs;
 
                                         return (
@@ -2284,13 +2260,12 @@ export default function LeaderClientPage({
                                   </td>
                                   <td className="py-5 px-4 text-center">
                                     <span
-                                      className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase shadow-sm whitespace-nowrap ${
-                                        l.status === "pending"
-                                          ? "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
-                                          : l.status === "approved"
-                                            ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
-                                            : "bg-rose-100 text-rose-700 ring-1 ring-rose-200"
-                                      }`}
+                                      className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase shadow-sm whitespace-nowrap ${l.status === "pending"
+                                        ? "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
+                                        : l.status === "approved"
+                                          ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
+                                          : "bg-rose-100 text-rose-700 ring-1 ring-rose-200"
+                                        }`}
                                     >
                                       {l.status === "pending"
                                         ? "• รออนุมัติ"
@@ -2342,11 +2317,10 @@ export default function LeaderClientPage({
                                       <input
                                         type="text"
                                         placeholder="ระบุหมายเหตุ..."
-                                        className={`border rounded-xl px-3 py-1.5 text-xs w-full transition-all outline-none ${
-                                          l.status !== "pending"
-                                            ? "bg-gray-50 text-gray-700 border-gray-200 shadow-sm"
-                                            : "bg-white border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                                        }`}
+                                        className={`border rounded-xl px-3 py-1.5 text-xs w-full transition-all outline-none ${l.status !== "pending"
+                                          ? "bg-gray-50 text-gray-700 border-gray-200 shadow-sm"
+                                          : "bg-white border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                                          }`}
                                         value={
                                           l.status === "pending"
                                             ? (leaveRemarks[l.id] ??
@@ -2372,11 +2346,10 @@ export default function LeaderClientPage({
                                                   : l.id
                                               )
                                             }
-                                            className={`shrink-0 p-1.5 rounded-lg transition-colors border ${
-                                              viewRemarkId === l.id
-                                                ? "bg-blue-600 text-white border-blue-600"
-                                                : "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
-                                            }`}
+                                            className={`shrink-0 p-1.5 rounded-lg transition-colors border ${viewRemarkId === l.id
+                                              ? "bg-blue-600 text-white border-blue-600"
+                                              : "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
+                                              }`}
                                           >
                                             <svg
                                               xmlns="http://www.w3.org/2000/svg"
@@ -2460,7 +2433,7 @@ export default function LeaderClientPage({
                                   </td>
                                   <td className="p-6 text-center">
                                     {l.status !== "pending" &&
-                                    l.approverFirst ? (
+                                      l.approverFirst ? (
                                       <div className="inline-flex flex-col items-center">
                                         <span className="text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
                                           {`${l.approverFirst} ${l.approverLast || ""}`.trim()}
@@ -2608,13 +2581,12 @@ export default function LeaderClientPage({
                                   </td>
                                   <td className="py-5 px-4 text-center">
                                     <span
-                                      className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase shadow-sm whitespace-nowrap ${
-                                        ot.status === "pending"
-                                          ? "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
-                                          : ot.status === "approved"
-                                            ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
-                                            : "bg-rose-100 text-rose-700 ring-1 ring-rose-200"
-                                      }`}
+                                      className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase shadow-sm whitespace-nowrap ${ot.status === "pending"
+                                        ? "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
+                                        : ot.status === "approved"
+                                          ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
+                                          : "bg-rose-100 text-rose-700 ring-1 ring-rose-200"
+                                        }`}
                                     >
                                       {ot.status === "pending"
                                         ? "• รออนุมัติ"
@@ -2665,11 +2637,10 @@ export default function LeaderClientPage({
                                       <input
                                         type="text"
                                         placeholder="ระบุหมายเหตุ..."
-                                        className={`border rounded-xl px-3 py-1.5 text-xs w-full transition-all outline-none ${
-                                          ot.status !== "pending"
-                                            ? "bg-gray-50 text-gray-700 border-gray-200 shadow-sm"
-                                            : "bg-white border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                                        }`}
+                                        className={`border rounded-xl px-3 py-1.5 text-xs w-full transition-all outline-none ${ot.status !== "pending"
+                                          ? "bg-gray-50 text-gray-700 border-gray-200 shadow-sm"
+                                          : "bg-white border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                                          }`}
                                         value={
                                           ot.status === "pending"
                                             ? (otRemarks[ot.id] ??
@@ -2695,11 +2666,10 @@ export default function LeaderClientPage({
                                                   : ot.id
                                               )
                                             }
-                                            className={`shrink-0 p-1.5 rounded-lg transition-colors border ${
-                                              viewRemarkId === ot.id
-                                                ? "bg-blue-600 text-white border-blue-600"
-                                                : "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
-                                            }`}
+                                            className={`shrink-0 p-1.5 rounded-lg transition-colors border ${viewRemarkId === ot.id
+                                              ? "bg-blue-600 text-white border-blue-600"
+                                              : "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
+                                              }`}
                                           >
                                             <svg
                                               xmlns="http://www.w3.org/2000/svg"
@@ -2783,7 +2753,7 @@ export default function LeaderClientPage({
                                   </td>
                                   <td className="p-6 text-center">
                                     {ot.status !== "pending" &&
-                                    (ot.approverFirst || ot.approverName) ? (
+                                      (ot.approverFirst || ot.approverName) ? (
                                       <div className="inline-flex flex-col items-center">
                                         <span className="text-[13px] font-bold text-gray-900 tracking-tight whitespace-nowrap">
                                           {ot.approverName ||
@@ -2886,52 +2856,50 @@ export default function LeaderClientPage({
                       leaveEndTime &&
                       (leaveStart !== leaveEnd ||
                         leaveEndTime > leaveStartTime))) && (
-                    <div className="flex flex-col items-center justify-center py-4 animate-in zoom-in duration-300">
-                      <div className="bg-indigo-600 px-8 py-3 rounded-[2rem] shadow-[0_10px_25px_-5px_rgba(79,70,229,0.4)] flex items-center gap-3">
-                        <span className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">
-                          ระยะเวลา
-                        </span>
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-3xl font-black text-white leading-none">
-                            {leaveType === "ลาเป็นชั่วโมง"
-                              ? calculateTotalHours(
+                      <div className="flex flex-col items-center justify-center py-4 animate-in zoom-in duration-300">
+                        <div className="bg-indigo-600 px-8 py-3 rounded-[2rem] shadow-[0_10px_25px_-5px_rgba(79,70,229,0.4)] flex items-center gap-3">
+                          <span className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">
+                            ระยะเวลา
+                          </span>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-black text-white leading-none">
+                              {leaveType === "ลาเป็นชั่วโมง"
+                                ? calculateTotalHours(
                                   leaveStart,
                                   leaveEnd,
                                   leaveStartTime,
                                   leaveEndTime
                                 )
-                              : calculateLeaveDays(leaveStart, leaveEnd)}
-                          </span>
-                          <span className="text-sm font-bold text-white uppercase">
-                            {leaveType === "ลาเป็นชั่วโมง" ? "ชั่วโมง" : "วัน"}
-                          </span>
+                                : calculateLeaveDays(leaveStart, leaveEnd)}
+                            </span>
+                            <span className="text-sm font-bold text-white uppercase">
+                              {leaveType === "ลาเป็นชั่วโมง" ? "ชั่วโมง" : "วัน"}
+                            </span>
+                          </div>
                         </div>
+                        <div className="h-4 w-0.5 bg-gradient-to-b from-indigo-600 to-transparent opacity-20"></div>
                       </div>
-                      <div className="h-4 w-0.5 bg-gradient-to-b from-indigo-600 to-transparent opacity-20"></div>
-                    </div>
-                  )}
+                    )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
                     {/* Start Date */}
                     <div className="space-y-2 group">
                       <label
-                        className={`text-[10px] font-black uppercase ml-4 transition-colors ${
-                          leaveError?.includes("เริ่มต้น") ||
+                        className={`text-[10px] font-black uppercase ml-4 transition-colors ${leaveError?.includes("เริ่มต้น") ||
                           (leaveStart &&
                             !validateLeaveDates(leaveStart, leaveEnd).isValid)
-                            ? "text-red-500"
-                            : "text-gray-400 group-focus-within:text-indigo-500"
-                        }`}
+                          ? "text-red-500"
+                          : "text-gray-400 group-focus-within:text-indigo-500"
+                          }`}
                       >
                         เริ่มต้น
                       </label>
                       <input
                         type="date"
-                        className={`w-full bg-white p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none ${
-                          leaveError?.includes("เริ่มต้น")
-                            ? "border-red-200 bg-red-50/50"
-                            : "border-transparent focus:border-indigo-500 text-gray-700"
-                        }`}
+                        className={`w-full bg-white p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none ${leaveError?.includes("เริ่มต้น")
+                          ? "border-red-200 bg-red-50/50"
+                          : "border-transparent focus:border-indigo-500 text-gray-700"
+                          }`}
                         value={leaveStart}
                         onChange={(e) => {
                           setLeaveStart(e.target.value);
@@ -2943,23 +2911,21 @@ export default function LeaderClientPage({
                     {/* End Date */}
                     <div className="space-y-2 group">
                       <label
-                        className={`text-[10px] font-black uppercase ml-4 transition-colors ${
-                          leaveError?.includes("สิ้นสุด") ||
+                        className={`text-[10px] font-black uppercase ml-4 transition-colors ${leaveError?.includes("สิ้นสุด") ||
                           (leaveEnd &&
                             !validateLeaveDates(leaveStart, leaveEnd).isValid)
-                            ? "text-red-500"
-                            : "text-gray-400 group-focus-within:text-indigo-500"
-                        }`}
+                          ? "text-red-500"
+                          : "text-gray-400 group-focus-within:text-indigo-500"
+                          }`}
                       >
                         สิ้นสุด
                       </label>
                       <input
                         type="date"
-                        className={`w-full bg-white p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none ${
-                          leaveError?.includes("สิ้นสุด")
-                            ? "border-red-200 bg-red-50/50"
-                            : "border-transparent focus:border-indigo-500 text-gray-700"
-                        }`}
+                        className={`w-full bg-white p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none ${leaveError?.includes("สิ้นสุด")
+                          ? "border-red-200 bg-red-50/50"
+                          : "border-transparent focus:border-indigo-500 text-gray-700"
+                          }`}
                         value={leaveEnd}
                         onChange={(e) => {
                           setLeaveEnd(e.target.value);
@@ -2979,11 +2945,10 @@ export default function LeaderClientPage({
                           เวลาเริ่มต้น (24H)
                         </label>
                         <select
-                          className={`w-full p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${
-                            !leaveStart
-                              ? "border-red-200 bg-red-50 text-red-600"
-                              : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
-                          }`}
+                          className={`w-full p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${!leaveStart
+                            ? "border-red-200 bg-red-50 text-red-600"
+                            : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
+                            }`}
                           value={leaveStartTime}
                           onChange={(e) => {
                             if (!leaveStart || !leaveEnd) {
@@ -3030,15 +2995,14 @@ export default function LeaderClientPage({
                           เวลาสิ้นสุด (24H)
                         </label>
                         <select
-                          className={`w-full p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${
-                            !leaveEnd ||
+                          className={`w-full p-5 rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${!leaveEnd ||
                             (leaveStart === leaveEnd &&
                               leaveEndTime &&
                               leaveEndTime !== "00:00" &&
                               leaveStartTime >= leaveEndTime)
-                              ? "border-red-200 bg-red-50 text-red-600"
-                              : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
-                          }`}
+                            ? "border-red-200 bg-red-50 text-red-600"
+                            : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
+                            }`}
                           value={leaveEndTime}
                           onChange={(e) => {
                             if (!leaveStart || !leaveEnd) {
@@ -3662,28 +3626,28 @@ export default function LeaderClientPage({
           animation: scan 3s linear infinite;
         }
       `}</style>
-       {showOffsitePopup && (
-  <OffsiteConfirmPopup
-    siteName={pendingData?.siteName || "ไซต์งาน"}
-    onCancel={() => setShowOffsitePopup(false)}
-    onConfirm={() => {
-      // แก้ไขให้เรียกใช้ฟังก์ชันที่ถูกต้องตามที่ประกาศไว้ใน Server Action
-      // โดยส่ง isConfirmed: true เข้าไปเพื่อข้ามขั้นตอนเช็คพิกัดซ้ำ
-      saveAttendanceAction({
-        ...pendingData!,
-        isConfirmed: true, 
-      }).then((result) => {
-        if (result.success) {
-          alert(isCheckingOut ? "บันทึกออกงานสำเร็จ" : "บันทึกเข้างานสำเร็จ");
-          setShowOffsitePopup(false);
-          router.refresh();
-        } else {
-          alert("ข้อผิดพลาด: " + (result.error || "ไม่สามารถบันทึกเวลาได้"));
-        }
-      });
-    }}
-  />
-)}
+      {showOffsitePopup && (
+        <OffsiteConfirmPopup
+          siteName={pendingData?.siteName || "ไซต์งาน"}
+          onCancel={() => setShowOffsitePopup(false)}
+          onConfirm={() => {
+            // แก้ไขให้เรียกใช้ฟังก์ชันที่ถูกต้องตามที่ประกาศไว้ใน Server Action
+            // โดยส่ง isConfirmed: true เข้าไปเพื่อข้ามขั้นตอนเช็คพิกัดซ้ำ
+            saveAttendanceAction({
+              ...pendingData!,
+              isConfirmed: true,
+            }).then((result) => {
+              if (result.success) {
+                alert(isCheckingOut ? "บันทึกออกงานสำเร็จ" : "บันทึกเข้างานสำเร็จ");
+                setShowOffsitePopup(false);
+                router.refresh();
+              } else {
+                alert("ข้อผิดพลาด: " + (result.error || "ไม่สามารถบันทึกเวลาได้"));
+              }
+            });
+          }}
+        />
+      )}
       {/* --- 4. ปุ่มยืนยันออกงานก่อนกำหนด < 1 ชม. ของนาย --- */}
       {showLogoutConfirmPopup && (
         <LogoutConfirmPopup
