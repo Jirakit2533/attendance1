@@ -10,6 +10,7 @@ import {
   changePasswordAction,
   createPersonalOTAction,
 } from "./actions";
+import { CardSmall } from "@/components/ui/cardSmall";
 
 import { OffsiteCheckOutConfirm } from "@/app/component/modal/OffsiteCheckOutConfirm";
 import RemarkModal from "@/features/remarkAttendance/remarkAttendance.tsx";
@@ -186,12 +187,7 @@ export default function EmployeeClientPage({
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [readyToCapture, setReadyToCapture] = useState(false);
   const [attendanceId, setAttendanceId] = useState<string | null>(null);
-
-  const [isRemarkModalOpen, setIsRemarkModalOpen] = useState(false);
-  const [currentAttendanceId, setCurrentAttendanceId] = useState<string | null>(
-    null
-  );
-  const [isSubmittingRemark, setIsSubmittingRemark] = useState(false);
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
 
   const [showLogoutConfirmPopup, setShowLogoutConfirmPopup] = useState(false);
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -519,7 +515,7 @@ export default function EmployeeClientPage({
           }, 50);
         } else {
           // 🚩 ถ้าบันทึกสำเร็จ (และส่ง Remark เรียบร้อยแล้ว)
-          alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
+          setShowSuccessCard(true);
           setShowOffsitePopup(false);
 
           // ปิด Modal Remark (ถ้ามันเปิดอยู่)
@@ -626,7 +622,7 @@ export default function EmployeeClientPage({
         }
 
         if (res.success) {
-          alert(isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ");
+          setShowSuccessCard(true);
           router.refresh();
           setIsProcessing(false);
         } else {
@@ -2274,6 +2270,14 @@ export default function EmployeeClientPage({
             startCamera();
           }}
         />
+      )}
+      {showSuccessCard && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4 transition-opacity">
+          <CardSmall 
+            title={isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ"}
+            onClose={() => setShowSuccessCard(false)} 
+          />
+        </div>
       )}
     </div>
   );
