@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SRS Time Attendance</string>
+    <string name="title_activity_main">SRS CheckPoint</string>
+    <string name="package_name">com.srs.attendance</string>
+    <string name="custom_url_scheme">com.srs.attendance</string>
+</resources>
