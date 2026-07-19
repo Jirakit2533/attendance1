@@ -12,7 +12,7 @@ import {
 } from "./actions";
 import { CardSmall } from "@/components/ui/cardSmall";
 
-import { OffsiteCheckOutConfirm } from "@/app/component/modal/OffsiteCheckOutConfirm";
+import { OffsiteCheckOutConfirm } from "@/components/ui/OffsiteCheckOutConfirm";
 import RemarkModal from "@/features/remarkAttendance/remarkAttendance.tsx";
 
 // --- เพิ่ม Component LoadingOverlay เหมือนหน้า Leader ---
@@ -197,8 +197,7 @@ export default function EmployeeClientPage({
   const [leaveEnd, setLeaveEnd] = useState("");
   const [leaveReason, setLeaveReason] = useState("");
   const [leaveError, setLeaveError] = useState("");
-  const activeFeatures =
-    userProfile?.company?.companyFeatureSelected?.featureSelectedArray || [];
+  const activeFeatures = userProfile?.company?.companyFeatureSelected?.featureSelectedArray || [];
   const isRemarkActive = activeFeatures.includes("remarkAttendance");
   const [showOffsitePopup, setShowOffsitePopup] = useState(false);
   const [pendingData, setPendingData] = useState<any>(null);
@@ -1092,15 +1091,15 @@ export default function EmployeeClientPage({
                 {/* ✅ ปรับความกว้างรวมของตารางให้ลดลง (min-w) เพื่อไม่ให้แผ่กว้างเกินไป */}
                 <div className="overflow-x-auto overflow-y-auto max-h-[450px] sm:max-h-[350px] rounded-[1.5rem] sm:rounded-[2rem] border border-gray-50">
                   <table className="w-full text-xs sm:text-sm min-w-[700px] sm:min-w-[800px] table-auto">
-                    <thead className="bg-gray-50/50 text-gray-400 uppercase text-[9px] sm:text-[10px] font-black tracking-widest sticky top-0 z-10 backdrop-blur-md">
+                    <thead className="bg-gray-50/50 text-gray-700 uppercase text-lg sm:text-xl font-black tracking-widest sticky top-0 z-10 backdrop-blur-md">
                       <tr>
-                        <th className="p-4 text-left w-[120px]">วันที่</th>
-                        <th className="p-4 text-left w-[150px]">รอบเข้างาน</th>
-                        <th className="p-4 text-left w-[200px]">
+                        <th className="p-4 text-left w-30">วันที่</th>
+                        <th className="p-4 text-left w-37.5">รอบเข้างาน</th>
+                        <th className="p-4 text-left w-50">
                           สถานะการเข้า-ออก
                         </th>
-                        <th className="p-4 text-left w-[120px]">เวลาเข้า</th>
-                        <th className="p-4 text-left w-[120px]">เวลาออก</th>
+                        <th className="p-4 text-left w-30">เวลาเข้า</th>
+                        <th className="p-4 text-left w-30">เวลาออก</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">

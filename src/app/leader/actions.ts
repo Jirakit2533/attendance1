@@ -1,10 +1,10 @@
 "use server";
 
 import { db } from "@/db/db";
-import { leaveTable, attendanceTable, usersTable, shiftsTable, overtimeTable, departmentsTable, sitesTable, temporaryShiftsTable, companyTable, overtimeRequestsTable, companyFeatureSelectedTable } from "@/db/schema";
+import { leaveTable, attendanceTable, usersTable, shiftsTable, overtimeTable, departmentsTable, temporaryShiftsTable, companyTable, overtimeRequestsTable, companyFeatureSelectedTable } from "@/db/schema";
 import { eq, and, sql, isNull, desc } from "drizzle-orm"; // เพิ่ม isNull, desc
 import { revalidatePath } from "next/cache";
-import { isInsideBound, validateAndGetSite, validateCheckOutLocation } from "@/lib/location-service";
+import { validateAndGetSite, validateCheckOutLocation } from "@/lib/location-service";
 import { calculateOvertime } from "@/features/over-time/ot-calculate";
 import { getCurrentUser } from "@/lib/auth";
 import { FeatureService } from "@/features/feature-service";

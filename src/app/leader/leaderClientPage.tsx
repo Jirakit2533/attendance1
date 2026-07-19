@@ -13,8 +13,8 @@ import {
   createPersonalOTAction,
   updateOTStatusAction,
 } from "./actions";
-import { toast } from "react-hot-toast";
-import { OffsiteCheckOutConfirm } from "@/app/component/modal/OffsiteCheckOutConfirm";
+import { CardSmall } from "@/components/ui/cardSmall";
+import { OffsiteCheckOutConfirm } from "@/components/ui/OffsiteCheckOutConfirm";
 
 /* ---------------- COMPONENTS ---------------- */
 
@@ -152,6 +152,7 @@ export default function LeaderClientPage({
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [readyToCapture, setReadyToCapture] = useState(false);
   const [searchAtt, setSearchAtt] = useState("");
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
 
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [leaveSuccess, setLeaveSuccess] = useState(false);
@@ -766,7 +767,7 @@ export default function LeaderClientPage({
       }
 
       if (result.success) {
-        alert(isCheckingOut ? "บันทึกออกงานสำเร็จ" : "บันทึกเข้างานสำเร็จ");
+        setShowSuccessCard(true);
         router.refresh();
       } else {
         // ✅ ปรับ Logic: ถ้าได้รับสัญญาณยืนยันหรือสถานะ offsite จากเซิร์ฟเวอร์ ให้เปิด Pop-up ทันที
@@ -3638,7 +3639,7 @@ export default function LeaderClientPage({
               isConfirmed: true,
             }).then((result) => {
               if (result.success) {
-                alert(isCheckingOut ? "บันทึกออกงานสำเร็จ" : "บันทึกเข้างานสำเร็จ");
+                setShowSuccessCard(true);
                 setShowOffsitePopup(false);
                 router.refresh();
               } else {
@@ -3664,6 +3665,14 @@ export default function LeaderClientPage({
             startCamera();
           }}
         />
+      )}
+      {showSuccessCard && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4 transition-opacity">
+          <CardSmall 
+            title={isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ"}
+            onClose={() => setShowSuccessCard(false)} 
+          />
+        </div>
       )}
     </div>
   );
