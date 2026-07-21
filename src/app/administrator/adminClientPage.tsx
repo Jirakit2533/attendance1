@@ -3286,8 +3286,8 @@ export default function AdminClientPage({
                                     <td className="py-4 px-6 text-center text-gray-500 text-[11px] font-bold leading-tight">
                                       {l.requestDate
                                         ? new Date(
-                                          l.requestDate
-                                        ).toLocaleDateString("th-TH")
+                                            l.requestDate
+                                          ).toLocaleDateString("th-TH")
                                         : "-"}
                                     </td>
 
@@ -3295,12 +3295,12 @@ export default function AdminClientPage({
                                     <td className="py-4 px-6 text-center text-gray-800 font-bold text-sm">
                                       {l.workingDate
                                         ? new Date(
-                                          l.workingDate
-                                        ).toLocaleDateString("th-TH", {
-                                          day: "numeric",
-                                          month: "short",
-                                          year: "numeric",
-                                        })
+                                            l.workingDate
+                                          ).toLocaleDateString("th-TH", {
+                                            day: "numeric",
+                                            month: "short",
+                                            year: "numeric",
+                                          })
                                         : "-"}
                                     </td>
 
@@ -3323,22 +3323,23 @@ export default function AdminClientPage({
                                     {/* 7. สถานะ */}
                                     <td className="py-4 px-6 text-center">
                                       <span
-                                        className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${l.status === "pending"
-                                          ? "bg-orange-100 text-orange-600 border-orange-200"
-                                          : l.status === "approved"
+                                        className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${
+                                          l.status === "pending"
+                                            ? "bg-orange-100 text-orange-600 border-orange-200"
+                                            : l.status === "approved"
                                             ? "bg-emerald-100 text-emerald-600 border-emerald-200"
                                             : l.status === "executed"
-                                              ? "bg-blue-100 text-blue-600 border-blue-200"
-                                              : "bg-red-100 text-red-600 border-red-200"
-                                          }`}
+                                            ? "bg-blue-100 text-blue-600 border-blue-200"
+                                            : "bg-red-100 text-red-600 border-red-200"
+                                        }`}
                                       >
                                         {l.status === "pending"
                                           ? "รออนุมัติ"
                                           : l.status === "approved"
-                                            ? "อนุมัติแล้ว"
-                                            : l.status === "executed"
-                                              ? "เสร็จสมบูรณ์"
-                                              : "ปฏิเสธ"}
+                                          ? "อนุมัติแล้ว"
+                                          : l.status === "executed"
+                                          ? "เสร็จสมบูรณ์"
+                                          : "ปฏิเสธ"}
                                       </span>
                                     </td>
 
@@ -3388,10 +3389,11 @@ export default function AdminClientPage({
                                         <input
                                           type="text"
                                           placeholder="ระบุหมายเหตุ..."
-                                          className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${l.status !== "pending"
-                                            ? "bg-slate-50 text-slate-500 border-slate-100"
-                                            : "bg-white border-slate-200 focus:border-blue-400"
-                                            }`}
+                                          className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${
+                                            l.status !== "pending"
+                                              ? "bg-slate-50 text-slate-500 border-slate-100"
+                                              : "bg-white border-slate-200 focus:border-blue-400"
+                                          }`}
                                           value={currentRemark}
                                           onChange={(e) =>
                                             handleOTRemarkChange(
@@ -3426,15 +3428,10 @@ export default function AdminClientPage({
 
                     {/* --- Mobile Card View --- */}
                     <div className="lg:hidden grid grid-cols-1 gap-4 px-4 pb-20">
-                      {currentItems.length > 0 ? (
-                        currentItems.map((l) => {
-                          const start = new Date(l.startDate);
-                          const end = new Date(l.endDate);
-                          const dDays =
-                            Math.ceil(
-                              Math.abs(end.getTime() - start.getTime()) /
-                              (1000 * 60 * 60 * 24)
-                            ) + 1;
+                      {overtimeReques.length > 0 ? (
+                        overtimeReques.map((l) => {
+                          const currentRemark =
+                            otRemarks[l.id] ?? l.remark ?? "";
 
                           return (
                             <div
@@ -3443,18 +3440,23 @@ export default function AdminClientPage({
                             >
                               {/* Status Badge */}
                               <div
-                                className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${l.status === "pending"
-                                  ? "bg-orange-100 text-orange-600"
-                                  : l.status === "approved"
+                                className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${
+                                  l.status === "pending"
+                                    ? "bg-orange-100 text-orange-600"
+                                    : l.status === "approved"
                                     ? "bg-emerald-100 text-emerald-600"
+                                    : l.status === "executed"
+                                    ? "bg-blue-100 text-blue-600"
                                     : "bg-red-100 text-red-600"
-                                  }`}
+                                }`}
                               >
                                 {l.status === "pending"
                                   ? "รออนุมัติ"
                                   : l.status === "approved"
-                                    ? "อนุมัติแล้ว"
-                                    : "ปฏิเสธ"}
+                                  ? "อนุมัติแล้ว"
+                                  : l.status === "executed"
+                                  ? "เสร็จสมบูรณ์"
+                                  : "ปฏิเสธ"}
                               </div>
 
                               {/* Action Menu & Remark Popover */}
@@ -3477,50 +3479,56 @@ export default function AdminClientPage({
                                     />
                                     <div className="absolute right-0 top-12 z-50 w-64 bg-white border border-slate-100 rounded-3xl shadow-2xl p-4 animate-in fade-in zoom-in duration-200">
                                       <p className="text-[10px] font-black text-slate-400 uppercase mb-3 px-1 text-left">
-                                        จัดการคำขอ / หมายเหตุ
+                                        จัดการคำขอ OT / หมายเหตุ
                                       </p>
                                       <textarea
                                         placeholder="ระบุหมายเหตุที่นี่..."
                                         className="w-full h-24 p-3 rounded-2xl border border-slate-100 bg-slate-50 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none text-left"
-                                        value={
-                                          leaveRemarks[l.id] ?? l.remark ?? ""
-                                        }
+                                        value={currentRemark}
                                         onChange={(e) =>
-                                          handleRemarkChange(
+                                          handleOTRemarkChange(
                                             l.id,
                                             e.target.value
                                           )
                                         }
+                                        readOnly={
+                                          isProcessing ||
+                                          l.status === "executed"
+                                        }
                                       />
-                                      <div className="grid grid-cols-2 gap-2">
+                                      {l.status !== "executed" ? (
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <button
+                                            disabled={isProcessing}
+                                            onClick={() => {
+                                              handleApproveOT(l.id);
+                                              setViewRemarkId(null);
+                                            }}
+                                            className="bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold shadow-sm"
+                                          >
+                                            อนุมัติ
+                                          </button>
+                                          <button
+                                            disabled={isProcessing}
+                                            onClick={() => {
+                                              handleRejectOT(l.id);
+                                              setViewRemarkId(null);
+                                            }}
+                                            className="bg-white border border-red-200 text-red-500 py-2 rounded-xl text-xs font-bold"
+                                          >
+                                            ปฏิเสธ
+                                          </button>
+                                        </div>
+                                      ) : (
                                         <button
+                                          disabled={isProcessing}
                                           onClick={() => {
-                                            updateLeaveStatus(l.id, "approved");
+                                            resetOTStatus(l.id);
                                             setViewRemarkId(null);
                                           }}
-                                          className="py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-black"
+                                          className="w-full bg-slate-50 text-slate-600 border border-slate-200 py-2 rounded-xl text-xs font-bold"
                                         >
-                                          อนุมัติ
-                                        </button>
-                                        <button
-                                          onClick={() => {
-                                            updateLeaveStatus(l.id, "rejected");
-                                            setViewRemarkId(null);
-                                          }}
-                                          className="py-2.5 bg-red-500 text-white rounded-xl text-xs font-black"
-                                        >
-                                          ปฏิเสธ
-                                        </button>
-                                      </div>
-                                      {l.status !== "pending" && (
-                                        <button
-                                          onClick={() => {
-                                            updateLeaveStatus(l.id, "pending");
-                                            setViewRemarkId(null);
-                                          }}
-                                          className="w-full mt-2 py-2 text-slate-500 text-[10px] font-bold border border-dashed border-slate-200 rounded-xl text-center"
-                                        >
-                                          ย้อนเป็นรออนุมัติ
+                                          ✏️ แก้ไขสถานะ
                                         </button>
                                       )}
                                     </div>
@@ -3528,9 +3536,9 @@ export default function AdminClientPage({
                                 )}
                               </div>
 
-                              {/* Profile Section */}
-                              <div className="flex items-start gap-4 mb-4">
-                                <div className="w-14 h-14 relative rounded-2xl overflow-hidden border-2 border-slate-50 bg-slate-50 shadow-sm flex-shrink-0">
+                              {/* Card Content - Profile & Info */}
+                              <div className="flex items-start gap-4 mb-4 mt-2">
+                                <div className="w-14 h-14 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100 shrink-0">
                                   <Image
                                     src={
                                       l.avatarUrl ||
@@ -3543,81 +3551,80 @@ export default function AdminClientPage({
                                     className="object-cover"
                                   />
                                 </div>
-                                <div className="min-w-0">
-                                  <h3 className="font-black text-slate-800 text-lg leading-none truncate">
+                                <div className="flex-1 pr-6">
+                                  <h3 className="font-black text-gray-800 text-base leading-tight">
                                     {l.employeeName || "ไม่ระบุชื่อ"}
                                   </h3>
-                                  <p className="text-blue-500 font-mono text-xs font-bold mt-1 truncate">
+                                  <p className="text-blue-500 font-mono text-[11px] font-bold mb-3">
                                     @{l.userName || "user"}
                                   </p>
-                                  <div className="mt-1 font-bold text-blue-600 text-xs uppercase">
-                                    {l.type}
+
+                                  <div className="grid grid-cols-2 gap-2 text-xs">
+                                    {/* เพิ่มส่วน วันที่ขอ OT */}
+                                    <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                                      <span className="block text-[10px] text-slate-400 font-bold mb-0.5">
+                                        วันที่ขอ OT
+                                      </span>
+                                      <span className="font-bold text-gray-700">
+                                        {l.requestDate
+                                          ? new Date(
+                                              l.requestDate
+                                            ).toLocaleDateString("th-TH")
+                                          : "-"}
+                                      </span>
+                                    </div>
+                                    {/* ส่วน วันที่ทำ OT */}
+                                    <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                                      <span className="block text-[10px] text-slate-400 font-bold mb-0.5">
+                                        วันที่ทำ OT
+                                      </span>
+                                      <span className="font-bold text-gray-700">
+                                        {l.workingDate
+                                          ? new Date(
+                                              l.workingDate
+                                            ).toLocaleDateString("th-TH", {
+                                              day: "numeric",
+                                              month: "short",
+                                              year: "numeric",
+                                            })
+                                          : "-"}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
 
-                              {/* Duration & Dates */}
-                              <div className="grid grid-cols-2 gap-3 mb-4">
-                                <div className="bg-slate-50 p-3 rounded-2xl">
-                                  <p className="text-[10px] text-slate-400 font-black uppercase mb-1">
-                                    ระยะเวลา
-                                  </p>
-                                  <p className="text-sm font-black text-slate-700">
-                                    {isNaN(dDays) ? "-" : `${dDays} วัน`}
-                                  </p>
+                              {/* Time Details */}
+                              <div className="bg-blue-50/50 p-3.5 rounded-2xl border border-blue-100/50 mb-3">
+                                <div className="flex justify-between items-center mb-1">
+                                  <span className="text-[10px] text-blue-400 font-bold">
+                                    เวลาที่ทำ OT
+                                  </span>
+                                  <span className="text-blue-600 text-[10px] font-black uppercase bg-white px-2 py-0.5 rounded-full shadow-sm">
+                                    รวม {l.totalHours} นาที
+                                  </span>
                                 </div>
-                                <div className="bg-orange-50 p-3 rounded-2xl text-center">
-                                  <p className="text-[10px] text-orange-400 font-black uppercase mb-1">
-                                    วันที่ลา
-                                  </p>
-                                  <p className="text-[10px] font-bold text-orange-600 leading-tight">
-                                    {new Date(l.startDate).toLocaleDateString(
-                                      "th-TH"
-                                    )}{" "}
-                                    -{" "}
-                                    {new Date(l.endDate).toLocaleDateString(
-                                      "th-TH"
-                                    )}
-                                  </p>
+                                <div className="font-bold text-sm text-gray-800">
+                                  {l.timeStart?.slice(0, 5) || "00:00"} -{" "}
+                                  {l.timeEnd?.slice(0, 5) || "00:00"}
                                 </div>
                               </div>
 
-                              {/* Reason Section */}
-                              <div className="mb-4 text-left">
-                                <p className="text-[10px] text-slate-400 font-black uppercase mb-1 px-1">
-                                  เหตุผลการลา
-                                </p>
-                                <p className="text-xs text-slate-600 italic font-medium bg-slate-50/50 p-3 rounded-2xl border border-slate-50">
+                              {/* Reason */}
+                              <div className="px-1">
+                                <span className="block text-[10px] text-slate-400 font-bold mb-1">
+                                  เหตุผลการขอ OT
+                                </span>
+                                <p className="text-xs text-gray-600 italic leading-relaxed">
                                   "{l.reason || "ไม่มีระบุเหตุผล"}"
                                 </p>
-                              </div>
-
-                              {/* Footer Actions / Info */}
-                              <div className="flex gap-2 mt-2">
-                                {l.fileUrl?.trim() ? (
-                                  <button
-                                    onClick={() => setViewImage(l.fileUrl)}
-                                    className="flex-1 py-3 bg-slate-900 text-white rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all"
-                                  >
-                                    📄 ดูเอกสาร
-                                  </button>
-                                ) : (
-                                  <div className="flex-1 py-3 bg-slate-100 text-slate-400 rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 border border-slate-200/50">
-                                    🚫 ไม่มีเอกสารแนบมา
-                                  </div>
-                                )}
-                                {l.remark && l.status !== "pending" && (
-                                  <div className="flex-1 p-3 bg-blue-50 text-blue-700 rounded-2xl text-[10px] font-bold border border-blue-100 truncate flex items-center justify-center">
-                                    📌 {l.remark}
-                                  </div>
-                                )}
                               </div>
                             </div>
                           );
                         })
                       ) : (
-                        <div className="py-20 text-center bg-white rounded-[2.5rem] border border-slate-100 text-slate-400 italic font-black">
-                          ไม่พบคำขอลางาน...
+                        <div className="py-20 text-center text-slate-400 italic font-black bg-white rounded-3xl border border-slate-100">
+                          ไม่พบคำขอ OT ในขณะนี้...
                         </div>
                       )}
                     </div>
