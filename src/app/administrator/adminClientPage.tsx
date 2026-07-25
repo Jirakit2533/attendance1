@@ -3286,8 +3286,8 @@ export default function AdminClientPage({
                                     <td className="py-4 px-6 text-center text-gray-500 text-[11px] font-bold leading-tight">
                                       {l.requestDate
                                         ? new Date(
-                                            l.requestDate
-                                          ).toLocaleDateString("th-TH")
+                                          l.requestDate
+                                        ).toLocaleDateString("th-TH")
                                         : "-"}
                                     </td>
 
@@ -3295,12 +3295,12 @@ export default function AdminClientPage({
                                     <td className="py-4 px-6 text-center text-gray-800 font-bold text-sm">
                                       {l.workingDate
                                         ? new Date(
-                                            l.workingDate
-                                          ).toLocaleDateString("th-TH", {
-                                            day: "numeric",
-                                            month: "short",
-                                            year: "numeric",
-                                          })
+                                          l.workingDate
+                                        ).toLocaleDateString("th-TH", {
+                                          day: "numeric",
+                                          month: "short",
+                                          year: "numeric",
+                                        })
                                         : "-"}
                                     </td>
 
@@ -3323,23 +3323,22 @@ export default function AdminClientPage({
                                     {/* 7. สถานะ */}
                                     <td className="py-4 px-6 text-center">
                                       <span
-                                        className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${
-                                          l.status === "pending"
-                                            ? "bg-orange-100 text-orange-600 border-orange-200"
-                                            : l.status === "approved"
+                                        className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${l.status === "pending"
+                                          ? "bg-orange-100 text-orange-600 border-orange-200"
+                                          : l.status === "approved"
                                             ? "bg-emerald-100 text-emerald-600 border-emerald-200"
                                             : l.status === "executed"
-                                            ? "bg-blue-100 text-blue-600 border-blue-200"
-                                            : "bg-red-100 text-red-600 border-red-200"
-                                        }`}
+                                              ? "bg-blue-100 text-blue-600 border-blue-200"
+                                              : "bg-red-100 text-red-600 border-red-200"
+                                          }`}
                                       >
                                         {l.status === "pending"
                                           ? "รออนุมัติ"
                                           : l.status === "approved"
-                                          ? "อนุมัติแล้ว"
-                                          : l.status === "executed"
-                                          ? "เสร็จสมบูรณ์"
-                                          : "ปฏิเสธ"}
+                                            ? "อนุมัติแล้ว"
+                                            : l.status === "executed"
+                                              ? "เสร็จสมบูรณ์"
+                                              : "ปฏิเสธ"}
                                       </span>
                                     </td>
 
@@ -3389,11 +3388,10 @@ export default function AdminClientPage({
                                         <input
                                           type="text"
                                           placeholder="ระบุหมายเหตุ..."
-                                          className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${
-                                            l.status !== "pending"
-                                              ? "bg-slate-50 text-slate-500 border-slate-100"
-                                              : "bg-white border-slate-200 focus:border-blue-400"
-                                          }`}
+                                          className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${l.status !== "pending"
+                                            ? "bg-slate-50 text-slate-500 border-slate-100"
+                                            : "bg-white border-slate-200 focus:border-blue-400"
+                                            }`}
                                           value={currentRemark}
                                           onChange={(e) =>
                                             handleOTRemarkChange(
@@ -3440,23 +3438,22 @@ export default function AdminClientPage({
                             >
                               {/* Status Badge */}
                               <div
-                                className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${
-                                  l.status === "pending"
-                                    ? "bg-orange-100 text-orange-600"
-                                    : l.status === "approved"
+                                className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${l.status === "pending"
+                                  ? "bg-orange-100 text-orange-600"
+                                  : l.status === "approved"
                                     ? "bg-emerald-100 text-emerald-600"
                                     : l.status === "executed"
-                                    ? "bg-blue-100 text-blue-600"
-                                    : "bg-red-100 text-red-600"
-                                }`}
+                                      ? "bg-blue-100 text-blue-600"
+                                      : "bg-red-100 text-red-600"
+                                  }`}
                               >
                                 {l.status === "pending"
                                   ? "รออนุมัติ"
                                   : l.status === "approved"
-                                  ? "อนุมัติแล้ว"
-                                  : l.status === "executed"
-                                  ? "เสร็จสมบูรณ์"
-                                  : "ปฏิเสธ"}
+                                    ? "อนุมัติแล้ว"
+                                    : l.status === "executed"
+                                      ? "เสร็จสมบูรณ์"
+                                      : "ปฏิเสธ"}
                               </div>
 
                               {/* Action Menu & Remark Popover */}
@@ -3568,8 +3565,8 @@ export default function AdminClientPage({
                                       <span className="font-bold text-gray-700">
                                         {l.requestDate
                                           ? new Date(
-                                              l.requestDate
-                                            ).toLocaleDateString("th-TH")
+                                            l.requestDate
+                                          ).toLocaleDateString("th-TH")
                                           : "-"}
                                       </span>
                                     </div>
@@ -3581,12 +3578,12 @@ export default function AdminClientPage({
                                       <span className="font-bold text-gray-700">
                                         {l.workingDate
                                           ? new Date(
-                                              l.workingDate
-                                            ).toLocaleDateString("th-TH", {
-                                              day: "numeric",
-                                              month: "short",
-                                              year: "numeric",
-                                            })
+                                            l.workingDate
+                                          ).toLocaleDateString("th-TH", {
+                                            day: "numeric",
+                                            month: "short",
+                                            year: "numeric",
+                                          })
                                           : "-"}
                                       </span>
                                     </div>
@@ -5034,8 +5031,8 @@ export default function AdminClientPage({
           </div>
         </div>
       )}
-{/* --- 🖨️ MODAL: REPORT PREVIEW --- */}
-{showReport && (
+      {/* --- 🖨️ MODAL: REPORT PREVIEW --- */}
+      {showReport && (
         <div className="fixed inset-0 bg-slate-900/95 flex flex-col items-center z-[600] p-2 sm:p-4 overflow-y-auto custom-scrollbar font-sans print:overflow-visible print:bg-white print:p-0 print:relative">
           {/* สไตล์สำหรับคุมขนาด PDF/A4 ตอนสั่งพิมพ์ */}
           <style
@@ -5345,15 +5342,17 @@ export default function AdminClientPage({
                                     </td>
                                     <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
                                       {(() => {
-                                        const totalMinutes =
-                                          Number(a.otHours) ||
-                                          Number(a.overtimeByRequest) ||
-                                          0;
-                                        const h = Math.floor(totalMinutes / 60);
-                                        const m = totalMinutes % 60;
-                                        return `${h}.${m.toString().padStart(2, "0")}`;
-                                      })()}{" "}
-                                      ชม.
+                                        const totalMinutes = Number(a.overtimeByRequest) || 0;
+
+                                        // 1. หาจำนวนชั่วโมงเต็ม (ปัดเศษทิ้ง)
+                                        const hours = Math.floor(totalMinutes / 60);
+
+                                        // 2. หาเศษนาทีที่เหลือ (modulo 60) และเติม 0 ด้านหน้าถ้าเศษไม่ถึง 10
+                                        const minutes = String(totalMinutes % 60).padStart(2, '0');
+
+                                        // 3. นำมาต่อกันด้วยจุด
+                                        return `${hours}.${minutes}`;
+                                      })()} ชม.
                                     </td>
                                     <td className="px-3 py-2 text-right border border-slate-200 truncate max-w-[120px]">
                                       {a.otRemark || a.reason || a.otStatus || "-"}
