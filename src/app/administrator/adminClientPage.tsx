@@ -5422,12 +5422,15 @@ export default function AdminClientPage({
                                   </p>
                                   <p className="text-xl font-black text-blue-900">
                                     {(() => {
-                                      const totalMinutes = Number(pageObj.totalOtMinutes) || 0;
+                                      // เปลี่ยนจาก data.reduce เป็น group.reduce
+                                      const totalMinutes = group.reduce((sum, row) => {
+                                        return sum + (Number(row.overtimeByRequest) || 0);
+                                      }, 0);
+
                                       const h = Math.floor(totalMinutes / 60);
                                       const m = totalMinutes % 60;
                                       return `${h}.${m.toString().padStart(2, "0")}`;
-                                    })()}{" "}
-                                    <span className="text-xs font-bold">ชั่วโมง</span>
+                                    })()} ชม.
                                   </p>
                                 </div>
                               ) : (
