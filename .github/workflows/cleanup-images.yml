@@ -1,0 +1,16 @@
+name: Cleanup Images Cron Job
+
+on:
+  schedule:
+    # 23:00 น. ของไทย (GMT+7) จะเท่ากับ 16:00 UTC
+    - cron: '0 16 * * *'
+  workflow_dispatch: # ช่วยให้คุณกดสั่งรันเองได้จากหน้า GitHub เพื่อทดสอบ
+
+jobs:
+  cleanup-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Cleanup Images API
+        run: |
+          curl -X GET "https://attendance1-k1ds.vercel.app/api/cron/cleanup-images" \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
