@@ -145,6 +145,7 @@ export default function AdminClientPage({
   const [searchEmp, setSearchEmp] = useState("");
   const [searchAtt, setSearchAtt] = useState("");
   const [searchLeave, setSearchLeave] = useState("");
+  const [searchOT, setSearchOT] = useState("");
   const router = useRouter();
 
   const [showAdminEdit, setShowAdminEdit] = useState(false);
@@ -170,7 +171,7 @@ export default function AdminClientPage({
   const [reportData, setReportData] = useState<any[]>([]); // ถังเก็บข้อมูลที่จะโชว์ในตารางรายงาน
   const [leaveData, setLeaveData] = useState<any[]>([]);
 
-  const [overtimeReques, setOvertimeReques] = useState<OvertimeRequest[]>(
+  const [overtimeRequest, setOvertimeRequest] = useState<OvertimeRequest[]>(
     initialOvertimeRequests
   );
   const [isUpdating, setIsUpdating] = useState(false);
@@ -327,49 +328,228 @@ export default function AdminClientPage({
   // 1. Filter การเข้างานหลัก (ตัวเดิมที่คุณมีอยู่แล้ว) - ต้องอยู่ด้านบน
   const filteredAttendance = useMemo(() => {
     if (!attendance) return [];
-
+  
+    // เอาตัวคั่นวันที่ออก
+    // 01/07/2026 -> 01072026
+    // 01-07-2026 -> 01072026
+    // 01 07 2026 -> 01072026
+    const normalizeDate = (value: string) => {
+      return value.replace(/\D/g, "");
+    };
+  
+    // สร้างวันที่หลายรูปแบบสำหรับใช้ค้นหา
+    const getDateFormats = (value: unknown) => {
+      if (!value) return [];
+  
+      const raw = String(value);
+  
+      // รองรับ:
+      // 2026-07-01
+      // 2026-07-01T10:30:00.000Z
+      const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  
+      if (!match) {
+        return [
+          raw.toLowerCase(),
+          normalizeDate(raw),
+        ];
+      }
+  
+      const [, year, month, day] = match;
+  
+      return [
+        // 2026-07-01
+        `${year}-${month}-${day}`,
+  
+        // 01/07/2026
+        `${day}/${month}/${year}`,
+  
+        // 01-07-2026
+        `${day}-${month}-${year}`,
+  
+        // 01 07 2026
+        `${day} ${month} ${year}`,
+  
+        // 01/07/26
+        `${day}/${month}/${year.slice(-2)}`,
+  
+        // 01-07-26
+        `${day}-${month}-${year.slice(-2)}`,
+  
+        // 01 07 26
+        `${day} ${month} ${year.slice(-2)}`,
+  
+        // 01072026
+        `${day}${month}${year}`,
+  
+        // 010726
+        `${day}${month}${year.slice(-2)}`,
+      ];
+    };
+  
     return attendance
       .map((att) => {
         // หาข้อมูลพนักงานมาประกบ
         const empInfo = employees?.find(
-          (e) => String(e.id) === String(att.userId || att.user_id)
+          (e) =>
+            String(e.id) ===
+            String(att.userId || att.user_id)
         );
-
+  
         return {
-          ...att, // ดึงค่าเดิมมาให้หมด (สำคัญ! ห้ามหาย)
-          // ปรับจูน Key ให้เป็นมาตรฐานเดียวกันเพื่อใช้ในตาราง
+          ...att,
+  
           id: att.id,
           date: att.date || "---",
           checkIn: att.checkIn || att.check_in || "--:--",
           checkOut: att.checkOut || att.check_out || "--:--",
           siteName: att.siteName || "General",
-          avatarUrl: att.avatarUrl || empInfo?.avatarUrl || null,
+          avatarUrl:
+            att.avatarUrl ||
+            empInfo?.avatarUrl ||
+            null,
+  
           employeeName:
             att.employeeName ||
-            (empInfo ? `${empInfo.firstName} ${empInfo.lastName}` : "Unknown"),
+            (empInfo
+              ? `${empInfo.firstName} ${empInfo.lastName}`
+              : "Unknown"),
+  
           userId: att.userId || att.user_id,
         };
       })
       .filter((a) => {
-        const search = (searchAtt || "").toLowerCase();
+        const search = (searchAtt || "")
+          .toLowerCase()
+          .trim();
+  
+        // ไม่มีคำค้นหา
+        if (!search) return true;
+  
+        // =========================
+        // ค้นหาชื่อพนักงาน
+        // =========================
+        const employeeMatch =
+          String(a.employeeName || "")
+            .toLowerCase()
+            .includes(search);
+  
+        // =========================
+        // ค้นหา Site
+        // =========================
+        const siteMatch =
+          String(a.siteName || "")
+            .toLowerCase()
+            .includes(search);
+  
+        // =========================
+        // ค้นหาวันที่
+        // =========================
+        const dateFormats = getDateFormats(a.date);
+  
+        const searchDate = normalizeDate(search);
+  
+        // ป้องกันกรณีค้นชื่อแล้ว normalizeDate ได้ ""
+        const dateMatch =
+          searchDate.length > 0 &&
+          dateFormats.some(
+            (date) =>
+              date.toLowerCase().includes(search) ||
+              normalizeDate(date).includes(searchDate)
+          );
+  
         return (
-          a.employeeName.toLowerCase().includes(search) ||
-          a.date.toString().includes(search) ||
-          a.siteName.toLowerCase().includes(search)
+          employeeMatch ||
+          siteMatch ||
+          dateMatch
         );
       });
   }, [attendance, employees, searchAtt]);
-
   // 3. Filter การลา + ดึงข้อมูลรูปและ Username จากพนักงาน
   const filteredLeaves = useMemo(() => {
+    // เอาเฉพาะตัวเลขออกมา
+    // 01/07/2026 -> 01072026
+    // 01-07-2026 -> 01072026
+    // 01 07 2026 -> 01072026
+    const normalizeDate = (value: string) => {
+      return value.replace(/\D/g, "");
+    };
+  
+    // สร้างรูปแบบวันที่สำหรับค้นหา
+    const getDateFormats = (value: unknown) => {
+      if (!value) return [];
+  
+      const raw = String(value).trim();
+  
+      // รองรับ:
+      // 2026-07-01
+      // 2026-07-01T08:30:00.000Z
+      const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  
+      if (!match) {
+        return [
+          raw.toLowerCase(),
+          normalizeDate(raw),
+        ];
+      }
+  
+      const [, year, month, day] = match;
+  
+      return [
+        // YYYY-MM-DD
+        `${year}-${month}-${day}`,
+  
+        // DD/MM/YYYY
+        `${day}/${month}/${year}`,
+  
+        // DD-MM-YYYY
+        `${day}-${month}-${year}`,
+  
+        // DD MM YYYY
+        `${day} ${month} ${year}`,
+  
+        // DD/MM/YY
+        `${day}/${month}/${year.slice(-2)}`,
+  
+        // DD-MM-YY
+        `${day}-${month}-${year.slice(-2)}`,
+  
+        // DD MM YY
+        `${day} ${month} ${year.slice(-2)}`,
+  
+        // DDMMYYYY
+        `${day}${month}${year}`,
+  
+        // DDMMYY
+        `${day}${month}${year.slice(-2)}`,
+  
+        // เผื่อค้นแบบ YYYYMMDD
+        `${year}${month}${day}`,
+  
+        // เผื่อค้นแบบ YYYY/MM/DD
+        `${year}/${month}/${day}`,
+  
+        // เผื่อค้นแบบ YYYY-MM-DD
+        `${year}-${month}-${day}`,
+      ];
+    };
+  
     return (leaves || [])
       .map((leave) => {
         const empInfo = employees.find(
-          (e) => String(e.id) === String(leave.userId || leave.user_id)
+          (e) =>
+            String(e.id) ===
+            String(leave.userId || leave.user_id)
         );
+  
         return {
           ...leave,
-          avatarUrl: leave.avatarUrl || empInfo?.avatarUrl || null,
+  
+          avatarUrl:
+            leave.avatarUrl ||
+            empInfo?.avatarUrl ||
+            null,
+  
           employeeName:
             leave.employeeName ||
             (empInfo
@@ -377,16 +557,175 @@ export default function AdminClientPage({
               : "พนักงานเก่า"),
         };
       })
-      .filter(
-        (l) =>
-          (l?.employeeName?.toLowerCase() || "").includes(
-            searchLeave?.toLowerCase() || ""
-          ) ||
-          (l?.type?.toLowerCase() || "").includes(
-            searchLeave?.toLowerCase() || ""
-          )
-      );
+      .filter((l) => {
+        const search = (searchLeave || "")
+          .toLowerCase()
+          .trim();
+  
+        // ไม่มีคำค้นหา
+        if (!search) return true;
+  
+        // =========================
+        // 1. ค้นหาชื่อพนักงาน
+        // =========================
+        const employeeMatch =
+          (l?.employeeName || "")
+            .toLowerCase()
+            .includes(search);
+  
+        // =========================
+        // 2. ค้นหาประเภทการลา
+        // =========================
+        const leaveTypeMatch =
+          (l?.type || "")
+            .toLowerCase()
+            .includes(search);
+  
+        // =========================
+        // 3. ค้นหาจาก createdAt
+        // =========================
+        const createdAtFormats =
+          getDateFormats(l?.createdAt);
+  
+        const normalizedSearch =
+          normalizeDate(search);
+  
+        const dateMatch =
+          createdAtFormats.some((date) => {
+            const dateLower = date.toLowerCase();
+  
+            // ค้นหาแบบตรงตัว
+            if (dateLower.includes(search)) {
+              return true;
+            }
+  
+            // ค้นหาแบบไม่สน / - หรือ space
+            if (
+              normalizedSearch &&
+              normalizeDate(date).includes(normalizedSearch)
+            ) {
+              return true;
+            }
+  
+            return false;
+          });
+  
+        return (
+          employeeMatch ||
+          leaveTypeMatch ||
+          dateMatch
+        );
+      });
   }, [leaves, employees, searchLeave]);
+
+
+  const filteredOvertimeRequests = useMemo(() => {
+    // เอาตัวคั่นวันที่ออก
+    // 02/06/2026 -> 02062026
+    // 02-06-2026 -> 02062026
+    // 02 06 2026 -> 02062026
+    const normalizeDate = (value: string) => {
+      return value.replace(/\D/g, "");
+    };
+
+    // สร้างรูปแบบวันที่ที่สามารถค้นหาได้หลายแบบ
+    const getDateFormats = (value: unknown) => {
+      if (!value) return [];
+
+      const raw = String(value);
+
+      // รองรับ
+      // 2026-06-02
+      // 2026-06-02T10:30:00.000Z
+      const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+      if (!match) {
+        return [
+          raw.toLowerCase(),
+          normalizeDate(raw),
+        ];
+      }
+
+      const [, year, month, day] = match;
+
+      return [
+        // 2026-06-02
+        `${year}-${month}-${day}`,
+
+        // 02/06/2026
+        `${day}/${month}/${year}`,
+
+        // 02-06-2026
+        `${day}-${month}-${year}`,
+
+        // 02 06 2026
+        `${day} ${month} ${year}`,
+
+        // 02/06/26
+        `${day}/${month}/${year.slice(-2)}`,
+
+        // 02-06-26
+        `${day}-${month}-${year.slice(-2)}`,
+
+        // 02 06 26
+        `${day} ${month} ${year.slice(-2)}`,
+
+        // 02062026
+        `${day}${month}${year}`,
+
+        // 020626
+        `${day}${month}${year.slice(-2)}`,
+      ];
+    };
+
+    return (overtimeRequest || []).filter((ot) => {
+      const search = (searchOT || "").toLowerCase().trim();
+
+      // ไม่มีคำค้นหา
+      if (!search) return true;
+
+      // =========================
+      // ค้นหาชื่อพนักงาน
+      // =========================
+      const employeeMatch =
+        String(ot.employeeName || "")
+          .toLowerCase()
+          .includes(search);
+
+      // =========================
+      // ค้นหา Username ด้วย
+      // =========================
+      const usernameMatch =
+        String(ot.userName || "")
+          .toLowerCase()
+          .includes(search);
+
+      // =========================
+      // ค้นหาวันที่ขอ OT
+      // requestDate = createdAt
+      // =========================
+      const dateFormats = getDateFormats(ot.requestDate);
+
+      const searchDate = normalizeDate(search);
+
+      // สำคัญ:
+      // ตรวจเฉพาะกรณีที่ search มีตัวเลขจริง ๆ
+      const dateMatch =
+        searchDate.length > 0 &&
+        dateFormats.some(
+          (date) =>
+            date.toLowerCase().includes(search) ||
+            normalizeDate(date).includes(searchDate)
+        );
+
+      return (
+        employeeMatch ||
+        usernameMatch ||
+        dateMatch
+      );
+    });
+  }, [overtimeRequest, searchOT]);
+
 
   // 4. Filter สำหรับช่องค้นหาใน Report
   // --- 1. กรองรายชื่อพนักงานในหน้า Modal (Member Selection) ---
@@ -2546,7 +2885,7 @@ export default function AdminClientPage({
                 </div>
                 <input
                   type="text"
-                  placeholder="ค้นชื่อพนักงาน หรือ ประเภทลา..."
+                  placeholder="ค้นหาชื่อพนักงาน / วันที่ / ประเภทการลา"
                   className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
                   value={searchLeave}
                   onChange={(e) => {
@@ -3184,11 +3523,11 @@ export default function AdminClientPage({
                 </div>
                 <input
                   type="text"
-                  placeholder="ค้นชื่อพนักงาน หรือ ประเภทลา..."
+                  placeholder="ค้นหาชื่อพนักงาน / วันที่ขอ OT เช่น 02/06/2026"
                   className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-                  value={searchLeave}
+                  value={searchOT}
                   onChange={(e) => {
-                    setSearchLeave(e.target.value);
+                    setSearchOT(e.target.value);
                     setCurrentPage(1); // Reset หน้าเมื่อมีการค้นหา
                   }}
                 />
@@ -3244,8 +3583,8 @@ export default function AdminClientPage({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-50">
-                            {overtimeReques.length > 0 ? (
-                              overtimeReques.map((l) => {
+                            {overtimeRequest.length > 0 ? (
+                              filteredOvertimeRequests.map((l) => {
                                 // ✅ ใช้ฟังก์ชัน getEffectiveRemark ที่เราเขียนไว้ใน State
                                 const currentRemark =
                                   otRemarks[l.id] ?? l.remark ?? "";
@@ -3426,8 +3765,8 @@ export default function AdminClientPage({
 
                     {/* --- Mobile Card View --- */}
                     <div className="lg:hidden grid grid-cols-1 gap-4 px-4 pb-20">
-                      {overtimeReques.length > 0 ? (
-                        overtimeReques.map((l) => {
+                      {overtimeRequest.length > 0 ? (
+                        filteredOvertimeRequests.map((l) => {
                           const currentRemark =
                             otRemarks[l.id] ?? l.remark ?? "";
 
