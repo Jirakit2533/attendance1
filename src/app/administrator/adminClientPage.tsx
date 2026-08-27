@@ -1111,28 +1111,29 @@ export default function AdminClientPage({
         if (reportType === "overtime") {
           finalData = finalData.map((item: any) => ({
             ...item,
-            // ข้อมูลจาก Schema ใหม่ที่ส่งมาจาก API
-            // 1. ใช้ชื่อผู้อนุมัติที่ Join มาจาก Aliased Table
+            // 1. เพิ่ม 3 ฟิลด์สำคัญที่หายไป ส่งต่อไปยัง UI/State
+            overtimeBefore: item.overtimeBefore ?? 0,
+            overtimeAfter: item.overtimeAfter ?? 0,
+            overtimeApproved: item.overtimeApproved ?? 0,
+
+            // 2. ข้อมูลอื่นๆ จาก Schema
             approvedByName: item.approvedByName ?? "System Admin",
             approvedBy: item.approvedBy ?? null,
 
-            // 2. ใช้ค่าชั่วโมงที่อนุมัติจริง (otHours) จาก overtimeTable
-            // หากไม่มีให้ Fallback ไปที่ค่าที่ Request (overtimeByRequest)
-            otHours: item.otHours ?? item.overtimeByRequest ?? 0,
+            // 3. otHours ส่งค่าจริงตรงๆ ไม่ fallback ข้ามไปเอา overtimeByRequest มาทับ
+            otHours: item.otHours ?? 0,
 
-            // 3. ใช้สถานะจากตารางหลัก (otStatus) ที่เป็น 'approved'
+            // 4. สถานะและรายละเอียด
             status: item.otStatus ?? item.status,
-
-            // 4. ข้อมูลเพิ่มเติม
             reason: item.reason ?? "-",
             remarks: item.remarks ?? "-",
             timeStart: item.timeStart ?? "-",
             timeEnd: item.timeEnd ?? "-",
             date: item.date,
-            userName: item.userName ?? `${item.firstName} ${item.lastName}`,
+            userName: item.userName ?? `${item.firstName || ""} ${item.lastName || ""}`.trim(),
           }));
 
-          // ถ้าเป็น OT Report ปกติจะไม่มีข้อมูลลาแยกมา แต่เราล้าง State Leave ไว้กันเหนื่อย
+          // ล้าง State Leave เมื่อเป็นรายงาน OT
           setLeaveData([]);
         }
 
@@ -5624,7 +5625,6 @@ export default function AdminClientPage({
                               )}
                             </tr>
                           </thead>
-                          {/* ✅ เพิ่ม <tbody> ห่อม map */}
                           <tbody className="divide-y divide-slate-200">
                             {group.map((a: any, i: number) => (
                               <tr key={i} className="text-[10px] leading-tight">
@@ -5682,53 +5682,40 @@ export default function AdminClientPage({
                                     </td>
                                     <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
                                       {(() => {
-                                        // ✅ Debug: แสดงค่าที่ได้มา
-                                        console.log("OT Data:", {
-                                          timeStart: a.timeStart,
-                                          startTime: a.startTime,
-                                          overtimeBefore: a.overtimeBefore,
-                                          overtimeAfter: a.overtimeAfter,
-                                          overtimeByRequest: a.overtimeByRequest,
-                                        });
+                                        // 1. ดึงค่านาทีตรงๆ จาก DB Schema (ผ่าน API ที่แก้แล้ว)
+                                        const beforeVal = Number(a.overtimeBefore ?? 0);
+                                        const afterVal = Number(a.overtimeAfter ?? 0);
+                                        const approveVal = Number(a.overtimeApproved ?? 0);
+                                        const requestedMinutes = Number(a.overtimeByRequest ?? 0);
 
-                                        // ✅ Step 1: ตรวจสอบว่า a.timeStart เป็นก่อนหรือหลัง a.startTime
-                                        const timeStart = a.timeStart?.substring(0, 5); // เวลา HH:MM
-                                        const shiftStart = a.startTime?.substring(0, 5); // เวลา shift ปกติ HH:MM
+                                        // 2. เช็คว่าเป็น OT ก่อนเริ่มงาน หรือ หลังเลิกงาน
+                                        const timeStart = String(a.timeStart || "").trim();
+                                        // ตัดวิออกเปรียบเทียบแค่ HH:mm (เช่น "06:00" < "08:30")
+                                        const formattedTimeStart = timeStart.length >= 5 ? timeStart.substring(0, 5) : timeStart;
+                                        const isBeforeShift = formattedTimeStart !== "" && formattedTimeStart < "08:30";
 
-                                        // เลือก overtime: overtimeBefore (ถ้า < shift) หรือ overtimeAfter (ถ้า >= shift)
-                                        let selectedOvertimeMinutes: number;
+                                        // 3. เลือกตัวตั้งลบตามเงื่อนไข:
+                                        // - ก่อนเริ่มงาน -> เอา After - Approve
+                                        // - หลังเลิกงาน  -> เอา Before - Approve
+                                        const targetVal = isBeforeShift ? afterVal : beforeVal;
+                                        const diffMinutes = Math.abs(targetVal - approveVal);
 
-                                        if (timeStart && shiftStart && timeStart < shiftStart) {
-                                          // ✅ OT ก่อนเวลา (timeStart < startTime) → ใช้ overtimeBefore
-                                          selectedOvertimeMinutes = a.overtimeBefore || 0;
+                                        // 4. เปรียบเทียบกับคำขอ (overtimeByRequest)
+                                        // - ถ้าน้อยกว่าคำขอ -> ใช้ diffMinutes
+                                        // - ถ้ามากกว่าหรือเท่ากับคำขอ -> ใช้ requestedMinutes
+                                        let finalMinutes = 0;
+                                        if (requestedMinutes > 0 && diffMinutes >= requestedMinutes) {
+                                          finalMinutes = requestedMinutes;
                                         } else {
-                                          // ✅ OT หลังเวลา (timeStart >= startTime) → ใช้ overtimeAfter
-                                          selectedOvertimeMinutes = a.overtimeAfter || 0;
+                                          finalMinutes = diffMinutes;
                                         }
 
-                                        // ✅ Step 2: เทียบ selectedOvertimeMinutes กับ a.overtimeByRequest
-                                        const overtimeByRequest = Number(a.overtimeByRequest) || 0;
-                                        const finalOvertimeMinutes =
-                                          selectedOvertimeMinutes < overtimeByRequest
-                                            ? selectedOvertimeMinutes
-                                            : overtimeByRequest;
+                                        // 5. แปลงนาทีเป็นฟอร์แมต H.MM (คงเศษนาทีจริง ไม่ปัดเศษ)
+                                        const hours = Math.floor(finalMinutes / 60);
+                                        const minutes = String(finalMinutes % 60).padStart(2, '0');
 
-                                        // ✅ Step 3: แปลงนาที เป็น ชั่วโมง.นาที
-                                        const hours = Math.floor(finalOvertimeMinutes / 60);
-                                        const minutes = String(finalOvertimeMinutes % 60).padStart(2, "0");
-
-                                        return `${hours}.${minutes}`;
-                                      })()} ชม.
-                                    </td>
-
-                                    {/* ✅ เพิ่มแถมข้อมูลทั้งหมด (ลบหลังจากแก้ไขได้แล้ว) */}
-                                    <td className="px-3 py-2 text-right border border-slate-200 text-[9px] bg-yellow-50">
-                                      <div className="text-red-600 font-bold">Debug:</div>
-                                      <div>Before: {a.overtimeBefore}</div>
-                                      <div>After: {a.overtimeAfter}</div>
-                                      <div>Request: {a.overtimeByRequest}</div>
-                                      <div>timeStart: {a.timeStart}</div>
-                                      <div>shiftStart: {a.startTime}</div>
+                                        return `${hours}.${minutes} ชม.`;
+                                      })()}
                                     </td>
                                     <td className="px-3 py-2 text-right border border-slate-200 truncate max-w-[120px]">
                                       {a.otRemark || a.reason || a.otStatus || "-"}

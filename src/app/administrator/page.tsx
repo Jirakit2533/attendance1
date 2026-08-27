@@ -49,8 +49,7 @@ export default async function AdminDashboardPage() {
       departmentsData,
       defaultShiftData,
       companyInfoData,
-      rawOvertime,
-      rawOvertimeApprovals, 
+      rawOvertime, // เพิ่ม OT เข้ามาในชุด Parallel เพื่อ Performance
     ] = await Promise.all([
       // --- พนักงาน: ดึงผ่าน companyId แทน createdBy ---
       db
@@ -186,21 +185,29 @@ export default async function AdminDashboardPage() {
         .limit(1),
 
       // --- OT Requests ---
+      // --- OT Requests + OT Result ---
+      // --- OT Requests + OT Result ---
       db
         .select({
-          id: overtimeRequestsTable.id,
+          requestId: overtimeRequestsTable.id,
           userId: overtimeRequestsTable.userId,
           userName: overtimeRequestsTable.userName,
-          employeeName: sql<string>`concat(${usersTable.firstName}, ' ', ${usersTable.lastName})`,
-          avatarUrl: usersTable.avatarUrl,
-          requestDate: overtimeRequestsTable.createdAt,
           workingDate: overtimeRequestsTable.date,
           timeStart: overtimeRequestsTable.timeStart,
           timeEnd: overtimeRequestsTable.timeEnd,
           overtimeByRequest: overtimeRequestsTable.overtimeByRequest,
-          reason: overtimeRequestsTable.reason,
           status: overtimeRequestsTable.status,
-          remarks: overtimeRequestsTable.remarks,
+
+          // ดึงค่า OT จาก overtimeTable
+          overtimeBefore: overtimeTable.overtimeBefore,
+          overtimeAfter: overtimeTable.overtimeAfter,
+          overtimeApproved: overtimeTable.overtimeApproved,
+
+          // ข้อมูลพนักงาน
+          firstName: usersTable.firstName,
+          lastName: usersTable.lastName,
+          employeeName: sql<string>`concat(${usersTable.firstName}, ' ', ${usersTable.lastName})`,
+          avatarUrl: usersTable.avatarUrl,
           positionName: positionsTable.name,
           departmentName: departmentsTable.name,
         })
@@ -208,49 +215,24 @@ export default async function AdminDashboardPage() {
         .leftJoin(usersTable, eq(overtimeRequestsTable.userId, usersTable.id))
         .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
         .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id))
+        // --- จุดที่ต้องแก้: JOIN ด้วย userId และ cast วันที่ให้เป็น string ชัดเจน ---
+        .leftJoin(
+          overtimeTable,
+          and(
+            eq(overtimeRequestsTable.userId, overtimeTable.userId),
+            eq(
+              sql`DATE(${overtimeRequestsTable.date})`,
+              sql`DATE(${overtimeTable.date})`
+            )
+          )
+        )
         .where(
           and(
             eq(overtimeRequestsTable.companyId, companyId || ""),
             isNull(usersTable.deletedAt)
           )
         )
-        .orderBy(desc(overtimeRequestsTable.createdAt)),
-
-      db
-        .select({
-          id: overtimeTable.id,
-          userId: overtimeTable.userId,
-          userName: overtimeTable.userName,
-          employeeName: sql<string>`concat(${usersTable.firstName}, ' ', ${usersTable.lastName})`,
-          avatarUrl: usersTable.avatarUrl,
-          workingDate: overtimeTable.date,
-          status: overtimeTable.status,
-          positionName: positionsTable.name,
-          departmentName: departmentsTable.name,
-          // ฟิลด์จาก overtimeTable
-          shiftId: overtimeTable.shiftId,
-          attendanceId: overtimeTable.attendanceId,
-          overtimeBefore: overtimeTable.overtimeBefore,
-          overtimeAfter: overtimeTable.overtimeAfter,
-          overtimeApproved: overtimeTable.overtimeApproved,
-          overtimeRejected: overtimeTable.overtimeRejected,
-          otRoundingOption: overtimeTable.otRoundingOption,
-          // ✅ เอา startTime และ endTime จาก shiftsTable ผ่าน shiftId
-          startTime: shiftsTable.startTime,
-          endTime: shiftsTable.endTime,
-        })
-        .from(overtimeTable)
-        .leftJoin(usersTable, eq(overtimeTable.userId, usersTable.id))
-        .leftJoin(positionsTable, eq(usersTable.positionId, positionsTable.id))
-        .leftJoin(departmentsTable, eq(usersTable.departmentId, departmentsTable.id))
-        .leftJoin(shiftsTable, eq(overtimeTable.shiftId, shiftsTable.id)) // ✅ Join shiftsTable
-        .where(
-          and(
-            eq(overtimeTable.companyId, companyId || ""),
-            isNull(usersTable.deletedAt)
-          )
-        )
-        .orderBy(desc(overtimeTable.date)),
+        .orderBy(desc(overtimeRequestsTable.createdAt))
     ]);
 
     // ... (ส่วน Mapping ข้อมูลด้านล่างยังคงเหมือนเดิมทุกประการ)
@@ -313,34 +295,31 @@ export default async function AdminDashboardPage() {
       };
     });
 
-    const overtimeRequests = (rawOvertimeApprovals || []).map((ot) => ({
-      id: String(ot.id || ""),
-      userId: String(ot.userId || ""),
-      userName: String(ot.userName || ""),
-      employeeName: String(ot.employeeName || "ไม่ระบุชื่อ"),
-      avatarUrl: ot.avatarUrl || null,
-      requestDate: ot.requestDate ? String(ot.requestDate) : null,
-      workingDate: ot.workingDate ? String(ot.workingDate) : null,
-      timeStart: ot.timeStart || "",
-      timeEnd: ot.timeEnd || "",
-      totalHours: String(ot.overtimeByRequest || "0"),
-      reason: String(ot.reason || ""),
-      status: String(ot.status || "pending"),
-      remark: String(ot.remarks || ""),
-      positionName: ot.positionName || "พนักงาน",
-      departmentName: ot.departmentName || "ไม่ระบุแผนก",
-      shiftId: ot.shiftId ? String(ot.shiftId) : null,
-      attendanceId: ot.attendanceId ? String(ot.attendanceId) : null,
-      // ✅ เอามาจาก overtimeTable
-      overtimeBefore: ot.overtimeBefore || 0,
-      overtimeAfter: ot.overtimeAfter || 0,
-      overtimeApproved: ot.overtimeApproved || 0,
-      overtimeRejected: ot.overtimeRejected || 0,
-      otRoundingOption: ot.otRoundingOption || "",
-      // ✅ เอามาจาก shiftsTable
-      startTime: ot.startTime || null,
-      endTime: ot.endTime || null,
-    }));
+    const overtimeRequests = (rawOvertime || []).map((ot) => {
+      return {
+        id: String(ot.requestId || ot.id || ""),
+        userId: String(ot.userId || ""),
+        userName: String(ot.userName || ""),
+        firstName: ot.firstName || "",
+        lastName: ot.lastName || "",
+        employeeName: String(ot.employeeName || "ไม่ระบุชื่อ"),
+        avatarUrl: ot.avatarUrl || null,
+        date: ot.workingDate ? String(ot.workingDate) : "",
+        timeStart: ot.timeStart || "",
+        timeEnd: ot.timeEnd || "",
+        startTime: ot.startTime || ot.shiftStartTime || "08:00:00", // 👈 เพิ่มเวลาเริ่มงานกะปกติส่งไปด้วย
+        overtimeByRequest: Number(ot.overtimeByRequest || 0),
+
+        // 👈 ส่งค่าเป็น "นาที" ตรงๆ ไม่ต้องหาร 60 หรือทำ .toFixed()
+        overtimeBefore: Number(ot.overtimeBefore || 0),
+        overtimeAfter: Number(ot.overtimeAfter || 0),
+        overtimeApproved: Number(ot.overtimeApproved || 0),
+
+        status: String(ot.status || "pending"),
+        positionName: ot.positionName || "พนักงาน",
+        departmentName: ot.departmentName || "ไม่ระบุแผนก",
+      };
+    });
 
     const sites = (sitesData || []).map((s) => ({
       id: String(s?.id || ""),
