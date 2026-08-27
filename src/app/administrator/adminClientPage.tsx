@@ -5785,14 +5785,35 @@ export default function AdminClientPage({
                                   </p>
                                   <p className="text-xl font-black text-blue-900">
                                     {(() => {
-                                      // เปลี่ยนจาก data.reduce เป็น group.reduce
-                                      const totalMinutes = group.reduce((sum, row) => {
-                                        return sum + (Number(row.overtimeByRequest) || 0);
+                                      const totalMinutes = group.reduce((sum: number, row: any) => {
+                                        const beforeVal = Number(row.overtimeBefore ?? 0);
+                                        const afterVal = Number(row.overtimeAfter ?? 0);
+                                        const approveVal = Number(row.overtimeApproved ?? 0);
+                                        const requestedMinutes = Number(row.overtimeByRequest ?? 0);
+
+                                        // เช็คว่าเป็น OT ก่อนเริ่มงาน หรือ หลังเลิกงาน
+                                        const timeStart = String(row.timeStart || "").trim();
+                                        const formattedTimeStart = timeStart.length >= 5 ? timeStart.substring(0, 5) : timeStart;
+                                        const isBeforeShift = formattedTimeStart !== "" && formattedTimeStart < "08:30";
+
+                                        // เลือกตัวตั้งลบตามเงื่อนไข
+                                        const targetVal = isBeforeShift ? afterVal : beforeVal;
+                                        const diffMinutes = Math.abs(targetVal - approveVal);
+
+                                        // เปรียบเทียบกับคำขอ
+                                        let rowFinalMinutes = 0;
+                                        if (requestedMinutes > 0 && diffMinutes >= requestedMinutes) {
+                                          rowFinalMinutes = requestedMinutes;
+                                        } else {
+                                          rowFinalMinutes = diffMinutes;
+                                        }
+
+                                        return sum + rowFinalMinutes;
                                       }, 0);
 
                                       const h = Math.floor(totalMinutes / 60);
-                                      const m = totalMinutes % 60;
-                                      return `${h}.${m.toString().padStart(2, "0")}`;
+                                      const m = String(totalMinutes % 60).padStart(2, "0");
+                                      return `${h}.${m}`;
                                     })()} ชม.
                                   </p>
                                 </div>
