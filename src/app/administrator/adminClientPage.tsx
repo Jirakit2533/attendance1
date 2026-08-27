@@ -5682,37 +5682,12 @@ export default function AdminClientPage({
                                     </td>
                                     <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
                                       {(() => {
-                                        // 1. ดึงค่านาทีตรงๆ จาก DB Schema (ผ่าน API ที่แก้แล้ว)
-                                        const beforeVal = Number(a.overtimeBefore ?? 0);
-                                        const afterVal = Number(a.overtimeAfter ?? 0);
+                                        // ดึงค่า overtimeApproved (นาที) ที่คำนวณผ่าน API มาแล้ว
                                         const approveVal = Number(a.overtimeApproved ?? 0);
-                                        const requestedMinutes = Number(a.overtimeByRequest ?? 0);
 
-                                        // 2. เช็คว่าเป็น OT ก่อนเริ่มงาน หรือ หลังเลิกงาน
-                                        const timeStart = String(a.timeStart || "").trim();
-                                        // ตัดวิออกเปรียบเทียบแค่ HH:mm (เช่น "06:00" < "08:30")
-                                        const formattedTimeStart = timeStart.length >= 5 ? timeStart.substring(0, 5) : timeStart;
-                                        const isBeforeShift = formattedTimeStart !== "" && formattedTimeStart < "08:30";
-
-                                        // 3. เลือกตัวตั้งลบตามเงื่อนไข:
-                                        // - ก่อนเริ่มงาน -> เอา After - Approve
-                                        // - หลังเลิกงาน  -> เอา Before - Approve
-                                        const targetVal = isBeforeShift ? afterVal : beforeVal;
-                                        const diffMinutes = Math.abs(targetVal - approveVal);
-
-                                        // 4. เปรียบเทียบกับคำขอ (overtimeByRequest)
-                                        // - ถ้าน้อยกว่าคำขอ -> ใช้ diffMinutes
-                                        // - ถ้ามากกว่าหรือเท่ากับคำขอ -> ใช้ requestedMinutes
-                                        let finalMinutes = 0;
-                                        if (requestedMinutes > 0 && diffMinutes >= requestedMinutes) {
-                                          finalMinutes = requestedMinutes;
-                                        } else {
-                                          finalMinutes = diffMinutes;
-                                        }
-
-                                        // 5. แปลงนาทีเป็นฟอร์แมต H.MM (คงเศษนาทีจริง ไม่ปัดเศษ)
-                                        const hours = Math.floor(finalMinutes / 60);
-                                        const minutes = String(finalMinutes % 60).padStart(2, '0');
+                                        // แปลงนาทีเป็นฟอร์แมต H.MM
+                                        const hours = Math.floor(approveVal / 60);
+                                        const minutes = String(approveVal % 60).padStart(2, '0');
 
                                         return `${hours}.${minutes} ชม.`;
                                       })()}
@@ -5785,36 +5760,17 @@ export default function AdminClientPage({
                                   </p>
                                   <p className="text-xl font-black text-blue-900">
                                     {(() => {
+                                      // ดึง overtimeApproved ที่ถูกคำนวณและ Cap ยอดมาจาก Server Action แล้วมารวมกันตรงๆ
                                       const totalMinutes = group.reduce((sum: number, row: any) => {
-                                        const beforeVal = Number(row.overtimeBefore ?? 0);
-                                        const afterVal = Number(row.overtimeAfter ?? 0);
                                         const approveVal = Number(row.overtimeApproved ?? 0);
-                                        const requestedMinutes = Number(row.overtimeByRequest ?? 0);
-
-                                        // เช็คว่าเป็น OT ก่อนเริ่มงาน หรือ หลังเลิกงาน
-                                        const timeStart = String(row.timeStart || "").trim();
-                                        const formattedTimeStart = timeStart.length >= 5 ? timeStart.substring(0, 5) : timeStart;
-                                        const isBeforeShift = formattedTimeStart !== "" && formattedTimeStart < "08:30";
-
-                                        // เลือกตัวตั้งลบตามเงื่อนไข
-                                        const targetVal = isBeforeShift ? afterVal : beforeVal;
-                                        const diffMinutes = Math.abs(targetVal - approveVal);
-
-                                        // เปรียบเทียบกับคำขอ
-                                        let rowFinalMinutes = 0;
-                                        if (requestedMinutes > 0 && diffMinutes >= requestedMinutes) {
-                                          rowFinalMinutes = requestedMinutes;
-                                        } else {
-                                          rowFinalMinutes = diffMinutes;
-                                        }
-
-                                        return sum + rowFinalMinutes;
+                                        return sum + approveVal;
                                       }, 0);
 
                                       const h = Math.floor(totalMinutes / 60);
                                       const m = String(totalMinutes % 60).padStart(2, "0");
                                       return `${h}.${m}`;
-                                    })()} ชม.
+                                    })()}{" "}
+                                    ชม.
                                   </p>
                                 </div>
                               ) : (

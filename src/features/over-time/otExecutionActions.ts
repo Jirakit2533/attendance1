@@ -3,8 +3,8 @@
 "use server";
 
 import { db } from "@/db/db";
-import { overtimeTable, overtimeRequestsTable, automationLogTable } from "@/db/schema"; // เพิ่ม automationLogTable
-import { eq, and, sql } from "drizzle-orm";
+import { overtimeTable, overtimeRequestsTable, automationLogTable } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -18,7 +18,7 @@ export async function executeOTAction(attendanceId: string, adminId: string) {
   let logId: string | null = null;
 
   try {
-    // --- [เพิ่มบันทึก Log เริ่มต้น] ---
+    // --- [บันทึก Log เริ่มต้น] ---
     const [log] = await db.insert(automationLogTable).values({
       jobName: "manual-ot-execution",
       date: todayDate,
@@ -28,7 +28,7 @@ export async function executeOTAction(attendanceId: string, adminId: string) {
     }).returning({ id: automationLogTable.id });
     logId = log.id;
 
-    // 1. ดึง OT ที่ยัง pending เท่านั้น (คงเดิม)
+    // 1. ดึง OT ที่ยัง pending เท่านั้น
     const [rawOT] = await db
       .select()
       .from(overtimeTable)
@@ -44,14 +44,14 @@ export async function executeOTAction(attendanceId: string, adminId: string) {
       throw new Error("⚠️ ไม่พบ OT ที่เป็น pending");
     }
 
-    // 2. หา request โดยเทียบ “วัน” (คงเดิม)
+    // 2. หา request โดยเทียบ “วัน”
     const requests = await db
       .select()
       .from(overtimeRequestsTable)
       .where(
         and(
           eq(overtimeRequestsTable.userId, rawOT.userId!),
-          eq(overtimeRequestsTable.date, rawOT.date!), // เทียบวันที่ตรงๆ
+          eq(overtimeRequestsTable.date, rawOT.date!),
           eq(overtimeRequestsTable.status, "approved")
         )
       );
@@ -66,16 +66,39 @@ export async function executeOTAction(attendanceId: string, adminId: string) {
 
     const requestOT = requests[0];
 
-    // 3. คำนวณ OT (คงเดิม)
-    const totalRawMinutes =
-      (rawOT.overtimeBefore || 0) + (rawOT.overtimeAfter || 0);
+    // --- 3. คำนวณ OT ตาม Logic ช่วงเวลาและคำขอ ---
+    const shiftStartTime = "08:30"; // เวลาเริ่มงานปกติ
+    const timeStart = String(rawOT.timeStart || "").trim().substring(0, 5);
+    const timeEnd = String(rawOT.timeEnd || "").trim().substring(0, 5);
 
-    const finalizedMinutes = Math.min(
-      totalRawMinutes,
-      requestOT.overtimeByRequest
-    );
+    const otBefore = Number(rawOT.overtimeBefore || 0);
+    const otAfter = Number(rawOT.overtimeAfter || 0);
+    const requestedMinutes = Number(requestOT.overtimeByRequest || 0);
 
-    // 4. update OT (กัน race condition ด้วย where pending) (คงเดิม)
+    // เลือก OT ตามช่วงเวลานาฬิกา
+    let targetOtMinutes = 0;
+    if (timeStart !== "" && timeEnd !== "" && timeStart < shiftStartTime && timeEnd < shiftStartTime) {
+      // เวลาสแกนอยู่ก่อนเวลาเริ่มงานปกติ -> ใช้ OT ก่อนเริ่มงาน
+      targetOtMinutes = otBefore;
+    } else if (timeStart !== "" && timeEnd !== "" && timeStart > shiftStartTime && timeEnd > shiftStartTime) {
+      // เวลาสแกนอยู่หลังเวลาเริ่มงานปกติ -> ใช้ OT หลังเลิกงาน
+      targetOtMinutes = otAfter;
+    } else {
+      // กรณีเวลาคาบเกี่ยว (Fallback)
+      targetOtMinutes = otBefore > 0 ? otBefore : otAfter;
+    }
+
+    // เปรียบเทียบกับ overtimeByRequest
+    let finalizedMinutes = 0;
+    if (targetOtMinutes < requestedMinutes) {
+      finalizedMinutes = targetOtMinutes;
+    } else {
+      finalizedMinutes = requestedMinutes;
+    }
+
+    const totalRawMinutes = otBefore + otAfter;
+
+    // 4. update OT
     const updated = await db
       .update(overtimeTable)
       .set({
@@ -94,21 +117,21 @@ export async function executeOTAction(attendanceId: string, adminId: string) {
       throw new Error("❌ OT ถูก process ไปแล้ว (race condition)");
     }
 
-    // 5. ปิด request (คงเดิม)
+    // 5. ปิด request
     await db
       .update(overtimeRequestsTable)
       .set({ status: "executed" as any })
       .where(eq(overtimeRequestsTable.id, requestOT.id));
 
-    // --- [เพิ่มบันทึก Log จบงานสำเร็จ] ---
+    // --- [บันทึก Log จบงานสำเร็จ] ---
     if (logId) {
       const endTime = new Date();
       await db.update(automationLogTable).set({
         endAt: endTime,
         durationMs: endTime.getTime() - startTime.getTime(),
-        readCount: 1, // อ่าน 1 รายการ
-        changeCount: 1, // เปลี่ยนแปลง 1 รายการ (จับคู่สำเร็จ)
-        executedCount: 1, // บันทึกสำเร็จ 1 รายการ
+        readCount: 1,
+        changeCount: 1,
+        executedCount: 1,
         details: { 
           attendanceId, 
           rawMinutes: totalRawMinutes, 
@@ -130,7 +153,7 @@ export async function executeOTAction(attendanceId: string, adminId: string) {
     };
 
   } catch (error: any) {
-    // --- [เพิ่มบันทึก Log กรณีพัง] ---
+    // --- [บันทึก Log กรณีพัง] ---
     if (logId) {
       await db.update(automationLogTable).set({
         status: "fault",
