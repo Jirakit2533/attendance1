@@ -328,7 +328,7 @@ export default function AdminClientPage({
   // 1. Filter การเข้างานหลัก (ตัวเดิมที่คุณมีอยู่แล้ว) - ต้องอยู่ด้านบน
   const filteredAttendance = useMemo(() => {
     if (!attendance) return [];
-  
+
     // เอาตัวคั่นวันที่ออก
     // 01/07/2026 -> 01072026
     // 01-07-2026 -> 01072026
@@ -336,57 +336,57 @@ export default function AdminClientPage({
     const normalizeDate = (value: string) => {
       return value.replace(/\D/g, "");
     };
-  
+
     // สร้างวันที่หลายรูปแบบสำหรับใช้ค้นหา
     const getDateFormats = (value: unknown) => {
       if (!value) return [];
-  
+
       const raw = String(value);
-  
+
       // รองรับ:
       // 2026-07-01
       // 2026-07-01T10:30:00.000Z
       const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  
+
       if (!match) {
         return [
           raw.toLowerCase(),
           normalizeDate(raw),
         ];
       }
-  
+
       const [, year, month, day] = match;
-  
+
       return [
         // 2026-07-01
         `${year}-${month}-${day}`,
-  
+
         // 01/07/2026
         `${day}/${month}/${year}`,
-  
+
         // 01-07-2026
         `${day}-${month}-${year}`,
-  
+
         // 01 07 2026
         `${day} ${month} ${year}`,
-  
+
         // 01/07/26
         `${day}/${month}/${year.slice(-2)}`,
-  
+
         // 01-07-26
         `${day}-${month}-${year.slice(-2)}`,
-  
+
         // 01 07 26
         `${day} ${month} ${year.slice(-2)}`,
-  
+
         // 01072026
         `${day}${month}${year}`,
-  
+
         // 010726
         `${day}${month}${year.slice(-2)}`,
       ];
     };
-  
+
     return attendance
       .map((att) => {
         // หาข้อมูลพนักงานมาประกบ
@@ -395,10 +395,10 @@ export default function AdminClientPage({
             String(e.id) ===
             String(att.userId || att.user_id)
         );
-  
+
         return {
           ...att,
-  
+
           id: att.id,
           date: att.date || "---",
           checkIn: att.checkIn || att.check_in || "--:--",
@@ -408,13 +408,13 @@ export default function AdminClientPage({
             att.avatarUrl ||
             empInfo?.avatarUrl ||
             null,
-  
+
           employeeName:
             att.employeeName ||
             (empInfo
               ? `${empInfo.firstName} ${empInfo.lastName}`
               : "Unknown"),
-  
+
           userId: att.userId || att.user_id,
         };
       })
@@ -422,10 +422,10 @@ export default function AdminClientPage({
         const search = (searchAtt || "")
           .toLowerCase()
           .trim();
-  
+
         // ไม่มีคำค้นหา
         if (!search) return true;
-  
+
         // =========================
         // ค้นหาชื่อพนักงาน
         // =========================
@@ -433,7 +433,7 @@ export default function AdminClientPage({
           String(a.employeeName || "")
             .toLowerCase()
             .includes(search);
-  
+
         // =========================
         // ค้นหา Site
         // =========================
@@ -441,14 +441,14 @@ export default function AdminClientPage({
           String(a.siteName || "")
             .toLowerCase()
             .includes(search);
-  
+
         // =========================
         // ค้นหาวันที่
         // =========================
         const dateFormats = getDateFormats(a.date);
-  
+
         const searchDate = normalizeDate(search);
-  
+
         // ป้องกันกรณีค้นชื่อแล้ว normalizeDate ได้ ""
         const dateMatch =
           searchDate.length > 0 &&
@@ -457,7 +457,7 @@ export default function AdminClientPage({
               date.toLowerCase().includes(search) ||
               normalizeDate(date).includes(searchDate)
           );
-  
+
         return (
           employeeMatch ||
           siteMatch ||
@@ -474,66 +474,66 @@ export default function AdminClientPage({
     const normalizeDate = (value: string) => {
       return value.replace(/\D/g, "");
     };
-  
+
     // สร้างรูปแบบวันที่สำหรับค้นหา
     const getDateFormats = (value: unknown) => {
       if (!value) return [];
-  
+
       const raw = String(value).trim();
-  
+
       // รองรับ:
       // 2026-07-01
       // 2026-07-01T08:30:00.000Z
       const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  
+
       if (!match) {
         return [
           raw.toLowerCase(),
           normalizeDate(raw),
         ];
       }
-  
+
       const [, year, month, day] = match;
-  
+
       return [
         // YYYY-MM-DD
         `${year}-${month}-${day}`,
-  
+
         // DD/MM/YYYY
         `${day}/${month}/${year}`,
-  
+
         // DD-MM-YYYY
         `${day}-${month}-${year}`,
-  
+
         // DD MM YYYY
         `${day} ${month} ${year}`,
-  
+
         // DD/MM/YY
         `${day}/${month}/${year.slice(-2)}`,
-  
+
         // DD-MM-YY
         `${day}-${month}-${year.slice(-2)}`,
-  
+
         // DD MM YY
         `${day} ${month} ${year.slice(-2)}`,
-  
+
         // DDMMYYYY
         `${day}${month}${year}`,
-  
+
         // DDMMYY
         `${day}${month}${year.slice(-2)}`,
-  
+
         // เผื่อค้นแบบ YYYYMMDD
         `${year}${month}${day}`,
-  
+
         // เผื่อค้นแบบ YYYY/MM/DD
         `${year}/${month}/${day}`,
-  
+
         // เผื่อค้นแบบ YYYY-MM-DD
         `${year}-${month}-${day}`,
       ];
     };
-  
+
     return (leaves || [])
       .map((leave) => {
         const empInfo = employees.find(
@@ -541,15 +541,15 @@ export default function AdminClientPage({
             String(e.id) ===
             String(leave.userId || leave.user_id)
         );
-  
+
         return {
           ...leave,
-  
+
           avatarUrl:
             leave.avatarUrl ||
             empInfo?.avatarUrl ||
             null,
-  
+
           employeeName:
             leave.employeeName ||
             (empInfo
@@ -561,10 +561,10 @@ export default function AdminClientPage({
         const search = (searchLeave || "")
           .toLowerCase()
           .trim();
-  
+
         // ไม่มีคำค้นหา
         if (!search) return true;
-  
+
         // =========================
         // 1. ค้นหาชื่อพนักงาน
         // =========================
@@ -572,7 +572,7 @@ export default function AdminClientPage({
           (l?.employeeName || "")
             .toLowerCase()
             .includes(search);
-  
+
         // =========================
         // 2. ค้นหาประเภทการลา
         // =========================
@@ -580,25 +580,25 @@ export default function AdminClientPage({
           (l?.type || "")
             .toLowerCase()
             .includes(search);
-  
+
         // =========================
         // 3. ค้นหาจาก createdAt
         // =========================
         const createdAtFormats =
           getDateFormats(l?.createdAt);
-  
+
         const normalizedSearch =
           normalizeDate(search);
-  
+
         const dateMatch =
           createdAtFormats.some((date) => {
             const dateLower = date.toLowerCase();
-  
+
             // ค้นหาแบบตรงตัว
             if (dateLower.includes(search)) {
               return true;
             }
-  
+
             // ค้นหาแบบไม่สน / - หรือ space
             if (
               normalizedSearch &&
@@ -606,10 +606,10 @@ export default function AdminClientPage({
             ) {
               return true;
             }
-  
+
             return false;
           });
-  
+
         return (
           employeeMatch ||
           leaveTypeMatch ||
@@ -5624,6 +5624,7 @@ export default function AdminClientPage({
                               )}
                             </tr>
                           </thead>
+                          {/* ✅ เพิ่ม <tbody> ห่อม map */}
                           <tbody className="divide-y divide-slate-200">
                             {group.map((a: any, i: number) => (
                               <tr key={i} className="text-[10px] leading-tight">
@@ -5681,17 +5682,53 @@ export default function AdminClientPage({
                                     </td>
                                     <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
                                       {(() => {
-                                        const totalMinutes = Number(a.overtimeByRequest) || 0;
+                                        // ✅ Debug: แสดงค่าที่ได้มา
+                                        console.log("OT Data:", {
+                                          timeStart: a.timeStart,
+                                          startTime: a.startTime,
+                                          overtimeBefore: a.overtimeBefore,
+                                          overtimeAfter: a.overtimeAfter,
+                                          overtimeByRequest: a.overtimeByRequest,
+                                        });
 
-                                        // 1. หาจำนวนชั่วโมงเต็ม (ปัดเศษทิ้ง)
-                                        const hours = Math.floor(totalMinutes / 60);
+                                        // ✅ Step 1: ตรวจสอบว่า a.timeStart เป็นก่อนหรือหลัง a.startTime
+                                        const timeStart = a.timeStart?.substring(0, 5); // เวลา HH:MM
+                                        const shiftStart = a.startTime?.substring(0, 5); // เวลา shift ปกติ HH:MM
 
-                                        // 2. หาเศษนาทีที่เหลือ (modulo 60) และเติม 0 ด้านหน้าถ้าเศษไม่ถึง 10
-                                        const minutes = String(totalMinutes % 60).padStart(2, '0');
+                                        // เลือก overtime: overtimeBefore (ถ้า < shift) หรือ overtimeAfter (ถ้า >= shift)
+                                        let selectedOvertimeMinutes: number;
 
-                                        // 3. นำมาต่อกันด้วยจุด
+                                        if (timeStart && shiftStart && timeStart < shiftStart) {
+                                          // ✅ OT ก่อนเวลา (timeStart < startTime) → ใช้ overtimeBefore
+                                          selectedOvertimeMinutes = a.overtimeBefore || 0;
+                                        } else {
+                                          // ✅ OT หลังเวลา (timeStart >= startTime) → ใช้ overtimeAfter
+                                          selectedOvertimeMinutes = a.overtimeAfter || 0;
+                                        }
+
+                                        // ✅ Step 2: เทียบ selectedOvertimeMinutes กับ a.overtimeByRequest
+                                        const overtimeByRequest = Number(a.overtimeByRequest) || 0;
+                                        const finalOvertimeMinutes =
+                                          selectedOvertimeMinutes < overtimeByRequest
+                                            ? selectedOvertimeMinutes
+                                            : overtimeByRequest;
+
+                                        // ✅ Step 3: แปลงนาที เป็น ชั่วโมง.นาที
+                                        const hours = Math.floor(finalOvertimeMinutes / 60);
+                                        const minutes = String(finalOvertimeMinutes % 60).padStart(2, "0");
+
                                         return `${hours}.${minutes}`;
                                       })()} ชม.
+                                    </td>
+
+                                    {/* ✅ เพิ่มแถมข้อมูลทั้งหมด (ลบหลังจากแก้ไขได้แล้ว) */}
+                                    <td className="px-3 py-2 text-right border border-slate-200 text-[9px] bg-yellow-50">
+                                      <div className="text-red-600 font-bold">Debug:</div>
+                                      <div>Before: {a.overtimeBefore}</div>
+                                      <div>After: {a.overtimeAfter}</div>
+                                      <div>Request: {a.overtimeByRequest}</div>
+                                      <div>timeStart: {a.timeStart}</div>
+                                      <div>shiftStart: {a.startTime}</div>
                                     </td>
                                     <td className="px-3 py-2 text-right border border-slate-200 truncate max-w-[120px]">
                                       {a.otRemark || a.reason || a.otStatus || "-"}

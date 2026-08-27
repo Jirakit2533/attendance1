@@ -218,7 +218,7 @@ export const attendanceTable = pgTable("attendance", {
   imageInId: text("image_in_id"), 
   locationIn: varchar("location_in", { length: 255 }).notNull(),
   checkOut: time("check_out"),
-  imageOut: text("image_out"),
+  imageOut: text("image_out").notNull(),
   imageOutId: text("image_out_id"),
   locationOut: varchar("location_out", { length: 255 }),
   isLate: integer("is_late").default(0),      
