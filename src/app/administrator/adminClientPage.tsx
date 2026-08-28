@@ -3623,20 +3623,20 @@ export default function AdminClientPage({
                                     </td>
 
                                     {/* 3. วันที่ขอ OT */}
-                                    <td className="py-4 px-6 text-center text-gray-500 text-[11px] font-bold leading-tight">
+                                    <td className="py-4 px-6 text-center text-gray-800 font-bold text-sm">
                                       {l.requestDate
-                                        ? new Date(
-                                          l.requestDate
-                                        ).toLocaleDateString("th-TH")
+                                        ? new Date(l.requestDate).toLocaleDateString("th-TH", {
+                                          day: "numeric",
+                                          month: "short",
+                                          year: "numeric",
+                                        })
                                         : "-"}
                                     </td>
 
                                     {/* 4. วันที่ทำ OT */}
                                     <td className="py-4 px-6 text-center text-gray-800 font-bold text-sm">
                                       {l.workingDate
-                                        ? new Date(
-                                          l.workingDate
-                                        ).toLocaleDateString("th-TH", {
+                                        ? new Date(l.workingDate).toLocaleDateString("th-TH", {
                                           day: "numeric",
                                           month: "short",
                                           year: "numeric",
