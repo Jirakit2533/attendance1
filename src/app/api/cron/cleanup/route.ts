@@ -2,12 +2,12 @@
 
 import { cleanupExpiredOvertime } from "@/features/over-time/overtime-status-actions";
 import { db } from "@/db/db";
-import { overtimeTable, overtimeRequestsTable, automationLogTable } from "@/db/schema"; 
-import { and, eq, sql } from "drizzle-orm";
+import { overtimeTable, overtimeRequestsTable, automationLogTable } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // เพิ่มประกันเวลาให้รันได้นานสูงสุด 60 วินาทีตามที่แนะนำ
+
 
 export async function GET(request: Request) {
   const startTime = new Date();
@@ -42,10 +42,12 @@ export async function GET(request: Request) {
     const pendingOTs = await db
       .select()
       .from(overtimeTable)
-      .where(eq(overtimeTable.status, "pending"));
+      .where(
+        eq(overtimeTable.status, "pending")
+      );
 
     let autoExecutedCount = 0;
-    let matchCount = 0; 
+    let matchCount = 0;
 
     for (const rawOT of pendingOTs) {
       // 4. หา request ที่ match (คงเดิม)
@@ -61,7 +63,19 @@ export async function GET(request: Request) {
         );
 
       // ไม่เจอ หรือ ซ้ำ → ข้าม
-      if (requests.length !== 1) continue;
+      if (requests.length !== 1) {
+        console.log(
+          "OT SKIP",
+          {
+            attendanceId: rawOT.attendanceId,
+            userId: rawOT.userId,
+            date: rawOT.date,
+            requestCount: requests.length,
+          }
+        );
+
+        continue;
+      }
 
       matchCount++; // นับเมื่อเจอคู่ที่ถูกต้อง
       const requestOT = requests[0];
@@ -106,9 +120,9 @@ export async function GET(request: Request) {
     if (logId) {
       const endTime = new Date();
       // ค่านี้คือจำนวนแถวทั้งหมดที่ API "หยิบขึ้นมาอ่าน" ในรอบนี้จริงๆ เพื่อตรวจสอบประสิทธิภาพภายใต้เวลาจำกัด
-      const actualReadCount = pendingOTs.length; 
+      const actualReadCount = pendingOTs.length;
       const totalChange = (cleanupResult.expiredRawCount + cleanupResult.expiredRequestCount) + matchCount;
-      
+
       await db.update(automationLogTable).set({
         endAt: endTime,
         durationMs: endTime.getTime() - startTime.getTime(),
@@ -143,9 +157,9 @@ export async function GET(request: Request) {
     if (logId) {
       await db.update(automationLogTable).set({
         status: "fault",
-        details: { 
-            error: error.message,
-            stack: error.stack 
+        details: {
+          error: error.message,
+          stack: error.stack
         },
       }).where(eq(automationLogTable.id, logId));
     }

@@ -3650,8 +3650,25 @@ export default function AdminClientPage({
                                         {l.timeStart?.slice(0, 5) || "00:00"} -{" "}
                                         {l.timeEnd?.slice(0, 5) || "00:00"}
                                       </div>
+
                                       <div className="text-blue-600 text-[10px] font-black uppercase">
-                                        OT : {l.totalHours} นาที
+                                        OT :{" "}
+                                        {l.timeStart && l.timeEnd
+                                          ? (() => {
+                                            const [startH, startM] = l.timeStart.split(":").map(Number);
+                                            const [endH, endM] = l.timeEnd.split(":").map(Number);
+
+                                            let minutes = endH * 60 + endM - (startH * 60 + startM);
+
+                                            // กรณีข้ามเที่ยงคืน
+                                            if (minutes < 0) {
+                                              minutes += 24 * 60;
+                                            }
+
+                                            return minutes;
+                                          })()
+                                          : 0}{" "}
+                                        นาที
                                       </div>
                                     </td>
 
