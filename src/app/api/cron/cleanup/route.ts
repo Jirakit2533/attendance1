@@ -2,12 +2,12 @@
 
 import { cleanupExpiredOvertime } from "@/features/over-time/overtime-status-actions";
 import { db } from "@/db/db";
-import { overtimeTable, overtimeRequestsTable, automationLogTable } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { overtimeTable, overtimeRequestsTable, automationLogTable } from "@/db/schema"; 
+import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const startTime = new Date();
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   let logId: string | null = null;
 
   try {
-    // [LOG START] บันทึกจุดเริ่มต้นและจองสถานะ success ไว้ก่อน
+    // [LOG START]
     const [log] = await db.insert(automationLogTable).values({
       jobName: "ot-daily-automation",
       date: todayDate,
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     }).returning({ id: automationLogTable.id });
     logId = log.id;
 
-    // 1. Check Authorization (คงเดิม)
+    // 1. Check Authorization
     const authHeader = request.headers.get("authorization");
     if (
       process.env.CRON_SECRET &&
@@ -34,23 +34,21 @@ export async function GET(request: Request) {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    // 2. Cleanup ของเก่า (คงเดิม)
+    // 2. Cleanup ของเก่า
     const cleanupResult = await cleanupExpiredOvertime();
 
-    // 3. ดึง OT ที่ยัง pending ทั้งหมด (คงเดิม)
-    // จุดนี้คือการดึงข้อมูลทั้งหมดที่ "มองเห็น" ในขณะนั้นมาไว้บน Memory เพื่อเตรียม Process
+    // 3. ดึง OT ที่ยัง pending ทั้งหมด
     const pendingOTs = await db
       .select()
       .from(overtimeTable)
-      .where(
-        eq(overtimeTable.status, "pending")
-      );
+      .where(eq(overtimeTable.status, "pending"));
 
     let autoExecutedCount = 0;
-    let matchCount = 0;
+    let matchCount = 0; 
+    let skippedCount = 0;
 
     for (const rawOT of pendingOTs) {
-      // 4. หา request ที่ match (คงเดิม)
+      // 4. หา request ที่ match (อนุญาตให้มีหลายอันได้)
       const requests = await db
         .select()
         .from(overtimeRequestsTable)
@@ -62,35 +60,33 @@ export async function GET(request: Request) {
           )
         );
 
-      // ไม่เจอ หรือ ซ้ำ → ข้าม
-      if (requests.length !== 1) {
+      // ❌ ไม่เจอ approved request เลย → skip
+      if (requests.length === 0) {
+        skippedCount++;
         console.log(
-          "OT SKIP",
-          {
-            attendanceId: rawOT.attendanceId,
-            userId: rawOT.userId,
-            date: rawOT.date,
-            requestCount: requests.length,
-          }
+          `⏭️  SKIP: OT ID ${rawOT.id} | User ${rawOT.userId} | Date ${rawOT.date} | No approved requests`
         );
-
         continue;
       }
 
-      matchCount++; // นับเมื่อเจอคู่ที่ถูกต้อง
-      const requestOT = requests[0];
-
-      // 5. คำนวณ OT (คงเดิม)
+      // 5. คำนวณ raw minutes
       const totalRawMinutes =
         (rawOT.overtimeBefore || 0) +
         (rawOT.overtimeAfter || 0);
 
-      const finalizedMinutes = Math.min(
-        totalRawMinutes,
-        requestOT.overtimeByRequest
+      // 6. รวม overtimeByRequest จากทั้งหมดที่ approved
+      const totalRequestedMinutes = requests.reduce(
+        (sum, req) => sum + (req.overtimeByRequest || 0),
+        0
       );
 
-      // 6. update OT (คงเดิม)
+      // 7. เลือกน้อยกว่า: raw ที่ทำได้ vs request ที่ขอ
+      const finalizedMinutes = Math.min(
+        totalRawMinutes,
+        totalRequestedMinutes
+      );
+
+      // 8. update OT
       const updated = await db
         .update(overtimeTable)
         .set({
@@ -105,38 +101,53 @@ export async function GET(request: Request) {
         )
         .returning();
 
-      if (updated.length === 0) continue;
+      if (updated.length === 0) {
+        skippedCount++;
+        console.log(
+          `⚠️  RACE: OT ID ${rawOT.id} was updated elsewhere (race condition)`
+        );
+        continue;
+      }
 
-      // 7. ปิด request (คงเดิม)
+      // 9. ปิด request ทั้งหมด (อาจมีหลายอัน)
       await db
         .update(overtimeRequestsTable)
         .set({ status: "executed" as any })
-        .where(eq(overtimeRequestsTable.id, requestOT.id));
+        .where(
+          and(
+            eq(overtimeRequestsTable.userId, rawOT.userId!),
+            eq(overtimeRequestsTable.date, rawOT.date!),
+            eq(overtimeRequestsTable.status, "approved")
+          )
+        );
 
+      matchCount++;
       autoExecutedCount++;
+      
+      console.log(
+        `✅ EXECUTED: OT ID ${rawOT.id} | Raw ${totalRawMinutes} min | Requested ${totalRequestedMinutes} min (${requests.length} requests) | Approved ${finalizedMinutes} min`
+      );
     }
 
-    // [LOG UPDATE] บันทึกข้อมูลสรุปทั้งหมดลง Log (ใช้จำนวนที่ Fetch มาจริงบันทึกลง readCount)
+    // [LOG UPDATE]
     if (logId) {
       const endTime = new Date();
-      // ค่านี้คือจำนวนแถวทั้งหมดที่ API "หยิบขึ้นมาอ่าน" ในรอบนี้จริงๆ เพื่อตรวจสอบประสิทธิภาพภายใต้เวลาจำกัด
-      const actualReadCount = pendingOTs.length;
       const totalChange = (cleanupResult.expiredRawCount + cleanupResult.expiredRequestCount) + matchCount;
-
+      
       await db.update(automationLogTable).set({
         endAt: endTime,
         durationMs: endTime.getTime() - startTime.getTime(),
-        readCount: actualReadCount, // บันทึกจำนวนที่ "กวาดสายตาอ่าน" ไปทั้งหมดในรอบนี้
+        readCount: pendingOTs.length,
         changeCount: totalChange,
         executedCount: autoExecutedCount,
         deletedCount: (cleanupResult.expiredRawCount + cleanupResult.expiredRequestCount),
         details: {
           ...cleanupResult,
-          totalReadInProcess: actualReadCount, // ยืนยันยอดอ่านในรายละเอียด JSON
+          totalReadInProcess: pendingOTs.length,
           autoExecutedCount,
           matchCount,
-          skippedOrInvalid: actualReadCount - matchCount,
-          performanceNote: `Read ${actualReadCount} rows and executed ${autoExecutedCount} rows within timeframe`
+          skippedOrInvalid: skippedCount,
+          performanceNote: `Read ${pendingOTs.length} rows | Executed ${autoExecutedCount} | Skipped ${skippedCount}`
         },
       }).where(eq(automationLogTable.id, logId));
     }
@@ -149,17 +160,17 @@ export async function GET(request: Request) {
         ...cleanupResult,
         autoExecutedCount,
         readCount: pendingOTs.length,
+        skippedCount,
       },
     });
 
   } catch (error: any) {
-    // [LOG ERROR] กรณีพังหรือ Timeout เปลี่ยนสถานะเป็น fault เพื่อแสดงผลหน้า Login
     if (logId) {
       await db.update(automationLogTable).set({
         status: "fault",
-        details: {
-          error: error.message,
-          stack: error.stack
+        details: { 
+            error: error.message,
+            stack: error.stack 
         },
       }).where(eq(automationLogTable.id, logId));
     }

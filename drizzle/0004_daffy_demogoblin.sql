@@ -1,0 +1,1 @@
+ALTER TABLE "overtime" ADD COLUMN "cron_processed_at" timestamp;

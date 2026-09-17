@@ -129,6 +129,7 @@ export const overtimeTable = pgTable("overtime", {
   attendanceId: uuid("attendance_id").references(() => attendanceTable.id).unique(), 
   status: otStatusEnum("status").default("pending").notNull(), 
   date: date("date").notNull(),
+  cronProcessedAt: timestamp("cron_processed_at"),
   overtimeBefore: integer("overtime_before").notNull().default(0),
   overtimeAfter: integer("overtime_after").notNull().default(0),
   overtimeApproved: integer("overtime_approved").notNull().default(0), 
