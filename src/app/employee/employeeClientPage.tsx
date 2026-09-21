@@ -291,28 +291,28 @@ export default function EmployeeClientPage({
     }
   };
 
-  // useEffect(() => {
-  //   if (typeof window === "undefined") return;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  //   if (!("Notification" in window)) return;
+    if (!("Notification" in window)) return;
 
-  //   setNotificationPermission(Notification.permission);
+    setNotificationPermission(Notification.permission);
 
-  //   // Cache รอบเวลางาน
-  //   const schedule = {
-  //     startTime: userProfile?.startTime ?? null,
-  //     endTime: userProfile?.endTime ?? null,
-  //     updatedAt: new Date().toISOString(),
-  //   };
+    // Cache รอบเวลางาน
+    const schedule = {
+      startTime: userProfile?.startTime ?? null,
+      endTime: userProfile?.endTime ?? null,
+      updatedAt: new Date().toISOString(),
+    };
 
-  //   localStorage.setItem(
-  //     NOTIFICATION_STORAGE_KEY,
-  //     JSON.stringify(schedule)
-  //   );
-  // }, [
-  //   userProfile?.startTime,
-  //   userProfile?.endTime,
-  // ]);
+    localStorage.setItem(
+      NOTIFICATION_STORAGE_KEY,
+      JSON.stringify(schedule)
+    );
+  }, [
+    userProfile?.startTime,
+    userProfile?.endTime,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -340,10 +340,8 @@ export default function EmployeeClientPage({
         const startTime = schedule?.startTime;
         const endTime = schedule?.endTime;
 
-        if (
-          typeof startTime !== "string" ||
-          typeof endTime !== "string"
-        ) {
+        // ไม่มีรอบเข้างาน
+        if (!startTime || !endTime) {
           return;
         }
 

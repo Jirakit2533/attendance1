@@ -239,7 +239,13 @@ export default function LeaderClientPage({
 
       // Register Service Worker
       if ("serviceWorker" in navigator) {
-        await navigator.serviceWorker.register("/sw.js");
+        const registration =
+          await navigator.serviceWorker.register("/sw.js");
+
+        console.log(
+          "SW registered:",
+          registration.scope
+        );
       }
 
       console.log(
