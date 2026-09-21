@@ -119,6 +119,12 @@ export default function LeaderClientPage({
 }: any) {
   const router = useRouter();
 
+  const [notificationPermission, setNotificationPermission] =
+    useState<NotificationPermission>("default");
+
+  const NOTIFICATION_STORAGE_KEY =
+    "attendance_notification_schedule";
+
   // --- States ---
   const [records, setRecords] = useState<any[]>(myRecords);
   const [leaves, setLeaves] = useState<any[]>(initialLeaves);
@@ -201,6 +207,192 @@ export default function LeaderClientPage({
   });
 
   /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
+
+  const requestAttendanceNotificationPermission = async () => {
+    if (typeof window === "undefined") return;
+
+    if (!("Notification" in window)) {
+      alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+
+      setNotificationPermission(permission);
+
+      if (permission !== "granted") {
+        return;
+      }
+
+      // เก็บรอบเวลางานไว้ใน Browser
+      const schedule = {
+        startTime: userProfile?.startTime ?? null,
+        endTime: userProfile?.endTime ?? null,
+        updatedAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem(
+        NOTIFICATION_STORAGE_KEY,
+        JSON.stringify(schedule)
+      );
+
+      // Register Service Worker
+      if ("serviceWorker" in navigator) {
+        await navigator.serviceWorker.register("/sw.js");
+      }
+
+      console.log(
+        "Attendance Notification permission granted"
+      );
+    } catch (error) {
+      console.error(
+        "ไม่สามารถขอสิทธิ์ Notification ได้",
+        error
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (!("Notification" in window)) return;
+
+    setNotificationPermission(Notification.permission);
+
+    // Cache รอบเวลางาน
+    const schedule = {
+      startTime: userProfile?.startTime ?? null,
+      endTime: userProfile?.endTime ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(
+      NOTIFICATION_STORAGE_KEY,
+      JSON.stringify(schedule)
+    );
+  }, [
+    userProfile?.startTime,
+    userProfile?.endTime,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("Notification" in window)) return;
+
+    const checkAttendanceNotification = () => {
+      const stored = localStorage.getItem(
+        NOTIFICATION_STORAGE_KEY
+      );
+
+      if (!stored) return;
+
+      try {
+        const schedule = JSON.parse(stored);
+
+        const startTime = schedule?.startTime;
+        const endTime = schedule?.endTime;
+
+        // ไม่มีรอบเข้างาน
+        if (!startTime || !endTime) {
+          return;
+        }
+
+        // ยังไม่ได้รับสิทธิ์
+        if (Notification.permission !== "granted") {
+          return;
+        }
+
+        const now = new Date();
+
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
+
+        const [startHour, startMinute] = startTime
+          .split(":")
+          .map(Number);
+
+        const [endHour, endMinute] = endTime
+          .split(":")
+          .map(Number);
+
+        const currentMinutes =
+          currentHour * 60 + currentMinute;
+
+        const startMinutes =
+          startHour * 60 + startMinute;
+
+        const endMinutes =
+          endHour * 60 + endMinute;
+
+        // แจ้งก่อนเข้างาน 15 นาที
+        const checkInNotifyMinutes =
+          startMinutes - 15;
+
+        // แจ้งก่อนออกงาน 15 นาที
+        const checkOutNotifyMinutes =
+          endMinutes - 15;
+
+        const today =
+          now.toISOString().split("T")[0];
+
+        // ป้องกันแจ้งซ้ำ
+        const checkInKey =
+          `attendance_checkin_${today}_${startTime}`;
+
+        const checkOutKey =
+          `attendance_checkout_${today}_${endTime}`;
+
+        // แจ้งเตือนก่อนเข้างาน
+        if (
+          currentMinutes === checkInNotifyMinutes &&
+          !localStorage.getItem(checkInKey)
+        ) {
+          new Notification("แจ้งเตือนเวลาเข้างาน", {
+            body: `กำลังจะถึงเวลาเข้างาน ${startTime.slice(
+              0,
+              5
+            )} กรุณาลงชื่อเข้างาน`,
+          });
+
+          localStorage.setItem(checkInKey, "true");
+        }
+
+        // แจ้งเตือนก่อนออกงาน
+        if (
+          currentMinutes === checkOutNotifyMinutes &&
+          !localStorage.getItem(checkOutKey)
+        ) {
+          new Notification("แจ้งเตือนเวลาออกงาน", {
+            body: `กำลังจะถึงเวลาเลิกงาน ${endTime.slice(
+              0,
+              5
+            )} กรุณาลงชื่อออกงาน`,
+          });
+
+          localStorage.setItem(checkOutKey, "true");
+        }
+      } catch (error) {
+        console.error(
+          "ไม่สามารถตรวจสอบ Notification Schedule ได้",
+          error
+        );
+      }
+    };
+
+    // ตรวจทันที
+    checkAttendanceNotification();
+
+    // ตรวจทุก 30 วินาที
+    const interval = window.setInterval(
+      checkAttendanceNotification,
+      30 * 1000
+    );
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const calculateLeaveDays = (start: string, end: string): number => {
     if (!start || !end) return 0;
@@ -1010,6 +1202,25 @@ export default function LeaderClientPage({
 
             {/* Badges ด้านล่าง */}
             <div className="flex flex-col justify-center md:justify-start items-center md:items-start gap-3 mt-4">
+              <div className="w-full sm:w-fit">
+                <button
+                  type="button"
+                  onClick={requestAttendanceNotificationPermission}
+                  disabled={notificationPermission === "granted"}
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[10px] sm:text-xs font-semibold transition-colors active:scale-95 ${notificationPermission === "granted"
+                    ? "cursor-default border border-green-200 bg-green-50 text-green-700"
+                    : "border border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                    }`}
+                >
+                  {notificationPermission === "granted" && (
+                    <span className="w-2 h-2 rounded-full bg-green-500" />
+                  )}
+
+                  {notificationPermission === "granted"
+                    ? "เปิดการแจ้งเตือนแล้ว"
+                    : "เปิดการแจ้งเตือน"}
+                </button>
+              </div>
               <div className="w-fit">
                 {" "}
                 {/* ใช้ w-fit เพื่อให้พื้นหลังกว้างพอดีตัวอักษร */}
@@ -3668,9 +3879,9 @@ export default function LeaderClientPage({
       )}
       {showSuccessCard && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4 transition-opacity">
-          <CardSmall 
+          <CardSmall
             title={isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ"}
-            onClose={() => setShowSuccessCard(false)} 
+            onClose={() => setShowSuccessCard(false)}
           />
         </div>
       )}
