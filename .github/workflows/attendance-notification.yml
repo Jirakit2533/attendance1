@@ -1,0 +1,17 @@
+name: Attendance Notification
+
+on:
+  schedule:
+  workflow_dispatch:
+
+jobs:
+  attendance-notification:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call Attendance Notification API
+        run: |
+          curl --fail-with-body \
+            -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vattendance1-k1ds.vercel.app/api/cron/attendance-notification"
