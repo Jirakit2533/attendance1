@@ -241,25 +241,67 @@ export default function EmployeeClientPage({
 
   /* ---------------- ATTENDANCE NOTIFICATION ---------------- */
 
-  const NOTIFICATION_STORAGE_KEY = "attendance_notification_schedule";
+  const NOTIFICATION_STORAGE_KEY =
+    "attendance_notification_schedule";
+
+  const requestAttendanceNotificationPermission = async () => {
+    if (typeof window === "undefined") return;
+
+    if (!("Notification" in window)) {
+      alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+
+      setNotificationPermission(permission);
+
+      if (permission !== "granted") {
+        return;
+      }
+
+      // เก็บรอบเวลางานไว้ใน Browser
+      const schedule = {
+        startTime: userProfile?.startTime ?? null,
+        endTime: userProfile?.endTime ?? null,
+        updatedAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem(
+        NOTIFICATION_STORAGE_KEY,
+        JSON.stringify(schedule)
+      );
+
+      // Register Service Worker
+      if ("serviceWorker" in navigator) {
+        await navigator.serviceWorker.register(
+          "/sw.js"
+        );
+      }
+
+      console.log(
+        "Attendance Notification permission granted"
+      );
+    } catch (error) {
+      console.error(
+        "ไม่สามารถขอสิทธิ์ Notification ได้",
+        error
+      );
+    }
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // ตรวจสอบสิทธิ์ Notification ปัจจุบัน
-    if ("Notification" in window) {
-      setNotificationPermission(Notification.permission);
-    }
+    if (!("Notification" in window)) return;
 
-    // -----------------------------------------
-    // 1. เก็บรอบเข้างานลง localStorage
-    // -----------------------------------------
-    const startTime = userProfile?.startTime ?? null;
-    const endTime = userProfile?.endTime ?? null;
+    setNotificationPermission(Notification.permission);
 
+    // Cache รอบเวลางาน
     const schedule = {
-      startTime,
-      endTime,
+      startTime: userProfile?.startTime ?? null,
+      endTime: userProfile?.endTime ?? null,
       updatedAt: new Date().toISOString(),
     };
 
@@ -267,35 +309,10 @@ export default function EmployeeClientPage({
       NOTIFICATION_STORAGE_KEY,
       JSON.stringify(schedule)
     );
-
-    // -----------------------------------------
-    // 2. ถ้าไม่มีรอบงาน
-    // -----------------------------------------
-    if (!startTime || !endTime) {
-      return;
-    }
-
-    // -----------------------------------------
-    // 3. ตรวจสอบสิทธิ์ Notification
-    // -----------------------------------------
-    if (!("Notification" in window)) {
-      console.warn("Browser นี้ไม่รองรับ Notification API");
-      return;
-    }
-
-    if (Notification.permission === "denied") {
-      return;
-    }
-
-    // -----------------------------------------
-    // 4. ขอสิทธิ์ครั้งแรก
-    // -----------------------------------------
-    if (Notification.permission === "default") {
-      Notification.requestPermission().then((permission) => {
-        setNotificationPermission(permission);
-      });
-    }
-  }, [userProfile?.startTime, userProfile?.endTime]);
+  }, [
+    userProfile?.startTime,
+    userProfile?.endTime,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1113,16 +1130,39 @@ export default function EmployeeClientPage({
 
             {/* Badges ด้านล่าง */}
             <div className="flex flex-col justify-center md:justify-start items-center md:items-start gap-2 mt-4">
-              <div className="w-fit">
-                {" "}
-                {/* ใช้ w-fit เพื่อให้พื้นหลังกว้างพอดีตัวอักษร */}
-                <span className="inline-flex items-center bg-gray-100 text-gray-500 text-[10px] sm:text-[12px] px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl font-black border border-gray-200 uppercase tracking-widest shadow-sm">
+
+              {/* ปุ่ม Notification */}
+              <div className="w-full sm:w-fit">
+                <button
+                  type="button"
+                  onClick={requestAttendanceNotificationPermission}
+                  disabled={notificationPermission === "granted"}
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[10px] sm:text-xs font-semibold transition-colors active:scale-95 ${notificationPermission === "granted"
+                      ? "cursor-default border border-green-200 bg-green-50 text-green-700"
+                      : "border border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                    }`}
+                >
+                  {notificationPermission === "granted" && (
+                    <span className="w-2 h-2 rounded-full bg-green-500" />
+                  )}
+
+                  {notificationPermission === "granted"
+                    ? "เปิดการแจ้งเตือนแล้ว"
+                    : "เปิดการแจ้งเตือน"}
+                </button>
+              </div>
+
+              {/* Username */}
+              <div className="w-fit max-w-full">
+                <span className="inline-flex items-center max-w-full bg-gray-100 text-gray-500 text-[10px] sm:text-[12px] px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl font-black border border-gray-200 uppercase tracking-widest shadow-sm break-all">
                   USERNAME: {userProfile.userName || "ไม่ได้ระบุ"}
                 </span>
               </div>
+
+              {/* Department */}
               {userProfile.department && (
-                <div className="w-fit">
-                  <span className="inline-flex items-center bg-blue-50 text-blue-600 text-[10px] sm:text-[12px] px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl font-black border border-blue-100 uppercase tracking-widest shadow-sm">
+                <div className="w-fit max-w-full">
+                  <span className="inline-flex items-center max-w-full bg-blue-50 text-blue-600 text-[10px] sm:text-[12px] px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl font-black border border-blue-100 uppercase tracking-widest shadow-sm break-all">
                     แผนก: {userProfile.department}
                   </span>
                 </div>
