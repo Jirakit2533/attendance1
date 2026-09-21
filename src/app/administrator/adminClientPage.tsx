@@ -5522,6 +5522,20 @@ export default function AdminClientPage({
                   reportType === "overtime" ||
                   reportType === "ot" ||
                   safeReportData[0]?.generatedType === "overtime";
+                console.log(
+                  "===== REPORT DATA =====",
+                  safeReportData.map((item: any) => ({
+                    id: item?.id,
+                    userId: item?.userId,
+                    date: item?.date,
+                    timeStart: item?.timeStart,
+                    timeEnd: item?.timeEnd,
+                    overtimeByRequest: item?.overtimeByRequest,
+                    overtimeApproved: item?.overtimeApproved,
+                    attendanceId: item?.attendanceId,
+                    otId: item?.otId,
+                  }))
+                );
 
                 // ============================================================
                 // OT Allocation
@@ -5529,67 +5543,211 @@ export default function AdminClientPage({
                 // overtimeByRequest = ยอดที่แต่ละ request ขอ
                 // นำยอดรวมมาแบ่งให้แต่ละ request ตามลำดับ createdAt
                 // ============================================================
+                // ============================================================
+                // OT Report Normalization
+                // ป้องกันกรณี Request ถูก JOIN กับ OT หลาย attendanceId
+                //
+                // ตัวอย่างข้อมูลที่อาจเข้ามา:
+                // Request 1 + OT 38
+                // Request 1 + OT 282
+                // Request 2 + OT 38
+                // Request 2 + OT 282
+                // Request 3 + OT 38
+                // Request 3 + OT 282
+                //
+                // สิ่งที่ต้องการ:
+                // Request 1
+                // Request 2
+                // Request 3
+                //
+                // และ OT จริงของวัน = 38 + 282 = 320 นาที
+                // ============================================================
+
                 const reportDataWithOTAllocation = isOTReport
                   ? (() => {
-                    const result = safeReportData.map((item: any) => ({
-                      ...item,
-                    }));
+                    // --------------------------------------------
+                    // 1. รวม OT จริงตาม User + Date
+                    //    โดยไม่ให้ OT เดิมถูกนับซ้ำ
+                    // --------------------------------------------
+                    const approvedByUserDate =
+                      new Map<string, Set<number>>();
 
-                    // แยกกลุ่มตาม user + วันที่
-                    const groups = new Map<string, any[]>();
+                    for (const item of safeReportData) {
+                      const key =
+                        `${item?.userId}_${item?.date}`;
 
-                    for (const item of result) {
-                      const key = `${item?.userId}:${item?.date}`;
-
-                      if (!groups.has(key)) {
-                        groups.set(key, []);
+                      if (!approvedByUserDate.has(key)) {
+                        approvedByUserDate.set(
+                          key,
+                          new Set<number>()
+                        );
                       }
 
-                      groups.get(key)!.push(item);
-                    }
-
-                    // กระจาย overtimeApproved ให้แต่ละ request
-                    for (const items of groups.values()) {
-                      if (items.length === 0) continue;
-
-                      // overtimeApproved คือยอดรวมของวัน
-                      // ใช้ค่าจากรายการแรกเป็นยอดตั้งต้น
-                      let remainingApproved = Number(
-                        items[0]?.overtimeApproved ?? 0
+                      const approvedMinutes = Number(
+                        item?.overtimeApproved ?? 0
                       );
 
-                      // เรียง request เก่าสุดก่อน
-                      items.sort((a, b) => {
-                        const aTime = a?.requestDate
-                          ? new Date(a.requestDate).getTime()
-                          : 0;
+                      if (approvedMinutes > 0) {
+                        approvedByUserDate
+                          .get(key)!
+                          .add(approvedMinutes);
+                      }
+                    }
 
-                        const bTime = b?.requestDate
-                          ? new Date(b.requestDate).getTime()
-                          : 0;
+                    // --------------------------------------------
+                    // 2. รวมยอด OT ของ User + Date
+                    // --------------------------------------------
+                    const totalApprovedByUserDate =
+                      new Map<string, number>();
 
-                        if (aTime !== bTime) {
-                          return aTime - bTime;
+                    for (const [
+                      key,
+                      values,
+                    ] of approvedByUserDate) {
+                      totalApprovedByUserDate.set(
+                        key,
+                        Array.from(values).reduce(
+                          (sum, value) =>
+                            sum + value,
+                          0
+                        )
+                      );
+                    }
+
+                    // --------------------------------------------
+                    // 3. ตัด Request ซ้ำ
+                    //    1 Request ID = 1 row
+                    // --------------------------------------------
+                    const uniqueRequests =
+                      new Map<string, any>();
+
+                    for (const item of safeReportData) {
+                      const requestId = String(
+                        item?.id ?? ""
+                      );
+
+                      if (!requestId) {
+                        continue;
+                      }
+
+                      if (!uniqueRequests.has(requestId)) {
+                        uniqueRequests.set(
+                          requestId,
+                          {
+                            ...item,
+                            overtimeApproved: 0,
+                          }
+                        );
+                      }
+                    }
+
+                    const result =
+                      Array.from(
+                        uniqueRequests.values()
+                      );
+
+                    // --------------------------------------------
+                    // 4. จัดกลุ่ม Request ตาม User + Date
+                    // --------------------------------------------
+                    const requestGroups =
+                      new Map<string, any[]>();
+
+                    for (const request of result) {
+                      const key =
+                        `${request?.userId}_${request?.date}`;
+
+                      if (!requestGroups.has(key)) {
+                        requestGroups.set(
+                          key,
+                          []
+                        );
+                      }
+
+                      requestGroups
+                        .get(key)!
+                        .push(request);
+                    }
+
+                    // --------------------------------------------
+                    // 5. Allocate OT ให้ Request
+                    //    Request เก่าก่อนรับยอดก่อน
+                    // --------------------------------------------
+                    for (const [
+                      key,
+                      requests,
+                    ] of requestGroups) {
+                      let remainingApproved =
+                        totalApprovedByUserDate.get(
+                          key
+                        ) || 0;
+
+                      requests.sort(
+                        (a, b) => {
+                          const aTime = a?.requestDate
+                            ? new Date(
+                              a.requestDate
+                            ).getTime()
+                            : 0;
+
+                          const bTime = b?.requestDate
+                            ? new Date(
+                              b.requestDate
+                            ).getTime()
+                            : 0;
+
+                          if (
+                            aTime !== bTime
+                          ) {
+                            return (
+                              aTime - bTime
+                            );
+                          }
+
+                          return String(
+                            a?.id ?? ""
+                          ).localeCompare(
+                            String(
+                              b?.id ?? ""
+                            )
+                          );
+                        }
+                      );
+
+                      for (const request of requests) {
+                        if (
+                          request.status !==
+                          "approved" &&
+                          request.status !==
+                          "executed"
+                        ) {
+                          continue;
                         }
 
-                        return String(a?.id ?? "").localeCompare(
-                          String(b?.id ?? "")
-                        );
-                      });
+                        if (
+                          remainingApproved <=
+                          0
+                        ) {
+                          break;
+                        }
 
-                      for (const item of items) {
-                        const requested = Number(
-                          item?.overtimeByRequest ?? 0
-                        );
+                        const requestedMinutes =
+                          Number(
+                            request
+                              .overtimeByRequest ??
+                            0
+                          );
 
-                        const allocated = Math.min(
-                          Math.max(remainingApproved, 0),
-                          requested
-                        );
+                        const approvedMinutes =
+                          Math.min(
+                            remainingApproved,
+                            requestedMinutes
+                          );
 
-                        item.overtimeApproved = allocated;
+                        request.overtimeApproved =
+                          approvedMinutes;
 
-                        remainingApproved -= allocated;
+                        remainingApproved -=
+                          approvedMinutes;
                       }
                     }
 
@@ -5597,7 +5755,6 @@ export default function AdminClientPage({
                   })()
                   : safeReportData;
 
-                // ใช้ข้อมูลที่จัดสรรแล้วต่อจากนี้
                 const userIds = Array.from(
                   new Set(
                     reportDataWithOTAllocation.map(
@@ -5614,7 +5771,7 @@ export default function AdminClientPage({
                   // คำนวณยอดรวม OT (เฉพาะกรณี OT Report)
                   const totalOtForUser = userData.reduce(
                     (sum, item) =>
-                      sum + (Number(item?.otHours) || Number(item?.overtimeByRequest) || 0),
+                      sum + Number(item?.overtimeApproved ?? 0),
                     0
                   );
 
@@ -5924,6 +6081,7 @@ export default function AdminClientPage({
           </div>
         </div>
       )}
+
       {/* --- 🖨️ MODAL: EDIT SITE & POSITION --- */}
       {showManageModal && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[600] flex items-center justify-center p-4">
