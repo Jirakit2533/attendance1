@@ -218,69 +218,65 @@ export default function LeaderClientPage({
 
     try {
       const permission = await Notification.requestPermission();
-
       setNotificationPermission(permission);
 
       if (permission !== "granted") {
         return;
       }
 
-      // เก็บรอบเวลางานไว้ใน Browser
       const schedule = {
         startTime: userProfile?.startTime ?? null,
         endTime: userProfile?.endTime ?? null,
         updatedAt: new Date().toISOString(),
       };
 
-      localStorage.setItem(
-        NOTIFICATION_STORAGE_KEY,
-        JSON.stringify(schedule)
-      );
-
-      // Register Service Worker
-      if ("serviceWorker" in navigator) {
-        const registration =
-          await navigator.serviceWorker.register("/sw.js");
-
-        console.log(
-          "SW registered:",
-          registration.scope
-        );
+      try {
+        localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(schedule));
+      } catch (storageError) {
+        console.warn("⚠️ localStorage not available:", storageError);
       }
 
-      console.log(
-        "Attendance Notification permission granted"
-      );
+      // 🔧 PATH ที่ถูกต้อง!
+      if ("serviceWorker" in navigator) {
+        try {
+          const registration = await navigator.serviceWorker.register("/sw.js", {
+            scope: "/",
+          });
+          console.log("✅ Service Worker registered:", registration);
+        } catch (swError) {
+          console.warn("⚠️ Service Worker registration failed:", swError);
+          // Mobile อาจจะสำเร็จหรือล้มเหลว ก็ใช้งานได้ปกติ
+        }
+      }
+
+      console.log("✅ Notification permission granted");
     } catch (error) {
-      console.error(
-        "ไม่สามารถขอสิทธิ์ Notification ได้",
-        error
-      );
+      console.error("❌ Notification permission error:", error);
     }
   };
 
-  // useEffect(() => {
-  //   if (typeof window === "undefined") return;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  //   if (!("Notification" in window)) return;
+    if (!("Notification" in window)) return;
 
-  //   setNotificationPermission(Notification.permission);
+    setNotificationPermission(Notification.permission);
 
-  //   // Cache รอบเวลางาน
-  //   const schedule = {
-  //     startTime: userProfile?.startTime ?? null,
-  //     endTime: userProfile?.endTime ?? null,
-  //     updatedAt: new Date().toISOString(),
-  //   };
+    // Cache รอบเวลางาน
+    const schedule = {
+      startTime: userProfile?.startTime ?? null,
+      endTime: userProfile?.endTime ?? null,
+      updatedAt: new Date().toISOString(),
+    };
 
-  //   localStorage.setItem(
-  //     NOTIFICATION_STORAGE_KEY,
-  //     JSON.stringify(schedule)
-  //   );
-  // }, [
-  //   userProfile?.startTime,
-  //   userProfile?.endTime,
-  // ]);
+    localStorage.setItem(
+      NOTIFICATION_STORAGE_KEY,
+      JSON.stringify(schedule)
+    );
+  }, [
+    userProfile?.startTime,
+    userProfile?.endTime,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
