@@ -5523,13 +5523,91 @@ export default function AdminClientPage({
                   reportType === "ot" ||
                   safeReportData[0]?.generatedType === "overtime";
 
-                // Logic แยกรายคน (ใช้ทั้ง Attendance และ OT)
+                // ============================================================
+                // OT Allocation
+                // overtimeApproved จาก DB = ยอด OT จริงรวมของ user + date
+                // overtimeByRequest = ยอดที่แต่ละ request ขอ
+                // นำยอดรวมมาแบ่งให้แต่ละ request ตามลำดับ createdAt
+                // ============================================================
+                const reportDataWithOTAllocation = isOTReport
+                  ? (() => {
+                    const result = safeReportData.map((item: any) => ({
+                      ...item,
+                    }));
+
+                    // แยกกลุ่มตาม user + วันที่
+                    const groups = new Map<string, any[]>();
+
+                    for (const item of result) {
+                      const key = `${item?.userId}:${item?.date}`;
+
+                      if (!groups.has(key)) {
+                        groups.set(key, []);
+                      }
+
+                      groups.get(key)!.push(item);
+                    }
+
+                    // กระจาย overtimeApproved ให้แต่ละ request
+                    for (const items of groups.values()) {
+                      if (items.length === 0) continue;
+
+                      // overtimeApproved คือยอดรวมของวัน
+                      // ใช้ค่าจากรายการแรกเป็นยอดตั้งต้น
+                      let remainingApproved = Number(
+                        items[0]?.overtimeApproved ?? 0
+                      );
+
+                      // เรียง request เก่าสุดก่อน
+                      items.sort((a, b) => {
+                        const aTime = a?.requestDate
+                          ? new Date(a.requestDate).getTime()
+                          : 0;
+
+                        const bTime = b?.requestDate
+                          ? new Date(b.requestDate).getTime()
+                          : 0;
+
+                        if (aTime !== bTime) {
+                          return aTime - bTime;
+                        }
+
+                        return String(a?.id ?? "").localeCompare(
+                          String(b?.id ?? "")
+                        );
+                      });
+
+                      for (const item of items) {
+                        const requested = Number(
+                          item?.overtimeByRequest ?? 0
+                        );
+
+                        const allocated = Math.min(
+                          Math.max(remainingApproved, 0),
+                          requested
+                        );
+
+                        item.overtimeApproved = allocated;
+
+                        remainingApproved -= allocated;
+                      }
+                    }
+
+                    return result;
+                  })()
+                  : safeReportData;
+
+                // ใช้ข้อมูลที่จัดสรรแล้วต่อจากนี้
                 const userIds = Array.from(
-                  new Set(safeReportData.map((item: any) => item?.userId))
+                  new Set(
+                    reportDataWithOTAllocation.map(
+                      (item: any) => item?.userId
+                    )
+                  )
                 );
 
                 userIds.forEach((id) => {
-                  const userData = safeReportData.filter(
+                  const userData = reportDataWithOTAllocation.filter(
                     (item: any) => item?.userId === id
                   );
 

@@ -161,6 +161,9 @@ export default function EmployeeClientPage({
 }: Props) {
   const router = useRouter();
 
+  const [notificationPermission, setNotificationPermission] =
+    useState<NotificationPermission>("default");
+
   const [records, setRecords] = useState<any[]>(initialRecords);
   const [leaves, setLeaves] = useState<any[]>(initialLeaves);
 
@@ -224,6 +227,7 @@ export default function EmployeeClientPage({
   const [showOTModal, setShowOTModal] = useState(false);
   const [otError, setOtError] = useState("");
   const [otSuccess, setOtSuccess] = useState(false);
+
   const [isProcessingOT, setIsProcessingOT] = useState(false);
 
   const [otData, setOtData] = useState({
@@ -233,6 +237,190 @@ export default function EmployeeClientPage({
     siteId: "",
     reason: "",
   });
+
+
+  /* ---------------- ATTENDANCE NOTIFICATION ---------------- */
+
+  const NOTIFICATION_STORAGE_KEY = "attendance_notification_schedule";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // ตรวจสอบสิทธิ์ Notification ปัจจุบัน
+    if ("Notification" in window) {
+      setNotificationPermission(Notification.permission);
+    }
+
+    // -----------------------------------------
+    // 1. เก็บรอบเข้างานลง localStorage
+    // -----------------------------------------
+    const startTime = userProfile?.startTime ?? null;
+    const endTime = userProfile?.endTime ?? null;
+
+    const schedule = {
+      startTime,
+      endTime,
+      updatedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(
+      NOTIFICATION_STORAGE_KEY,
+      JSON.stringify(schedule)
+    );
+
+    // -----------------------------------------
+    // 2. ถ้าไม่มีรอบงาน
+    // -----------------------------------------
+    if (!startTime || !endTime) {
+      return;
+    }
+
+    // -----------------------------------------
+    // 3. ตรวจสอบสิทธิ์ Notification
+    // -----------------------------------------
+    if (!("Notification" in window)) {
+      console.warn("Browser นี้ไม่รองรับ Notification API");
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      return;
+    }
+
+    // -----------------------------------------
+    // 4. ขอสิทธิ์ครั้งแรก
+    // -----------------------------------------
+    if (Notification.permission === "default") {
+      Notification.requestPermission().then((permission) => {
+        setNotificationPermission(permission);
+      });
+    }
+  }, [userProfile?.startTime, userProfile?.endTime]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("Notification" in window)) return;
+
+    const checkAttendanceNotification = () => {
+      const stored = localStorage.getItem(
+        NOTIFICATION_STORAGE_KEY
+      );
+
+      if (!stored) return;
+
+      try {
+        const schedule = JSON.parse(stored);
+
+        const startTime = schedule?.startTime;
+        const endTime = schedule?.endTime;
+
+        // ไม่มีรอบเข้างาน
+        if (!startTime || !endTime) {
+          return;
+        }
+
+        // ยังไม่ได้รับสิทธิ์
+        if (Notification.permission !== "granted") {
+          return;
+        }
+
+        const now = new Date();
+
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
+
+        const [startHour, startMinute] = startTime
+          .split(":")
+          .map(Number);
+
+        const [endHour, endMinute] = endTime
+          .split(":")
+          .map(Number);
+
+        const currentMinutes =
+          currentHour * 60 + currentMinute;
+
+        const startMinutes =
+          startHour * 60 + startMinute;
+
+        const endMinutes =
+          endHour * 60 + endMinute;
+
+        // -----------------------------------------
+        // แจ้งก่อนเข้างาน 15 นาที
+        // -----------------------------------------
+        const checkInNotifyMinutes = startMinutes - 15;
+
+        // -----------------------------------------
+        // แจ้งก่อนออกงาน 15 นาที
+        // -----------------------------------------
+        const checkOutNotifyMinutes = endMinutes - 15;
+
+        const today = now.toISOString().split("T")[0];
+
+        // -----------------------------------------
+        // ป้องกันแจ้งซ้ำ
+        // -----------------------------------------
+        const checkInKey =
+          `attendance_checkin_${today}_${startTime}`;
+
+        const checkOutKey =
+          `attendance_checkout_${today}_${endTime}`;
+
+        // -----------------------------------------
+        // แจ้งเตือนก่อนเข้างาน
+        // -----------------------------------------
+        if (
+          currentMinutes === checkInNotifyMinutes &&
+          !localStorage.getItem(checkInKey)
+        ) {
+          new Notification("แจ้งเตือนเวลาเข้างาน", {
+            body: `กำลังจะถึงเวลาเข้างาน ${startTime.slice(
+              0,
+              5
+            )} กรุณาลงชื่อเข้างาน`,
+          });
+
+          localStorage.setItem(checkInKey, "true");
+        }
+
+        // -----------------------------------------
+        // แจ้งเตือนก่อนออกงาน
+        // -----------------------------------------
+        if (
+          currentMinutes === checkOutNotifyMinutes &&
+          !localStorage.getItem(checkOutKey)
+        ) {
+          new Notification("แจ้งเตือนเวลาออกงาน", {
+            body: `กำลังจะถึงเวลาเลิกงาน ${endTime.slice(
+              0,
+              5
+            )} กรุณาลงชื่อออกงาน`,
+          });
+
+          localStorage.setItem(checkOutKey, "true");
+        }
+      } catch (error) {
+        console.error(
+          "ไม่สามารถตรวจสอบ Notification Schedule ได้",
+          error
+        );
+      }
+    };
+
+    // ตรวจทันที
+    checkAttendanceNotification();
+
+    // ตรวจทุก 30 วินาที
+    const interval = window.setInterval(
+      checkAttendanceNotification,
+      30 * 1000
+    );
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
 
   /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
 
@@ -822,9 +1010,8 @@ export default function EmployeeClientPage({
                 alt={companyData?.name || "Logo"}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  e.currentTarget.src = `https://ui-avatars.com/api/?name=${
-                    companyData?.name || "CP"
-                  }&background=2563eb&color=fff`;
+                  e.currentTarget.src = `https://ui-avatars.com/api/?name=${companyData?.name || "CP"
+                    }&background=2563eb&color=fff`;
                 }}
               />
             </div>
@@ -880,8 +1067,7 @@ export default function EmployeeClientPage({
               src={
                 userProfile?.avatarUrl ||
                 userProfile?.profileImage ||
-                `https://ui-avatars.com/api/?name=${
-                  userProfile?.firstName || "User"
+                `https://ui-avatars.com/api/?name=${userProfile?.firstName || "User"
                 }`
               }
               alt="Profile"
@@ -918,9 +1104,9 @@ export default function EmployeeClientPage({
                 รอบเข้างาน :{" "}
                 {userProfile.startTime && userProfile.endTime
                   ? `${userProfile.startTime.slice(
-                      0,
-                      5
-                    )} - ${userProfile.endTime.slice(0, 5)}`
+                    0,
+                    5
+                  )} - ${userProfile.endTime.slice(0, 5)}`
                   : "ยังไม่ระบุ"}
               </p>
             </div>
@@ -947,7 +1133,7 @@ export default function EmployeeClientPage({
           <div className="flex flex-col gap-2.5 w-full md:w-auto min-w-[200px] sm:min-w-[240px]">
             {/* 1. ปุ่มลงชื่อเข้า/ออกงาน (Logic แบบสลับปุ่มเดียวและวนลูป) */}
             {!todayStatus.hasCheckedIn ||
-            (userProfile.site === "ทุกไซต์" && todayStatus.hasCheckedOut) ? (
+              (userProfile.site === "ทุกไซต์" && todayStatus.hasCheckedOut) ? (
               <button
                 onClick={handleCheckIn}
                 disabled={isProcessing}
@@ -1116,13 +1302,11 @@ export default function EmployeeClientPage({
                         [...records]
                           .sort((a, b) => {
                             const dateA = new Date(
-                              `${a.date} ${
-                                a.checkIn !== "-" ? a.checkIn : "00:00"
+                              `${a.date} ${a.checkIn !== "-" ? a.checkIn : "00:00"
                               }`
                             ).getTime();
                             const dateB = new Date(
-                              `${b.date} ${
-                                b.checkIn !== "-" ? b.checkIn : "00:00"
+                              `${b.date} ${b.checkIn !== "-" ? b.checkIn : "00:00"
                               }`
                             ).getTime();
                             return dateB - dateA;
@@ -1265,13 +1449,12 @@ export default function EmployeeClientPage({
                             </p>
                           </div>
                           <span
-                            className={`text-[11px] px-4 py-2 rounded-full font-black border uppercase tracking-widest ${
-                              l.status === "อนุมัติแล้ว"
-                                ? "bg-green-50 text-green-600 border-green-100"
-                                : l.status === "ปฏิเสธ"
-                                  ? "bg-red-50 text-red-600 border-red-100"
-                                  : "bg-amber-50 text-amber-600 border-amber-100"
-                            }`}
+                            className={`text-[11px] px-4 py-2 rounded-full font-black border uppercase tracking-widest ${l.status === "อนุมัติแล้ว"
+                              ? "bg-green-50 text-green-600 border-green-100"
+                              : l.status === "ปฏิเสธ"
+                                ? "bg-red-50 text-red-600 border-red-100"
+                                : "bg-amber-50 text-amber-600 border-amber-100"
+                              }`}
                           >
                             {l.status}
                           </span>
@@ -1351,13 +1534,12 @@ export default function EmployeeClientPage({
 
                           {/* Status Badge */}
                           <span
-                            className={`text-[11px] px-4 py-2 rounded-full font-black border uppercase tracking-widest ${
-                              ot.status === "approved"
-                                ? "bg-green-50 text-green-600 border-green-100"
-                                : ot.status === "rejected"
-                                  ? "bg-red-50 text-red-600 border-red-100"
-                                  : "bg-amber-50 text-amber-600 border-amber-100"
-                            }`}
+                            className={`text-[11px] px-4 py-2 rounded-full font-black border uppercase tracking-widest ${ot.status === "approved"
+                              ? "bg-green-50 text-green-600 border-green-100"
+                              : ot.status === "rejected"
+                                ? "bg-red-50 text-red-600 border-red-100"
+                                : "bg-amber-50 text-amber-600 border-amber-100"
+                              }`}
                           >
                             {ot.status === "approved"
                               ? "อนุมัติแล้ว"
@@ -1480,55 +1662,53 @@ export default function EmployeeClientPage({
                             leaveEndTime &&
                             (leaveStart !== leaveEnd ||
                               leaveEndTime > leaveStartTime))) && (
-                          <div className="flex flex-col items-center justify-center py-2 sm:py-4 animate-in zoom-in duration-300">
-                            <div className="bg-indigo-600 px-6 py-2 sm:px-8 sm:py-3 rounded-[2rem] shadow-[0_10px_25px_-5px_rgba(79,70,229,0.4)] flex items-center gap-3">
-                              <span className="text-[9px] sm:text-[10px] font-black text-indigo-100 uppercase tracking-widest">
-                                ระยะเวลา
-                              </span>
-                              <div className="flex items-baseline gap-1">
-                                <span className="text-2xl sm:text-3xl font-black text-white leading-none">
-                                  {leaveType === "ลาเป็นชั่วโมง"
-                                    ? calculateTotalHours(
+                            <div className="flex flex-col items-center justify-center py-2 sm:py-4 animate-in zoom-in duration-300">
+                              <div className="bg-indigo-600 px-6 py-2 sm:px-8 sm:py-3 rounded-[2rem] shadow-[0_10px_25px_-5px_rgba(79,70,229,0.4)] flex items-center gap-3">
+                                <span className="text-[9px] sm:text-[10px] font-black text-indigo-100 uppercase tracking-widest">
+                                  ระยะเวลา
+                                </span>
+                                <div className="flex items-baseline gap-1">
+                                  <span className="text-2xl sm:text-3xl font-black text-white leading-none">
+                                    {leaveType === "ลาเป็นชั่วโมง"
+                                      ? calculateTotalHours(
                                         leaveStart, // วันที่เริ่ม
                                         leaveEnd, // วันที่สิ้นสุด
                                         leaveStartTime, // เวลาเริ่ม
                                         leaveEndTime // เวลาสิ้นสุด
                                       )
-                                    : totalDays}
-                                </span>
-                                <span className="text-xs sm:text-sm font-bold text-white uppercase">
-                                  {leaveType === "ลาเป็นชั่วโมง"
-                                    ? "ชั่วโมง"
-                                    : "วัน"}
-                                </span>
+                                      : totalDays}
+                                  </span>
+                                  <span className="text-xs sm:text-sm font-bold text-white uppercase">
+                                    {leaveType === "ลาเป็นชั่วโมง"
+                                      ? "ชั่วโมง"
+                                      : "วัน"}
+                                  </span>
+                                </div>
                               </div>
+                              <div className="h-3 w-0.5 bg-gradient-to-b from-indigo-600 to-transparent opacity-20"></div>
                             </div>
-                            <div className="h-3 w-0.5 bg-gradient-to-b from-indigo-600 to-transparent opacity-20"></div>
-                          </div>
-                        )}
+                          )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
                           <div className="space-y-2 group">
                             <label
-                              className={`text-[10px] font-black uppercase ml-4 transition-colors ${
-                                leaveError?.includes("เริ่มต้น") ||
+                              className={`text-[10px] font-black uppercase ml-4 transition-colors ${leaveError?.includes("เริ่มต้น") ||
                                 (leaveStart &&
                                   !validateLeaveDates(leaveStart, leaveEnd)
                                     .isValid)
-                                  ? "text-red-500"
-                                  : "text-gray-400 group-focus-within:text-indigo-500"
-                              }`}
+                                ? "text-red-500"
+                                : "text-gray-400 group-focus-within:text-indigo-500"
+                                }`}
                             >
                               เริ่มต้น
                             </label>
                             <div className="relative">
                               <input
                                 type="date"
-                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black text-gray-700 outline-none shadow-sm border-2 transition-all appearance-none ${
-                                  leaveError?.includes("เริ่มต้น")
-                                    ? "border-red-200 bg-red-50/50"
-                                    : "bg-white border-transparent focus:border-indigo-500"
-                                }`}
+                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black text-gray-700 outline-none shadow-sm border-2 transition-all appearance-none ${leaveError?.includes("เริ่มต้น")
+                                  ? "border-red-200 bg-red-50/50"
+                                  : "bg-white border-transparent focus:border-indigo-500"
+                                  }`}
                                 value={leaveStart}
                                 onChange={(e) => {
                                   setLeaveStart(e.target.value);
@@ -1540,25 +1720,23 @@ export default function EmployeeClientPage({
 
                           <div className="space-y-2 group">
                             <label
-                              className={`text-[10px] font-black uppercase ml-4 transition-colors ${
-                                leaveError?.includes("สิ้นสุด") ||
+                              className={`text-[10px] font-black uppercase ml-4 transition-colors ${leaveError?.includes("สิ้นสุด") ||
                                 (leaveEnd &&
                                   !validateLeaveDates(leaveStart, leaveEnd)
                                     .isValid)
-                                  ? "text-red-500"
-                                  : "text-gray-400 group-focus-within:text-indigo-500"
-                              }`}
+                                ? "text-red-500"
+                                : "text-gray-400 group-focus-within:text-indigo-500"
+                                }`}
                             >
                               สิ้นสุด
                             </label>
                             <div className="relative">
                               <input
                                 type="date"
-                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black text-gray-700 outline-none shadow-sm border-2 transition-all appearance-none ${
-                                  leaveError?.includes("สิ้นสุด")
-                                    ? "border-red-200 bg-red-50/50"
-                                    : "bg-white border-transparent focus:border-indigo-500"
-                                }`}
+                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black text-gray-700 outline-none shadow-sm border-2 transition-all appearance-none ${leaveError?.includes("สิ้นสุด")
+                                  ? "border-red-200 bg-red-50/50"
+                                  : "bg-white border-transparent focus:border-indigo-500"
+                                  }`}
                                 value={leaveEnd}
                                 onChange={(e) => {
                                   setLeaveEnd(e.target.value);
@@ -1579,11 +1757,10 @@ export default function EmployeeClientPage({
                                 เวลาเริ่มต้น (24H)
                               </label>
                               <select
-                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${
-                                  !leaveStart
-                                    ? "border-red-200 bg-red-50 text-red-600"
-                                    : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
-                                }`}
+                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${!leaveStart
+                                  ? "border-red-200 bg-red-50 text-red-600"
+                                  : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
+                                  }`}
                                 value={leaveStartTime}
                                 onChange={(e) => {
                                   if (!leaveStart || !leaveEnd) {
@@ -1630,15 +1807,14 @@ export default function EmployeeClientPage({
                                 เวลาสิ้นสุด (24H)
                               </label>
                               <select
-                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${
-                                  !leaveEnd ||
+                                className={`w-full p-4 sm:p-5 rounded-[1.2rem] sm:rounded-[1.8rem] font-black outline-none shadow-sm border-2 transition-all appearance-none cursor-pointer ${!leaveEnd ||
                                   (leaveStart === leaveEnd &&
                                     leaveEndTime &&
                                     leaveEndTime !== "00:00" &&
                                     leaveStartTime >= leaveEndTime)
-                                    ? "border-red-200 bg-red-50 text-red-600"
-                                    : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
-                                }`}
+                                  ? "border-red-200 bg-red-50 text-red-600"
+                                  : "bg-white border-transparent focus:border-indigo-500 text-gray-700"
+                                  }`}
                                 value={leaveEndTime}
                                 onChange={(e) => {
                                   if (!leaveStart || !leaveEnd) {
@@ -2272,9 +2448,9 @@ export default function EmployeeClientPage({
       )}
       {showSuccessCard && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4 transition-opacity">
-          <CardSmall 
+          <CardSmall
             title={isCheckingOut ? "ลงชื่อเลิกงานสำเร็จ" : "ลงชื่อเข้างานสำเร็จ"}
-            onClose={() => setShowSuccessCard(false)} 
+            onClose={() => setShowSuccessCard(false)}
           />
         </div>
       )}
