@@ -239,350 +239,413 @@ export default function EmployeeClientPage({
   });
 
 
-  /* ---------------- ATTENDANCE NOTIFICATION ---------------- */
+  /* ---------------- TEST ANDROID NOTIFICATION ---------------- */
 
-  const NOTIFICATION_STORAGE_KEY =
-    "attendance_notification_schedule";
-
-  const requestAttendanceNotificationPermission = async () => {
+  useEffect(() => {
     if (typeof window === "undefined") return;
 
     if (!("Notification" in window)) {
-      alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
+      console.log("❌ Browser ไม่รองรับ Notification API");
+      return;
+    }
+
+    console.log(
+      "Notification permission:",
+      Notification.permission
+    );
+
+    if (Notification.permission !== "granted") {
+      console.log(
+        "❌ ยังไม่ได้รับ permission:",
+        Notification.permission
+      );
+      return;
+    }
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.ready
+        .then((registration) => {
+          console.log("✅ Service Worker ready");
+
+          return registration.showNotification(
+            "ทดสอบ Android Notification",
+            {
+              body: "ถ้าเห็นข้อความนี้ แสดงว่า Android สามารถแสดง Notification ได้",
+              icon: "/icon-192.png",
+              badge: "/icon-192.png",
+              tag: "android-notification-test",
+            }
+          );
+        })
+        .catch((error) => {
+          console.error(
+            "❌ Service Worker Notification failed:",
+            error
+          );
+        });
+
       return;
     }
 
     try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
+      new Notification("ทดสอบ Android Notification", {
+        body: "ถ้าเห็นข้อความนี้ Notification API ทำงาน",
+        icon: "/icon-192.png",
+      });
 
-      if (permission !== "granted") {
-        return;
-      }
-
-      const schedule = {
-        startTime: userProfile?.startTime ?? null,
-        endTime: userProfile?.endTime ?? null,
-        updatedAt: new Date().toISOString(),
-      };
-
-      try {
-        localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(schedule));
-      } catch (storageError) {
-        console.warn("⚠️ localStorage not available:", storageError);
-      }
-
-      // 🔧 PATH ที่ถูกต้อง!
-      if ("serviceWorker" in navigator) {
-        try {
-          const registration = await navigator.serviceWorker.register("/sw.js", {
-            scope: "/",
-          });
-          console.log("✅ Service Worker registered:", registration);
-        } catch (swError) {
-          console.warn("⚠️ Service Worker registration failed:", swError);
-          // Mobile อาจจะสำเร็จหรือล้มเหลว ก็ใช้งานได้ปกติ
-        }
-      }
-
-      console.log("✅ Notification permission granted");
+      console.log("✅ new Notification() ถูกเรียกสำเร็จ");
     } catch (error) {
-      console.error("❌ Notification permission error:", error);
-    }
-  };
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (!("Notification" in window)) return;
-
-    setNotificationPermission(Notification.permission);
-
-    // Cache รอบเวลางาน
-    const schedule = {
-      startTime: userProfile?.startTime ?? null,
-      endTime: userProfile?.endTime ?? null,
-      updatedAt: new Date().toISOString(),
-    };
-
-    localStorage.setItem(
-      NOTIFICATION_STORAGE_KEY,
-      JSON.stringify(schedule)
-    );
-  }, [
-    userProfile?.startTime,
-    userProfile?.endTime,
-  ]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!("Notification" in window)) return;
-
-    const checkAttendanceNotification = () => {
-      const stored = localStorage.getItem(
-        NOTIFICATION_STORAGE_KEY
+      console.error(
+        "❌ new Notification() failed:",
+        error
       );
+    }
+  }, []);
 
-      if (!stored) return;
+  // /* ---------------- ATTENDANCE NOTIFICATION ---------------- */
 
-      try {
-        const schedule = JSON.parse(stored);
+  // const NOTIFICATION_STORAGE_KEY =
+  //   "attendance_notification_schedule";
 
-        const startTime = schedule?.startTime;
-        const endTime = schedule?.endTime;
+  // const requestAttendanceNotificationPermission = async () => {
+  //   if (typeof window === "undefined") return;
 
-        if (!startTime || !endTime) {
-          return;
-        }
+  //   if (!("Notification" in window)) {
+  //     alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
+  //     return;
+  //   }
 
-        if (Notification.permission !== "granted") {
-          return;
-        }
+  //   try {
+  //     const permission = await Notification.requestPermission();
+  //     setNotificationPermission(permission);
 
-        const now = new Date();
+  //     if (permission !== "granted") {
+  //       return;
+  //     }
 
-        const currentHour = now.getHours();
-        const currentMinute = now.getMinutes();
+  //     const schedule = {
+  //       startTime: userProfile?.startTime ?? null,
+  //       endTime: userProfile?.endTime ?? null,
+  //       updatedAt: new Date().toISOString(),
+  //     };
 
-        const [startHour, startMinute] = startTime
-          .split(":")
-          .map(Number);
+  //     try {
+  //       localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(schedule));
+  //     } catch (storageError) {
+  //       console.warn("⚠️ localStorage not available:", storageError);
+  //     }
 
-        const [endHour, endMinute] = endTime
-          .split(":")
-          .map(Number);
+  //     // 🔧 PATH ที่ถูกต้อง!
+  //     if ("serviceWorker" in navigator) {
+  //       try {
+  //         const registration = await navigator.serviceWorker.register("/sw.js", {
+  //           scope: "/",
+  //         });
+  //         console.log("✅ Service Worker registered:", registration);
+  //       } catch (swError) {
+  //         console.warn("⚠️ Service Worker registration failed:", swError);
+  //         // Mobile อาจจะสำเร็จหรือล้มเหลว ก็ใช้งานได้ปกติ
+  //       }
+  //     }
 
-        const currentMinutes =
-          currentHour * 60 + currentMinute;
+  //     console.log("✅ Notification permission granted");
+  //   } catch (error) {
+  //     console.error("❌ Notification permission error:", error);
+  //   }
+  // };
 
-        const startMinutes =
-          startHour * 60 + startMinute;
+  // useEffect(() => {
+  //   if (typeof window === "undefined") return;
 
-        const endMinutes =
-          endHour * 60 + endMinute;
+  //   if (!("Notification" in window)) return;
 
-        const today = now.toISOString().split("T")[0];
+  //   setNotificationPermission(Notification.permission);
 
-        // -----------------------------------------
-        // ตรวจสอบการลงเวลาของวันนี้
-        // -----------------------------------------
+  //   // Cache รอบเวลางาน
+  //   const schedule = {
+  //     startTime: userProfile?.startTime ?? null,
+  //     endTime: userProfile?.endTime ?? null,
+  //     updatedAt: new Date().toISOString(),
+  //   };
 
-        const todayRecord = records.find(
-          (r: any) => r.date === today
-        );
+  //   localStorage.setItem(
+  //     NOTIFICATION_STORAGE_KEY,
+  //     JSON.stringify(schedule)
+  //   );
+  // }, [
+  //   userProfile?.startTime,
+  //   userProfile?.endTime,
+  // ]);
 
-        const checkInTime = todayRecord?.checkIn;
-        const checkOutTime = todayRecord?.checkOut;
+  // useEffect(() => {
+  //   if (typeof window === "undefined") return;
+  //   if (!("Notification" in window)) return;
 
-        const hasCheckedIn =
-          !!checkInTime && checkInTime !== "-";
+  //   const checkAttendanceNotification = () => {
+  //     const stored = localStorage.getItem(
+  //       NOTIFICATION_STORAGE_KEY
+  //     );
 
-        const hasCheckedOut =
-          !!checkOutTime && checkOutTime !== "-";
+  //     if (!stored) return;
 
-        // -----------------------------------------
-        // ฟังก์ชันแสดง Notification
-        // -----------------------------------------
+  //     try {
+  //       const schedule = JSON.parse(stored);
 
-        const showNotification = (
-          title: string,
-          body: string,
-          tag: string
-        ) => {
-          try {
-            new Notification(title, {
-              body,
-              icon: "/icon-192.png",
-              badge: "/icon-192.png",
-              tag,
-            });
-          } catch (error) {
-            console.warn(
-              "ไม่สามารถแสดง Notification ได้:",
-              error
-            );
-          }
-        };
+  //       const startTime = schedule?.startTime;
+  //       const endTime = schedule?.endTime;
 
-        // =========================================
-        // เวลาเข้างาน 3 ครั้ง
-        // =========================================
+  //       if (!startTime || !endTime) {
+  //         return;
+  //       }
 
-        // 1. 5 นาทีก่อนเข้างาน
-        const checkInNotify1Minutes =
-          startMinutes - 5;
+  //       if (Notification.permission !== "granted") {
+  //         return;
+  //       }
 
-        const checkInKey1 =
-          `attendance_checkin_notify1_${today}`;
+  //       const now = new Date();
 
-        if (
-          currentMinutes === checkInNotify1Minutes &&
-          !hasCheckedIn &&
-          !localStorage.getItem(checkInKey1)
-        ) {
-          showNotification(
-            "แจ้งเตือนเข้างาน",
-            `อีก 5 นาทีจะถึงเวลาเข้างาน ${startTime.slice(
-              0,
-              5
-            )} อย่าลืมลงชื่อเข้างาน`,
-            "attendance-checkin-5min"
-          );
+  //       const currentHour = now.getHours();
+  //       const currentMinute = now.getMinutes();
 
-          localStorage.setItem(checkInKey1, "true");
-        }
+  //       const [startHour, startMinute] = startTime
+  //         .split(":")
+  //         .map(Number);
 
-        // 2. ถึงเวลาเข้างาน
-        const checkInKey2 =
-          `attendance_checkin_notify2_${today}`;
+  //       const [endHour, endMinute] = endTime
+  //         .split(":")
+  //         .map(Number);
 
-        if (
-          currentMinutes === startMinutes &&
-          !hasCheckedIn &&
-          !localStorage.getItem(checkInKey2)
-        ) {
-          showNotification(
-            "แจ้งเตือนเข้างาน",
-            `ถึงเวลาเข้างาน ${startTime.slice(
-              0,
-              5
-            )} แล้ว อย่าลืมลงชื่อเข้างาน`,
-            "attendance-checkin-now"
-          );
+  //       const currentMinutes =
+  //         currentHour * 60 + currentMinute;
 
-          localStorage.setItem(checkInKey2, "true");
-        }
+  //       const startMinutes =
+  //         startHour * 60 + startMinute;
 
-        // 3. 5 นาทีหลังเวลาเข้างาน
-        const checkInNotify3Minutes =
-          startMinutes + 5;
+  //       const endMinutes =
+  //         endHour * 60 + endMinute;
 
-        const checkInKey3 =
-          `attendance_checkin_notify3_${today}`;
+  //       const today = now.toISOString().split("T")[0];
 
-        if (
-          currentMinutes === checkInNotify3Minutes &&
-          !hasCheckedIn &&
-          !localStorage.getItem(checkInKey3)
-        ) {
-          showNotification(
-            "แจ้งเตือนเข้างาน",
-            `ท่านยังไม่ได้ลงชื่อเข้างาน กรุณาลงชื่อเข้างาน`,
-            "attendance-checkin-5min-after"
-          );
+  //       // -----------------------------------------
+  //       // ตรวจสอบการลงเวลาของวันนี้
+  //       // -----------------------------------------
 
-          localStorage.setItem(checkInKey3, "true");
-        }
+  //       const todayRecord = records.find(
+  //         (r: any) => r.date === today
+  //       );
 
-        // =========================================
-        // เวลาออกงาน 4 ครั้ง
-        // =========================================
+  //       const checkInTime = todayRecord?.checkIn;
+  //       const checkOutTime = todayRecord?.checkOut;
 
-        // 1. ถึงเวลาออกงาน
-        const checkOutNotify1Minutes =
-          endMinutes;
+  //       const hasCheckedIn =
+  //         !!checkInTime && checkInTime !== "-";
 
-        const checkOutKey1 =
-          `attendance_checkout_notify1_${today}`;
+  //       const hasCheckedOut =
+  //         !!checkOutTime && checkOutTime !== "-";
 
-        if (
-          currentMinutes === checkOutNotify1Minutes &&
-          !hasCheckedOut &&
-          !localStorage.getItem(checkOutKey1)
-        ) {
-          showNotification(
-            "แจ้งเตือนออกงาน",
-            `ถึงเวลาออกงาน ${endTime.slice(
-              0,
-              5
-            )} แล้ว อย่าลืมลงชื่อออกงาน`,
-            "attendance-checkout-now"
-          );
+  //       // -----------------------------------------
+  //       // ฟังก์ชันแสดง Notification
+  //       // -----------------------------------------
 
-          localStorage.setItem(checkOutKey1, "true");
-        }
+  //       const showNotification = (
+  //         title: string,
+  //         body: string,
+  //         tag: string
+  //       ) => {
+  //         try {
+  //           new Notification(title, {
+  //             body,
+  //             icon: "/icon-192.png",
+  //             badge: "/icon-192.png",
+  //             tag,
+  //           });
+  //         } catch (error) {
+  //           console.warn(
+  //             "ไม่สามารถแสดง Notification ได้:",
+  //             error
+  //           );
+  //         }
+  //       };
 
-        // 2. 5 นาทีหลังเวลาออกงาน
-        const checkOutNotify2Minutes =
-          endMinutes + 5;
+  //       // =========================================
+  //       // เวลาเข้างาน 3 ครั้ง
+  //       // =========================================
 
-        const checkOutKey2 =
-          `attendance_checkout_notify2_${today}`;
+  //       // 1. 5 นาทีก่อนเข้างาน
+  //       const checkInNotify1Minutes =
+  //         startMinutes - 5;
 
-        if (
-          currentMinutes === checkOutNotify2Minutes &&
-          !hasCheckedOut &&
-          !localStorage.getItem(checkOutKey2)
-        ) {
-          showNotification(
-            "แจ้งเตือนออกงาน",
-            `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
-            "attendance-checkout-5min"
-          );
+  //       const checkInKey1 =
+  //         `attendance_checkin_notify1_${today}`;
 
-          localStorage.setItem(checkOutKey2, "true");
-        }
+  //       if (
+  //         currentMinutes === checkInNotify1Minutes &&
+  //         !hasCheckedIn &&
+  //         !localStorage.getItem(checkInKey1)
+  //       ) {
+  //         showNotification(
+  //           "แจ้งเตือนเข้างาน",
+  //           `อีก 5 นาทีจะถึงเวลาเข้างาน ${startTime.slice(
+  //             0,
+  //             5
+  //           )} อย่าลืมลงชื่อเข้างาน`,
+  //           "attendance-checkin-5min"
+  //         );
 
-        // 3. 10 นาทีหลังเวลาออกงาน
-        const checkOutNotify3Minutes =
-          endMinutes + 10;
+  //         localStorage.setItem(checkInKey1, "true");
+  //       }
 
-        const checkOutKey3 =
-          `attendance_checkout_notify3_${today}`;
+  //       // 2. ถึงเวลาเข้างาน
+  //       const checkInKey2 =
+  //         `attendance_checkin_notify2_${today}`;
 
-        if (
-          currentMinutes === checkOutNotify3Minutes &&
-          !hasCheckedOut &&
-          !localStorage.getItem(checkOutKey3)
-        ) {
-          showNotification(
-            "แจ้งเตือนออกงาน",
-            `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
-            "attendance-checkout-10min"
-          );
+  //       if (
+  //         currentMinutes === startMinutes &&
+  //         !hasCheckedIn &&
+  //         !localStorage.getItem(checkInKey2)
+  //       ) {
+  //         showNotification(
+  //           "แจ้งเตือนเข้างาน",
+  //           `ถึงเวลาเข้างาน ${startTime.slice(
+  //             0,
+  //             5
+  //           )} แล้ว อย่าลืมลงชื่อเข้างาน`,
+  //           "attendance-checkin-now"
+  //         );
 
-          localStorage.setItem(checkOutKey3, "true");
-        }
+  //         localStorage.setItem(checkInKey2, "true");
+  //       }
 
-        // 4. 15 นาทีหลังเวลาออกงาน
-        const checkOutNotify4Minutes =
-          endMinutes + 15;
+  //       // 3. 5 นาทีหลังเวลาเข้างาน
+  //       const checkInNotify3Minutes =
+  //         startMinutes + 5;
 
-        const checkOutKey4 =
-          `attendance_checkout_notify4_${today}`;
+  //       const checkInKey3 =
+  //         `attendance_checkin_notify3_${today}`;
 
-        if (
-          currentMinutes === checkOutNotify4Minutes &&
-          !hasCheckedOut &&
-          !localStorage.getItem(checkOutKey4)
-        ) {
-          showNotification(
-            "แจ้งเตือนออกงาน",
-            `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
-            "attendance-checkout-15min"
-          );
+  //       if (
+  //         currentMinutes === checkInNotify3Minutes &&
+  //         !hasCheckedIn &&
+  //         !localStorage.getItem(checkInKey3)
+  //       ) {
+  //         showNotification(
+  //           "แจ้งเตือนเข้างาน",
+  //           `ท่านยังไม่ได้ลงชื่อเข้างาน กรุณาลงชื่อเข้างาน`,
+  //           "attendance-checkin-5min-after"
+  //         );
 
-          localStorage.setItem(checkOutKey4, "true");
-        }
-      } catch (error) {
-        console.error(
-          "ไม่สามารถตรวจสอบ Notification Schedule ได้",
-          error
-        );
-      }
-    };
+  //         localStorage.setItem(checkInKey3, "true");
+  //       }
 
-    checkAttendanceNotification();
+  //       // =========================================
+  //       // เวลาออกงาน 4 ครั้ง
+  //       // =========================================
 
-    const interval = window.setInterval(
-      checkAttendanceNotification,
-      30 * 1000
-    );
+  //       // 1. ถึงเวลาออกงาน
+  //       const checkOutNotify1Minutes =
+  //         endMinutes;
 
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [records]);
+  //       const checkOutKey1 =
+  //         `attendance_checkout_notify1_${today}`;
+
+  //       if (
+  //         currentMinutes === checkOutNotify1Minutes &&
+  //         !hasCheckedOut &&
+  //         !localStorage.getItem(checkOutKey1)
+  //       ) {
+  //         showNotification(
+  //           "แจ้งเตือนออกงาน",
+  //           `ถึงเวลาออกงาน ${endTime.slice(
+  //             0,
+  //             5
+  //           )} แล้ว อย่าลืมลงชื่อออกงาน`,
+  //           "attendance-checkout-now"
+  //         );
+
+  //         localStorage.setItem(checkOutKey1, "true");
+  //       }
+
+  //       // 2. 5 นาทีหลังเวลาออกงาน
+  //       const checkOutNotify2Minutes =
+  //         endMinutes + 5;
+
+  //       const checkOutKey2 =
+  //         `attendance_checkout_notify2_${today}`;
+
+  //       if (
+  //         currentMinutes === checkOutNotify2Minutes &&
+  //         !hasCheckedOut &&
+  //         !localStorage.getItem(checkOutKey2)
+  //       ) {
+  //         showNotification(
+  //           "แจ้งเตือนออกงาน",
+  //           `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
+  //           "attendance-checkout-5min"
+  //         );
+
+  //         localStorage.setItem(checkOutKey2, "true");
+  //       }
+
+  //       // 3. 10 นาทีหลังเวลาออกงาน
+  //       const checkOutNotify3Minutes =
+  //         endMinutes + 10;
+
+  //       const checkOutKey3 =
+  //         `attendance_checkout_notify3_${today}`;
+
+  //       if (
+  //         currentMinutes === checkOutNotify3Minutes &&
+  //         !hasCheckedOut &&
+  //         !localStorage.getItem(checkOutKey3)
+  //       ) {
+  //         showNotification(
+  //           "แจ้งเตือนออกงาน",
+  //           `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
+  //           "attendance-checkout-10min"
+  //         );
+
+  //         localStorage.setItem(checkOutKey3, "true");
+  //       }
+
+  //       // 4. 15 นาทีหลังเวลาออกงาน
+  //       const checkOutNotify4Minutes =
+  //         endMinutes + 15;
+
+  //       const checkOutKey4 =
+  //         `attendance_checkout_notify4_${today}`;
+
+  //       if (
+  //         currentMinutes === checkOutNotify4Minutes &&
+  //         !hasCheckedOut &&
+  //         !localStorage.getItem(checkOutKey4)
+  //       ) {
+  //         showNotification(
+  //           "แจ้งเตือนออกงาน",
+  //           `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
+  //           "attendance-checkout-15min"
+  //         );
+
+  //         localStorage.setItem(checkOutKey4, "true");
+  //       }
+  //     } catch (error) {
+  //       console.error(
+  //         "ไม่สามารถตรวจสอบ Notification Schedule ได้",
+  //         error
+  //       );
+  //     }
+  //   };
+
+  //   checkAttendanceNotification();
+
+  //   const interval = window.setInterval(
+  //     checkAttendanceNotification,
+  //     30 * 1000
+  //   );
+
+  //   return () => {
+  //     window.clearInterval(interval);
+  //   };
+  // }, [records]);
 
   /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
 
