@@ -7,12 +7,12 @@ importScripts(
 );
 
 firebase.initializeApp({
-  apiKey: "ค่าจาก NEXT_PUBLIC_FIREBASE_API_KEY",
-  authDomain: "ค่าจาก NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-  projectId: "ค่าจาก NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-  storageBucket: "ค่าจาก NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
-  messagingSenderId: "ค่าจาก NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
-  appId: "ค่าจาก NEXT_PUBLIC_FIREBASE_APP_ID",
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID",
 });
 
 const messaging = firebase.messaging();
@@ -23,17 +23,17 @@ messaging.onBackgroundMessage((payload) => {
     payload
   );
 
-  const title =
-    payload.notification?.title || "แจ้งเตือน";
+  const notificationTitle =
+    payload.notification?.title ?? "แจ้งเตือน";
 
-  const options = {
-    body: payload.notification?.body || "",
+  const notificationOptions = {
+    body: payload.notification?.body ?? "",
     icon: "/icon-192.png",
     badge: "/icon-192.png",
   };
 
   self.registration.showNotification(
-    title,
-    options
+    notificationTitle,
+    notificationOptions
   );
 });

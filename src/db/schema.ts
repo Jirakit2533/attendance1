@@ -273,6 +273,15 @@ export const logTable = pgTable("logs", {
     .notNull(),
 });
 
+export const notificationDevicesTable = pgTable("notification_devices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => usersTable.id, { onDelete: "cascade" }).notNull(),
+  installationId: text("installation_id").notNull().unique(),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`timezone('UTC', now())`).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdateFn(() => sql`timezone('UTC', now())`),
+});
+
 export const automationLogTable = pgTable("automation_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   jobName: varchar("job_name", { length: 255 }).notNull(),
@@ -310,6 +319,7 @@ export const usersRelations = relations(usersTable, ({ one, many }) => ({
   attendances: many(attendanceTable),
   overtimeRequests: many(overtimeRequestsTable),
   shifts: many(shiftsTable),
+  notificationDevices: many(notificationDevicesTable),
   adminProfile: one(adminsTable, {
     fields: [usersTable.id],
     references: [adminsTable.user_id],
