@@ -322,6 +322,55 @@ export default function EmployeeClientPage({
     };
   }, []);
 
+  const requestAttendanceNotificationPermission = async () => {
+    if (typeof window === "undefined") return;
+
+    if (!("Notification" in window)) {
+      alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
+      return;
+    }
+
+    try {
+      const permission =
+        await Notification.requestPermission();
+
+      setNotificationPermission(permission);
+
+      if (permission !== "granted") {
+        return;
+      }
+
+      // Register Service Worker
+      if ("serviceWorker" in navigator) {
+        try {
+          const registration =
+            await navigator.serviceWorker.register("/sw.js", {
+              scope: "/",
+            });
+
+          console.log(
+            "✅ Service Worker registered:",
+            registration
+          );
+        } catch (swError) {
+          console.warn(
+            "⚠️ Service Worker registration failed:",
+            swError
+          );
+        }
+      }
+
+      console.log(
+        "✅ Notification permission granted"
+      );
+    } catch (error) {
+      console.error(
+        "❌ Notification permission error:",
+        error
+      );
+    }
+  };
+
   // /* ---------------- ATTENDANCE NOTIFICATION ---------------- */
 
   // const NOTIFICATION_STORAGE_KEY =
