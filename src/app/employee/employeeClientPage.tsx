@@ -331,12 +331,10 @@ export default function EmployeeClientPage({
         const startTime = schedule?.startTime;
         const endTime = schedule?.endTime;
 
-        // ไม่มีรอบเข้างาน
         if (!startTime || !endTime) {
           return;
         }
 
-        // ยังไม่ได้รับสิทธิ์
         if (Notification.permission !== "granted") {
           return;
         }
@@ -363,59 +361,208 @@ export default function EmployeeClientPage({
         const endMinutes =
           endHour * 60 + endMinute;
 
-        // -----------------------------------------
-        // แจ้งก่อนเข้างาน 15 นาที
-        // -----------------------------------------
-        const checkInNotifyMinutes = startMinutes - 15;
-
-        // -----------------------------------------
-        // แจ้งก่อนออกงาน 15 นาที
-        // -----------------------------------------
-        const checkOutNotifyMinutes = endMinutes - 15;
-
         const today = now.toISOString().split("T")[0];
 
         // -----------------------------------------
-        // ป้องกันแจ้งซ้ำ
+        // ตรวจสอบการลงเวลาของวันนี้
         // -----------------------------------------
-        const checkInKey =
-          `attendance_checkin_${today}_${startTime}`;
 
-        const checkOutKey =
-          `attendance_checkout_${today}_${endTime}`;
+        const todayRecord = records.find(
+          (r: any) => r.date === today
+        );
+
+        const checkInTime = todayRecord?.checkIn;
+        const checkOutTime = todayRecord?.checkOut;
+
+        const hasCheckedIn =
+          !!checkInTime && checkInTime !== "-";
+
+        const hasCheckedOut =
+          !!checkOutTime && checkOutTime !== "-";
 
         // -----------------------------------------
-        // แจ้งเตือนก่อนเข้างาน
+        // ฟังก์ชันแสดง Notification
         // -----------------------------------------
+
+        const showNotification = (
+          title: string,
+          body: string,
+          tag: string
+        ) => {
+          try {
+            new Notification(title, {
+              body,
+              icon: "/icon-192.png",
+              badge: "/icon-192.png",
+              tag,
+            });
+          } catch (error) {
+            console.warn(
+              "ไม่สามารถแสดง Notification ได้:",
+              error
+            );
+          }
+        };
+
+        // =========================================
+        // เวลาเข้างาน 3 ครั้ง
+        // =========================================
+
+        // 1. 5 นาทีก่อนเข้างาน
+        const checkInNotify1Minutes =
+          startMinutes - 5;
+
+        const checkInKey1 =
+          `attendance_checkin_notify1_${today}`;
+
         if (
-          currentMinutes === checkInNotifyMinutes &&
-          !localStorage.getItem(checkInKey)
+          currentMinutes === checkInNotify1Minutes &&
+          !hasCheckedIn &&
+          !localStorage.getItem(checkInKey1)
         ) {
-          new Notification("แจ้งเตือนเวลาเข้างาน", {
-            body: `กำลังจะถึงเวลาเข้างาน ${startTime.slice(
+          showNotification(
+            "แจ้งเตือนเข้างาน",
+            `อีก 5 นาทีจะถึงเวลาเข้างาน ${startTime.slice(
               0,
               5
-            )} กรุณาลงชื่อเข้างาน`,
-          });
+            )} อย่าลืมลงชื่อเข้างาน`,
+            "attendance-checkin-5min"
+          );
 
-          localStorage.setItem(checkInKey, "true");
+          localStorage.setItem(checkInKey1, "true");
         }
 
-        // -----------------------------------------
-        // แจ้งเตือนก่อนออกงาน
-        // -----------------------------------------
+        // 2. ถึงเวลาเข้างาน
+        const checkInKey2 =
+          `attendance_checkin_notify2_${today}`;
+
         if (
-          currentMinutes === checkOutNotifyMinutes &&
-          !localStorage.getItem(checkOutKey)
+          currentMinutes === startMinutes &&
+          !hasCheckedIn &&
+          !localStorage.getItem(checkInKey2)
         ) {
-          new Notification("แจ้งเตือนเวลาออกงาน", {
-            body: `กำลังจะถึงเวลาเลิกงาน ${endTime.slice(
+          showNotification(
+            "แจ้งเตือนเข้างาน",
+            `ถึงเวลาเข้างาน ${startTime.slice(
               0,
               5
-            )} กรุณาลงชื่อออกงาน`,
-          });
+            )} แล้ว อย่าลืมลงชื่อเข้างาน`,
+            "attendance-checkin-now"
+          );
 
-          localStorage.setItem(checkOutKey, "true");
+          localStorage.setItem(checkInKey2, "true");
+        }
+
+        // 3. 5 นาทีหลังเวลาเข้างาน
+        const checkInNotify3Minutes =
+          startMinutes + 5;
+
+        const checkInKey3 =
+          `attendance_checkin_notify3_${today}`;
+
+        if (
+          currentMinutes === checkInNotify3Minutes &&
+          !hasCheckedIn &&
+          !localStorage.getItem(checkInKey3)
+        ) {
+          showNotification(
+            "แจ้งเตือนเข้างาน",
+            `ท่านยังไม่ได้ลงชื่อเข้างาน กรุณาลงชื่อเข้างาน`,
+            "attendance-checkin-5min-after"
+          );
+
+          localStorage.setItem(checkInKey3, "true");
+        }
+
+        // =========================================
+        // เวลาออกงาน 4 ครั้ง
+        // =========================================
+
+        // 1. ถึงเวลาออกงาน
+        const checkOutNotify1Minutes =
+          endMinutes;
+
+        const checkOutKey1 =
+          `attendance_checkout_notify1_${today}`;
+
+        if (
+          currentMinutes === checkOutNotify1Minutes &&
+          !hasCheckedOut &&
+          !localStorage.getItem(checkOutKey1)
+        ) {
+          showNotification(
+            "แจ้งเตือนออกงาน",
+            `ถึงเวลาออกงาน ${endTime.slice(
+              0,
+              5
+            )} แล้ว อย่าลืมลงชื่อออกงาน`,
+            "attendance-checkout-now"
+          );
+
+          localStorage.setItem(checkOutKey1, "true");
+        }
+
+        // 2. 5 นาทีหลังเวลาออกงาน
+        const checkOutNotify2Minutes =
+          endMinutes + 5;
+
+        const checkOutKey2 =
+          `attendance_checkout_notify2_${today}`;
+
+        if (
+          currentMinutes === checkOutNotify2Minutes &&
+          !hasCheckedOut &&
+          !localStorage.getItem(checkOutKey2)
+        ) {
+          showNotification(
+            "แจ้งเตือนออกงาน",
+            `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
+            "attendance-checkout-5min"
+          );
+
+          localStorage.setItem(checkOutKey2, "true");
+        }
+
+        // 3. 10 นาทีหลังเวลาออกงาน
+        const checkOutNotify3Minutes =
+          endMinutes + 10;
+
+        const checkOutKey3 =
+          `attendance_checkout_notify3_${today}`;
+
+        if (
+          currentMinutes === checkOutNotify3Minutes &&
+          !hasCheckedOut &&
+          !localStorage.getItem(checkOutKey3)
+        ) {
+          showNotification(
+            "แจ้งเตือนออกงาน",
+            `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
+            "attendance-checkout-10min"
+          );
+
+          localStorage.setItem(checkOutKey3, "true");
+        }
+
+        // 4. 15 นาทีหลังเวลาออกงาน
+        const checkOutNotify4Minutes =
+          endMinutes + 15;
+
+        const checkOutKey4 =
+          `attendance_checkout_notify4_${today}`;
+
+        if (
+          currentMinutes === checkOutNotify4Minutes &&
+          !hasCheckedOut &&
+          !localStorage.getItem(checkOutKey4)
+        ) {
+          showNotification(
+            "แจ้งเตือนออกงาน",
+            `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
+            "attendance-checkout-15min"
+          );
+
+          localStorage.setItem(checkOutKey4, "true");
         }
       } catch (error) {
         console.error(
@@ -425,10 +572,8 @@ export default function EmployeeClientPage({
       }
     };
 
-    // ตรวจทันที
     checkAttendanceNotification();
 
-    // ตรวจทุก 30 วินาที
     const interval = window.setInterval(
       checkAttendanceNotification,
       30 * 1000
@@ -437,7 +582,7 @@ export default function EmployeeClientPage({
     return () => {
       window.clearInterval(interval);
     };
-  }, []);
+  }, [records]);
 
   /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
 
