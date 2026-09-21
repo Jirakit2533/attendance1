@@ -5,9 +5,7 @@ import { useRouter } from "next/navigation";
 import { logoutAction } from "@/server/auth";
 import {
   getMessaging,
-  onMessage,
-  onRegistered,
-  register,
+  getToken,
 } from "firebase/messaging";
 
 import { firebaseApp } from "@/lib/firebase";
@@ -991,49 +989,51 @@ export default function EmployeeClientPage({
         registration
       );
 
-      onRegistered(
-        messaging,
-        async (installationId) => {
-          console.log(
-            "Firebase Installation ID:",
-            installationId
-          );
+      const fcmToken = await getToken(messaging, {
+        vapidKey:
+          process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+        serviceWorkerRegistration: registration,
+      });
 
-          const response = await fetch(
-            "/api/notification/register",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                userId,
-                installationId,
-                userAgent: navigator.userAgent,
-              }),
-            }
-          );
+      if (!fcmToken) {
+        throw new Error(
+          "ไม่สามารถสร้าง FCM registration token ได้"
+        );
+      }
 
-          const result = await response.json();
+      console.log(
+        "FCM Registration Token:",
+        fcmToken
+      );
 
-          if (!response.ok) {
-            throw new Error(
-              result.message ||
-              "ไม่สามารถลงทะเบียนอุปกรณ์ได้"
-            );
-          }
-
-          console.log(
-            "Notification device registered:",
-            result
-          );
+      const response = await fetch(
+        "/api/notification/register",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: userProfile.id,
+            fcmToken,
+            userAgent: navigator.userAgent,
+          }),
         }
       );
 
-      await register(messaging, {
-        vapidKey:
-          process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
-      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message ||
+          "ไม่สามารถลงทะเบียนอุปกรณ์ได้"
+        );
+      }
+
+      console.log(
+        "Notification device registered:",
+        result
+      );
 
       console.log(
         "FCM registration completed"

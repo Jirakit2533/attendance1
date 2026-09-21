@@ -8,13 +8,13 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const { userId, installationId, userAgent } = body;
+    const { userId, fcmToken, userAgent } = body;
 
-    if (!userId || !installationId) {
+    if (!userId || !fcmToken) {
       return NextResponse.json(
         {
           success: false,
-          message: "userId และ installationId จำเป็นต้องมี",
+          message: "userId และ fcmToken จำเป็นต้องมี",
         },
         { status: 400 }
       );
@@ -25,8 +25,8 @@ export async function POST(request: NextRequest) {
       .from(notificationDevicesTable)
       .where(
         eq(
-          notificationDevicesTable.installationId,
-          installationId
+          notificationDevicesTable.fcmToken,
+          fcmToken
         )
       )
       .limit(1);
@@ -40,8 +40,8 @@ export async function POST(request: NextRequest) {
         })
         .where(
           eq(
-            notificationDevicesTable.installationId,
-            installationId
+            notificationDevicesTable.fcmToken,
+            fcmToken
           )
         );
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     await db.insert(notificationDevicesTable).values({
       userId,
-      installationId,
+      fcmToken,
       userAgent: userAgent ?? null,
     });
 
@@ -62,7 +62,10 @@ export async function POST(request: NextRequest) {
       message: "ลงทะเบียนอุปกรณ์เรียบร้อย",
     });
   } catch (error) {
-    console.error("Notification device register error:", error);
+    console.error(
+      "Notification device register error:",
+      error
+    );
 
     return NextResponse.json(
       {
