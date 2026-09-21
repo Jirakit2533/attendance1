@@ -319,6 +319,15 @@ export default function EmployeeClientPage({
     if (!("Notification" in window)) return;
 
     const checkAttendanceNotification = () => {
+      // TEST Notification
+      console.log("NOTIFICATION TEST");
+
+      if (Notification.permission === "granted") {
+        new Notification("ทดสอบการแจ้งเตือน", {
+          body: "Notification ทำงานแล้ว",
+        });
+      }
+
       const stored = localStorage.getItem(
         NOTIFICATION_STORAGE_KEY
       );
@@ -1138,8 +1147,8 @@ export default function EmployeeClientPage({
                   onClick={requestAttendanceNotificationPermission}
                   disabled={notificationPermission === "granted"}
                   className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[10px] sm:text-xs font-semibold transition-colors active:scale-95 ${notificationPermission === "granted"
-                      ? "cursor-default border border-green-200 bg-green-50 text-green-700"
-                      : "border border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                    ? "cursor-default border border-green-200 bg-green-50 text-green-700"
+                    : "border border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
                     }`}
                 >
                   {notificationPermission === "granted" && (

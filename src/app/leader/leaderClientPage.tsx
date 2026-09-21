@@ -325,52 +325,158 @@ export default function LeaderClientPage({
         const endMinutes =
           endHour * 60 + endMinute;
 
-        // แจ้งก่อนเข้างาน 15 นาที
-        const checkInNotifyMinutes =
-          startMinutes - 15;
-
-        // แจ้งก่อนออกงาน 15 นาที
-        const checkOutNotifyMinutes =
-          endMinutes - 15;
-
         const today =
           now.toISOString().split("T")[0];
 
-        // ป้องกันแจ้งซ้ำ
-        const checkInKey =
-          `attendance_checkin_${today}_${startTime}`;
+        // =====================================================
+        // ป้องกันแจ้งซ้ำ แยกเป็นแต่ละรอบ
+        // =====================================================
 
-        const checkOutKey =
-          `attendance_checkout_${today}_${endTime}`;
+        const checkInMinus5Key =
+          `attendance_checkin_minus5_${today}_${startTime}`;
 
-        // แจ้งเตือนก่อนเข้างาน
+        const checkInStartKey =
+          `attendance_checkin_start_${today}_${startTime}`;
+
+        const checkInPlus5Key =
+          `attendance_checkin_plus5_${today}_${startTime}`;
+
+        const checkOutStartKey =
+          `attendance_checkout_start_${today}_${endTime}`;
+
+        const checkOutPlus5Key =
+          `attendance_checkout_plus5_${today}_${endTime}`;
+
+        const checkOutPlus10Key =
+          `attendance_checkout_plus10_${today}_${endTime}`;
+
+        const checkOutPlus15Key =
+          `attendance_checkout_plus15_${today}_${endTime}`;
+
+        // =====================================================
+        // เวลาเข้างาน
+        // - 5 นาที
+        // ตรงเวลา
+        // + 5 นาที
+        // =====================================================
+
+        // -5 นาที
         if (
-          currentMinutes === checkInNotifyMinutes &&
-          !localStorage.getItem(checkInKey)
+          currentMinutes === startMinutes - 5 &&
+          !localStorage.getItem(checkInMinus5Key)
         ) {
           new Notification("แจ้งเตือนเวลาเข้างาน", {
-            body: `กำลังจะถึงเวลาเข้างาน ${startTime.slice(
+            body: `อย่าลืมลงชื่อเข้างาน เวลา ${startTime.slice(
+              0,
+              5
+            )}`,
+          });
+
+          localStorage.setItem(
+            checkInMinus5Key,
+            "true"
+          );
+        }
+
+        // เวลาเข้างาน
+        if (
+          currentMinutes === startMinutes &&
+          !localStorage.getItem(checkInStartKey)
+        ) {
+          new Notification("แจ้งเตือนเวลาเข้างาน", {
+            body: `ถึงเวลาเข้างานแล้ว ${startTime.slice(
               0,
               5
             )} กรุณาลงชื่อเข้างาน`,
           });
 
-          localStorage.setItem(checkInKey, "true");
+          localStorage.setItem(
+            checkInStartKey,
+            "true"
+          );
         }
 
-        // แจ้งเตือนก่อนออกงาน
+        // +5 นาที
         if (
-          currentMinutes === checkOutNotifyMinutes &&
-          !localStorage.getItem(checkOutKey)
+          currentMinutes === startMinutes + 5 &&
+          !localStorage.getItem(checkInPlus5Key)
         ) {
-          new Notification("แจ้งเตือนเวลาออกงาน", {
-            body: `กำลังจะถึงเวลาเลิกงาน ${endTime.slice(
-              0,
-              5
-            )} กรุณาลงชื่อออกงาน`,
+          new Notification("แจ้งเตือนเวลาเข้างาน", {
+            body: "ท่านยังไม่ได้ลงชื่อเข้างาน กรุณาลงชื่อเข้างาน",
           });
 
-          localStorage.setItem(checkOutKey, "true");
+          localStorage.setItem(
+            checkInPlus5Key,
+            "true"
+          );
+        }
+
+        // =====================================================
+        // เวลาออกงาน
+        // ตรงเวลา
+        // +5 นาที
+        // +10 นาที
+        // +15 นาที
+        // =====================================================
+
+        // เวลาออกงาน
+        if (
+          currentMinutes === endMinutes &&
+          !localStorage.getItem(checkOutStartKey)
+        ) {
+          new Notification("แจ้งเตือนเวลาออกงาน", {
+            body: "อย่าลืมลงชื่อออกงาน",
+          });
+
+          localStorage.setItem(
+            checkOutStartKey,
+            "true"
+          );
+        }
+
+        // +5 นาที
+        if (
+          currentMinutes === endMinutes + 5 &&
+          !localStorage.getItem(checkOutPlus5Key)
+        ) {
+          new Notification("แจ้งเตือนเวลาออกงาน", {
+            body: "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
+          });
+
+          localStorage.setItem(
+            checkOutPlus5Key,
+            "true"
+          );
+        }
+
+        // +10 นาที
+        if (
+          currentMinutes === endMinutes + 10 &&
+          !localStorage.getItem(checkOutPlus10Key)
+        ) {
+          new Notification("แจ้งเตือนเวลาออกงาน", {
+            body: "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
+          });
+
+          localStorage.setItem(
+            checkOutPlus10Key,
+            "true"
+          );
+        }
+
+        // +15 นาที
+        if (
+          currentMinutes === endMinutes + 15 &&
+          !localStorage.getItem(checkOutPlus15Key)
+        ) {
+          new Notification("แจ้งเตือนเวลาออกงาน", {
+            body: "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
+          });
+
+          localStorage.setItem(
+            checkOutPlus15Key,
+            "true"
+          );
         }
       } catch (error) {
         console.error(
