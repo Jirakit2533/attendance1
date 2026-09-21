@@ -262,44 +262,64 @@ export default function EmployeeClientPage({
       return;
     }
 
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.ready
-        .then((registration) => {
-          console.log("✅ Service Worker ready");
+    let count = 0;
 
-          return registration.showNotification(
+    const showTestNotification = async () => {
+      count++;
+
+      try {
+        if ("serviceWorker" in navigator) {
+          const registration =
+            await navigator.serviceWorker.ready;
+
+          await registration.showNotification(
             "ทดสอบ Android Notification",
             {
-              body: "ถ้าเห็นข้อความนี้ แสดงว่า Android สามารถแสดง Notification ได้",
+              body: `ทดสอบครั้งที่ ${count} — แจ้งเตือนทุก 15 วินาที`,
               icon: "/icon-192.png",
               badge: "/icon-192.png",
-              tag: "android-notification-test",
+              tag: `android-notification-test-${count}`,
             }
           );
-        })
-        .catch((error) => {
-          console.error(
-            "❌ Service Worker Notification failed:",
-            error
+
+          console.log(
+            `✅ Notification ครั้งที่ ${count}`
           );
-        });
 
-      return;
-    }
+          return;
+        }
 
-    try {
-      new Notification("ทดสอบ Android Notification", {
-        body: "ถ้าเห็นข้อความนี้ Notification API ทำงาน",
-        icon: "/icon-192.png",
-      });
+        new Notification(
+          "ทดสอบ Android Notification",
+          {
+            body: `ทดสอบครั้งที่ ${count} — แจ้งเตือนทุก 15 วินาที`,
+            icon: "/icon-192.png",
+          }
+        );
 
-      console.log("✅ new Notification() ถูกเรียกสำเร็จ");
-    } catch (error) {
-      console.error(
-        "❌ new Notification() failed:",
-        error
-      );
-    }
+        console.log(
+          `✅ Notification ครั้งที่ ${count}`
+        );
+      } catch (error) {
+        console.error(
+          "❌ Notification failed:",
+          error
+        );
+      }
+    };
+
+    // แจ้งเตือนครั้งแรกทันที
+    showTestNotification();
+
+    // จากนั้นทุก 15 วินาที
+    const interval = window.setInterval(
+      showTestNotification,
+      15 * 1000
+    );
+
+    return () => {
+      window.clearInterval(interval);
+    };
   }, []);
 
   // /* ---------------- ATTENDANCE NOTIFICATION ---------------- */
