@@ -208,283 +208,318 @@ export default function LeaderClientPage({
 
   /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
 
-  const requestAttendanceNotificationPermission = async () => {
-    if (typeof window === "undefined") return;
-
-    if (!("Notification" in window)) {
-      alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
-      return;
-    }
-
-    try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-
-      if (permission !== "granted") {
-        return;
-      }
-
-      const schedule = {
-        startTime: userProfile?.startTime ?? null,
-        endTime: userProfile?.endTime ?? null,
-        updatedAt: new Date().toISOString(),
-      };
-
-      try {
-        localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(schedule));
-      } catch (storageError) {
-        console.warn("⚠️ localStorage not available:", storageError);
-      }
-
-      // 🔧 PATH ที่ถูกต้อง!
-      if ("serviceWorker" in navigator) {
-        try {
-          const registration = await navigator.serviceWorker.register("/sw.js", {
-            scope: "/",
-          });
-          console.log("✅ Service Worker registered:", registration);
-        } catch (swError) {
-          console.warn("⚠️ Service Worker registration failed:", swError);
-          // Mobile อาจจะสำเร็จหรือล้มเหลว ก็ใช้งานได้ปกติ
-        }
-      }
-
-      console.log("✅ Notification permission granted");
-    } catch (error) {
-      console.error("❌ Notification permission error:", error);
-    }
-  };
-
+  // 🔧 useEffect ที่ 1: ล้าง localStorage ก่อนเขียนใหม่
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    if (!("Notification" in window)) return;
+    try {
+      // ✅ ดึงวันที่ที่เก็บไว้
+      const storedDate = localStorage.getItem("attendance_notification_date");
+      const today = new Date().toISOString().split("T")[0];
 
-    setNotificationPermission(Notification.permission);
+      // ✅ ถ้าวันเปลี่ยน ให้ล้าง keys เก่า
+      if (storedDate !== today) {
+        console.log("🗑️ Clearing old notification keys...");
 
-    // Cache รอบเวลางาน
-    const schedule = {
-      startTime: userProfile?.startTime ?? null,
-      endTime: userProfile?.endTime ?? null,
-      updatedAt: new Date().toISOString(),
-    };
+        // ลบ notification flag keys ทั้งหมด
+        const keysToDelete = [
+          "attendance_checkin_notify1",
+          "attendance_checkin_notify2",
+          "attendance_checkin_notify3",
+          "attendance_checkout_notify1",
+          "attendance_checkout_notify2",
+          "attendance_checkout_notify3",
+          "attendance_checkout_notify4",
+        ];
 
-    localStorage.setItem(
-      NOTIFICATION_STORAGE_KEY,
-      JSON.stringify(schedule)
-    );
-  }, [
-    userProfile?.startTime,
-    userProfile?.endTime,
-  ]);
+        // ล้าง keys ทั้งหมดที่ขึ้นต้นด้วย "attendance_"
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (
+            key &&
+            (key.startsWith("attendance_checkin_") ||
+              key.startsWith("attendance_checkout_"))
+          ) {
+            try {
+              localStorage.removeItem(key);
+              console.log(`🗑️ Deleted: ${key}`);
+            } catch (e) {
+              console.warn("Could not delete localStorage key:", key, e);
+            }
+          }
+        }
 
+        // ✅ บันทึกวันที่ปัจจุบัน
+        try {
+          localStorage.setItem("attendance_notification_date", today);
+          console.log(`✅ Updated notification date to: ${today}`);
+        } catch (e) {
+          console.warn("Could not set attendance_notification_date:", e);
+        }
+      }
+    } catch (error) {
+      console.warn("⚠️ Error clearing localStorage:", error);
+    }
+  }, []); // รันแค่ครั้งแรก mount
+
+  // 🔧 useEffect ที่ 2: ตรวจสอบและแสดง notification
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("Notification" in window)) return;
 
     const checkAttendanceNotification = () => {
-      const stored = localStorage.getItem(
-        NOTIFICATION_STORAGE_KEY
-      );
+      let stored: string | null = null;
+
+      try {
+        stored = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
+      } catch (storageError) {
+        console.warn("⚠️ localStorage not available:", storageError);
+        return;
+      }
 
       if (!stored) return;
 
       try {
         const schedule = JSON.parse(stored);
-
         const startTime = schedule?.startTime;
         const endTime = schedule?.endTime;
 
-        if (
-          typeof startTime !== "string" ||
-          typeof endTime !== "string"
-        ) {
+        if (!startTime || !endTime) {
           return;
         }
 
-        // ยังไม่ได้รับสิทธิ์
         if (Notification.permission !== "granted") {
           return;
         }
 
         const now = new Date();
-
+        const today = now.toISOString().split("T")[0];
         const currentHour = now.getHours();
         const currentMinute = now.getMinutes();
+        const currentMinutes = currentHour * 60 + currentMinute;
 
-        const [startHour, startMinute] = startTime
-          .split(":")
-          .map(Number);
+        const [startHour, startMinute] = startTime.split(":").map(Number);
+        const [endHour, endMinute] = endTime.split(":").map(Number);
+        const startMinutes = startHour * 60 + startMinute;
+        const endMinutes = endHour * 60 + endMinute;
 
-        const [endHour, endMinute] = endTime
-          .split(":")
-          .map(Number);
+        // ====================================
+        // ดึง check-in time จาก records ของวันนี้
+        // ====================================
+        const todayRecord = records.find((r: any) => r.date === today);
+        const checkInTime = todayRecord?.checkIn;
+        const checkOutTime = todayRecord?.checkOut;
 
-        const currentMinutes =
-          currentHour * 60 + currentMinute;
-
-        const startMinutes =
-          startHour * 60 + startMinute;
-
-        const endMinutes =
-          endHour * 60 + endMinute;
-
-        const today =
-          now.toISOString().split("T")[0];
-
-        // =====================================================
-        // ป้องกันแจ้งซ้ำ แยกเป็นแต่ละรอบ
-        // =====================================================
-
-        const checkInMinus5Key =
-          `attendance_checkin_minus5_${today}_${startTime}`;
-
-        const checkInStartKey =
-          `attendance_checkin_start_${today}_${startTime}`;
-
-        const checkInPlus5Key =
-          `attendance_checkin_plus5_${today}_${startTime}`;
-
-        const checkOutStartKey =
-          `attendance_checkout_start_${today}_${endTime}`;
-
-        const checkOutPlus5Key =
-          `attendance_checkout_plus5_${today}_${endTime}`;
-
-        const checkOutPlus10Key =
-          `attendance_checkout_plus10_${today}_${endTime}`;
-
-        const checkOutPlus15Key =
-          `attendance_checkout_plus15_${today}_${endTime}`;
-
-        // =====================================================
-        // เวลาเข้างาน
-        // - 5 นาที
-        // ตรงเวลา
-        // + 5 นาที
-        // =====================================================
-
-        // -5 นาที
-        if (
-          currentMinutes === startMinutes - 5 &&
-          !localStorage.getItem(checkInMinus5Key)
-        ) {
-          new Notification("แจ้งเตือนเวลาเข้างาน", {
-            body: `อย่าลืมลงชื่อเข้างาน เวลา ${startTime.slice(
-              0,
-              5
-            )}`,
-          });
-
-          localStorage.setItem(
-            checkInMinus5Key,
-            "true"
-          );
+        let actualCheckInMinutes = 0;
+        if (checkInTime && checkInTime !== "-") {
+          const [inHour, inMinute] = checkInTime.split(":").map(Number);
+          actualCheckInMinutes = inHour * 60 + inMinute;
         }
 
-        // เวลาเข้างาน
+        // ====================================
+        // ฟังก์ชันช่วยแสดง Notification
+        // ====================================
+        const showNotification = (
+          title: string,
+          body: string,
+          tag: string
+        ) => {
+          if ("serviceWorker" in navigator) {
+            try {
+              navigator.serviceWorker.controller?.postMessage({
+                type: "SHOW_NOTIFICATION",
+                title,
+                options: {
+                  body,
+                  icon: "/icon-192.png",
+                  badge: "/icon-192.png",
+                  tag,
+                  requireInteraction: true,
+                  data: {
+                    url: "/employee",
+                  },
+                },
+              });
+              console.log("✅ Notification sent via Service Worker:", title);
+            } catch (swError) {
+              console.warn("⚠️ Service Worker postMessage failed:", swError);
+              showNotificationFallback(title, body);
+            }
+          } else {
+            showNotificationFallback(title, body);
+          }
+        };
+
+        const showNotificationFallback = (title: string, body: string) => {
+          try {
+            new Notification(title, {
+              body,
+              icon: "/icon-192.png",
+              badge: "/icon-192.png",
+            });
+            console.log("✅ Notification sent via Fallback:", title);
+          } catch (error) {
+            console.warn("⚠️ Notification fallback failed:", error);
+          }
+        };
+
+        // ====================================
+        // ========== เวลาเข้างาน (3 ครั้ง) ==========
+        // ====================================
+
+        // 1️⃣ แจ้ง -5 นาทีก่อนเข้างาน
+        const checkInNotify1Minutes = startMinutes - 5;
+        const checkInKey1 = `attendance_checkin_notify1_${today}`;
+
+        if (
+          currentMinutes === checkInNotify1Minutes &&
+          !checkInTime &&
+          !localStorage.getItem(checkInKey1)
+        ) {
+          showNotification(
+            "⏰ แจ้งเตือนเข้างาน",
+            `อีก 5 นาทีจะถึงเวลาเข้างาน ${startTime.slice(0, 5)} 🎯`,
+            "attendance-checkin-5min"
+          );
+          try {
+            localStorage.setItem(checkInKey1, "true");
+          } catch (e) {
+            console.warn("Could not set localStorage:", e);
+          }
+        }
+
+        // 2️⃣ แจ้ง เวลาเข้างาน
+        const checkInKey2 = `attendance_checkin_notify2_${today}`;
+
         if (
           currentMinutes === startMinutes &&
-          !localStorage.getItem(checkInStartKey)
+          !checkInTime &&
+          !localStorage.getItem(checkInKey2)
         ) {
-          new Notification("แจ้งเตือนเวลาเข้างาน", {
-            body: `ถึงเวลาเข้างานแล้ว ${startTime.slice(
-              0,
-              5
-            )} กรุณาลงชื่อเข้างาน`,
-          });
-
-          localStorage.setItem(
-            checkInStartKey,
-            "true"
+          showNotification(
+            "🔔 เวลาเข้างาน!",
+            `ถึงเวลาเข้างาน ${startTime.slice(0, 5)} แล้ว กรุณาลงชื่อเข้างาน 📋`,
+            "attendance-checkin-now"
           );
+          try {
+            localStorage.setItem(checkInKey2, "true");
+          } catch (e) {
+            console.warn("Could not set localStorage:", e);
+          }
         }
 
-        // +5 นาที
+        // 3️⃣ แจ้ง +5 นาทีหลังเข้างาน
+        const checkInNotify3Minutes = startMinutes + 5;
+        const checkInKey3 = `attendance_checkin_notify3_${today}`;
+
         if (
-          currentMinutes === startMinutes + 5 &&
-          !localStorage.getItem(checkInPlus5Key)
+          currentMinutes === checkInNotify3Minutes &&
+          !checkInTime &&
+          !localStorage.getItem(checkInKey3)
         ) {
-          new Notification("แจ้งเตือนเวลาเข้างาน", {
-            body: "ท่านยังไม่ได้ลงชื่อเข้างาน กรุณาลงชื่อเข้างาน",
-          });
-
-          localStorage.setItem(
-            checkInPlus5Key,
-            "true"
+          showNotification(
+            "⚠️ อย่าลืมลงชื่อเข้างาน",
+            `โปรดลงชื่อเข้างาน ปกติแล้ว! ⏱️ เวลา ${startTime.slice(0, 5)}`,
+            "attendance-checkin-5min-after"
           );
+          try {
+            localStorage.setItem(checkInKey3, "true");
+          } catch (e) {
+            console.warn("Could not set localStorage:", e);
+          }
         }
 
-        // =====================================================
-        // เวลาออกงาน
-        // ตรงเวลา
-        // +5 นาที
-        // +10 นาที
-        // +15 นาที
-        // =====================================================
+        // ====================================
+        // ========== เวลาออกงาน (4 ครั้ง) ==========
+        // ====================================
 
-        // เวลาออกงาน
+        const baseCheckInMinutes = actualCheckInMinutes || startMinutes;
+
+        // 1️⃣ แจ้ง -15 นาทีหลัง check-in
+        const checkOutNotify1Minutes = baseCheckInMinutes + (60 - 15);
+        const checkOutKey1 = `attendance_checkout_notify1_${today}`;
+
+        if (
+          currentMinutes === checkOutNotify1Minutes &&
+          !checkOutTime &&
+          !localStorage.getItem(checkOutKey1)
+        ) {
+          showNotification(
+            "📢 อย่าลืมออกงาน",
+            `เหลือเวลา 15 นาทีก่อนเลิกงาน ${endTime.slice(0, 5)} 🕐`,
+            "attendance-checkout-15min"
+          );
+          try {
+            localStorage.setItem(checkOutKey1, "true");
+          } catch (e) {
+            console.warn("Could not set localStorage:", e);
+          }
+        }
+
+        // 2️⃣ แจ้ง -10 นาทีหลัง check-in
+        const checkOutNotify2Minutes = baseCheckInMinutes + (60 - 10);
+        const checkOutKey2 = `attendance_checkout_notify2_${today}`;
+
+        if (
+          currentMinutes === checkOutNotify2Minutes &&
+          !checkOutTime &&
+          !localStorage.getItem(checkOutKey2)
+        ) {
+          showNotification(
+            "⏰ เตือนออกงาน",
+            `อีก 10 นาทีจะถึงเวลาเลิกงาน ⏱️`,
+            "attendance-checkout-10min"
+          );
+          try {
+            localStorage.setItem(checkOutKey2, "true");
+          } catch (e) {
+            console.warn("Could not set localStorage:", e);
+          }
+        }
+
+        // 3️⃣ แจ้ง -5 นาทีหลัง check-in
+        const checkOutNotify3Minutes = baseCheckInMinutes + (60 - 5);
+        const checkOutKey3 = `attendance_checkout_notify3_${today}`;
+
+        if (
+          currentMinutes === checkOutNotify3Minutes &&
+          !checkOutTime &&
+          !localStorage.getItem(checkOutKey3)
+        ) {
+          showNotification(
+            "🔔 เลิกงานเร็ว ๆ นี้",
+            `เหลือ 5 นาที กรุณาเตรียมออกงาน 🚪`,
+            "attendance-checkout-5min"
+          );
+          try {
+            localStorage.setItem(checkOutKey3, "true");
+          } catch (e) {
+            console.warn("Could not set localStorage:", e);
+          }
+        }
+
+        // 4️⃣ แจ้ง เวลาเลิกงาน
+        const checkOutKey4 = `attendance_checkout_notify4_${today}`;
+
         if (
           currentMinutes === endMinutes &&
-          !localStorage.getItem(checkOutStartKey)
+          !checkOutTime &&
+          !localStorage.getItem(checkOutKey4)
         ) {
-          new Notification("แจ้งเตือนเวลาออกงาน", {
-            body: "อย่าลืมลงชื่อออกงาน",
-          });
-
-          localStorage.setItem(
-            checkOutStartKey,
-            "true"
+          showNotification(
+            "🚪 เวลาเลิกงาน!",
+            `ถึงเวลาเลิกงาน ${endTime.slice(0, 5)} แล้ว กรุณาลงชื่อออกงาน 📋`,
+            "attendance-checkout-now"
           );
-        }
-
-        // +5 นาที
-        if (
-          currentMinutes === endMinutes + 5 &&
-          !localStorage.getItem(checkOutPlus5Key)
-        ) {
-          new Notification("แจ้งเตือนเวลาออกงาน", {
-            body: "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
-          });
-
-          localStorage.setItem(
-            checkOutPlus5Key,
-            "true"
-          );
-        }
-
-        // +10 นาที
-        if (
-          currentMinutes === endMinutes + 10 &&
-          !localStorage.getItem(checkOutPlus10Key)
-        ) {
-          new Notification("แจ้งเตือนเวลาออกงาน", {
-            body: "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
-          });
-
-          localStorage.setItem(
-            checkOutPlus10Key,
-            "true"
-          );
-        }
-
-        // +15 นาที
-        if (
-          currentMinutes === endMinutes + 15 &&
-          !localStorage.getItem(checkOutPlus15Key)
-        ) {
-          new Notification("แจ้งเตือนเวลาออกงาน", {
-            body: "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
-          });
-
-          localStorage.setItem(
-            checkOutPlus15Key,
-            "true"
-          );
+          try {
+            localStorage.setItem(checkOutKey4, "true");
+          } catch (e) {
+            console.warn("Could not set localStorage:", e);
+          }
         }
       } catch (error) {
-        console.error(
-          "ไม่สามารถตรวจสอบ Notification Schedule ได้",
+        console.warn(
+          "⚠️ ไม่สามารถตรวจสอบ Notification Schedule ได้:",
           error
         );
       }
@@ -493,16 +528,16 @@ export default function LeaderClientPage({
     // ตรวจทันที
     checkAttendanceNotification();
 
-    // ตรวจทุก 30 วินาที
+    // ตรวจทุก 1 นาที (60 วินาที)
     const interval = window.setInterval(
       checkAttendanceNotification,
-      30 * 1000
+      60 * 1000
     );
 
     return () => {
       window.clearInterval(interval);
     };
-  }, []);
+  }, [records]); // dependency: records
 
   const calculateLeaveDays = (start: string, end: string): number => {
     if (!start || !end) return 0;
