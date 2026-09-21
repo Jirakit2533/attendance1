@@ -293,8 +293,10 @@ export default function LeaderClientPage({
         const startTime = schedule?.startTime;
         const endTime = schedule?.endTime;
 
-        // ไม่มีรอบเข้างาน
-        if (!startTime || !endTime) {
+        if (
+          typeof startTime !== "string" ||
+          typeof endTime !== "string"
+        ) {
           return;
         }
 
