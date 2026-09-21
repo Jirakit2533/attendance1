@@ -2,16 +2,7 @@
 import Image from "next/image";
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { registerPushNotification } from "@/lib/push-notification";
 import { logoutAction } from "@/server/auth";
-import {
-  getMessaging,
-  onMessage,
-  onRegistered,
-  register,
-} from "firebase/messaging";
-
-import { firebaseApp } from "@/lib/firebase";
 import {
   checkInAction,
   checkOutAction,
@@ -248,133 +239,602 @@ export default function EmployeeClientPage({
   });
 
 
+  // /* ---------------- TEST ANDROID NOTIFICATION ---------------- */
+
+  // useEffect(() => {
+  //   if (typeof window === "undefined") return;
+
+  //   if (!("Notification" in window)) {
+  //     console.log("❌ Browser ไม่รองรับ Notification API");
+  //     return;
+  //   }
+
+  //   console.log(
+  //     "Notification permission:",
+  //     Notification.permission
+  //   );
+
+  //   if (Notification.permission !== "granted") {
+  //     console.log(
+  //       "❌ ยังไม่ได้รับ permission:",
+  //       Notification.permission
+  //     );
+  //     return;
+  //   }
+
+  //   let count = 0;
+
+  //   const showTestNotification = async () => {
+  //     count++;
+
+  //     try {
+  //       if ("serviceWorker" in navigator) {
+  //         const registration =
+  //           await navigator.serviceWorker.ready;
+
+  //         await registration.showNotification(
+  //           "ทดสอบ Android Notification",
+  //           {
+  //             body: `ทดสอบครั้งที่ ${count} — แจ้งเตือนทุก 15 วินาที`,
+  //             icon: "/icon-192.png",
+  //             badge: "/icon-192.png",
+  //             tag: `android-notification-test-${count}`,
+  //           }
+  //         );
+
+  //         console.log(
+  //           `✅ Notification ครั้งที่ ${count}`
+  //         );
+
+  //         return;
+  //       }
+
+  //       new Notification(
+  //         "ทดสอบ Android Notification",
+  //         {
+  //           body: `ทดสอบครั้งที่ ${count} — แจ้งเตือนทุก 15 วินาที`,
+  //           icon: "/icon-192.png",
+  //         }
+  //       );
+
+  //       console.log(
+  //         `✅ Notification ครั้งที่ ${count}`
+  //       );
+  //     } catch (error) {
+  //       console.error(
+  //         "❌ Notification failed:",
+  //         error
+  //       );
+  //     }
+  //   };
+
+  //   // แจ้งเตือนครั้งแรกทันที
+  //   showTestNotification();
+
+  //   // จากนั้นทุก 15 วินาที
+  //   const interval = window.setInterval(
+  //     showTestNotification,
+  //     15 * 1000
+  //   );
+
+  //   return () => {
+  //     window.clearInterval(interval);
+  //   };
+  // }, []);
+
+  // const requestAttendanceNotificationPermission = async () => {
+  //   if (typeof window === "undefined") return;
+
+  //   if (!("Notification" in window)) {
+  //     alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
+  //     return;
+  //   }
+
+  //   try {
+  //     const permission =
+  //       await Notification.requestPermission();
+
+  //     setNotificationPermission(permission);
+
+  //     if (permission !== "granted") {
+  //       return;
+  //     }
+
+  //     // Register Service Worker
+  //     if ("serviceWorker" in navigator) {
+  //       try {
+  //         const registration =
+  //           await navigator.serviceWorker.register("/sw.js", {
+  //             scope: "/",
+  //           });
+
+  //         console.log(
+  //           "✅ Service Worker registered:",
+  //           registration
+  //         );
+  //       } catch (swError) {
+  //         console.warn(
+  //           "⚠️ Service Worker registration failed:",
+  //           swError
+  //         );
+  //       }
+  //     }
+
+  //     console.log(
+  //       "✅ Notification permission granted"
+  //     );
+  //   } catch (error) {
+  //     console.error(
+  //       "❌ Notification permission error:",
+  //       error
+  //     );
+  //   }
+  // };
+
   /* ---------------- ATTENDANCE NOTIFICATION ---------------- */
 
-  /* ---------------- FCM PUSH NOTIFICATION ---------------- */
+const NOTIFICATION_STORAGE_KEY =
+  "attendance_notification_schedule";
 
-  const setupPushNotification = async () => {
-    if (typeof window === "undefined") {
+const requestAttendanceNotificationPermission = async () => {
+  if (typeof window === "undefined") return;
+
+  if (!("Notification" in window)) {
+    alert("เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน");
+    return;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+
+    if (permission !== "granted") {
       return;
     }
 
-    if (!("Notification" in window)) {
-      console.warn(
-        "Browser ไม่รองรับ Notification"
-      );
-      return;
-    }
-
-    if (!("serviceWorker" in navigator)) {
-      console.warn(
-        "Browser ไม่รองรับ Service Worker"
-      );
-      return;
-    }
+    const schedule = {
+      startTime: userProfile?.startTime ?? null,
+      endTime: userProfile?.endTime ?? null,
+      updatedAt: new Date().toISOString(),
+    };
 
     try {
-      const permission =
-        await Notification.requestPermission();
+      localStorage.setItem(
+        NOTIFICATION_STORAGE_KEY,
+        JSON.stringify(schedule)
+      );
+    } catch (storageError) {
+      console.warn(
+        "⚠️ localStorage not available:",
+        storageError
+      );
+    }
 
-      setNotificationPermission(permission);
+    if ("serviceWorker" in navigator) {
+      try {
+        const registration =
+          await navigator.serviceWorker.register("/sw.js", {
+            scope: "/",
+          });
 
-      if (permission !== "granted") {
         console.log(
-          "ไม่ได้รับอนุญาต Notification"
+          "✅ Service Worker registered:",
+          registration
         );
+      } catch (swError) {
+        console.warn(
+          "⚠️ Service Worker registration failed:",
+          swError
+        );
+      }
+    }
+
+    console.log(
+      "✅ Notification permission granted"
+    );
+  } catch (error) {
+    console.error(
+      "❌ Notification permission error:",
+      error
+    );
+  }
+};
+
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  if (!("Notification" in window)) return;
+
+  setNotificationPermission(
+    Notification.permission
+  );
+
+  const schedule = {
+    startTime: userProfile?.startTime ?? null,
+    endTime: userProfile?.endTime ?? null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  localStorage.setItem(
+    NOTIFICATION_STORAGE_KEY,
+    JSON.stringify(schedule)
+  );
+}, [
+  userProfile?.startTime,
+  userProfile?.endTime,
+]);
+
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  if (!("Notification" in window)) return;
+
+  // เก็บเวลาที่ตรวจสอบครั้งก่อน
+  // เพื่อรองรับกรณี browser/mobile หน่วง timer
+  let lastCheckTime = Date.now() - 30 * 1000;
+
+  const checkAttendanceNotification = async () => {
+    const stored = localStorage.getItem(
+      NOTIFICATION_STORAGE_KEY
+    );
+
+    if (!stored) return;
+
+    try {
+      const schedule = JSON.parse(stored);
+
+      const startTime = schedule?.startTime;
+      const endTime = schedule?.endTime;
+
+      if (!startTime || !endTime) {
         return;
       }
 
-      // ลงทะเบียน Firebase Messaging
-      const messaging =
-        getMessaging(firebaseApp);
+      if (Notification.permission !== "granted") {
+        return;
+      }
 
-      // รับ Firebase Installation ID
-      onRegistered(
-        messaging,
-        async (installationId) => {
-          console.log(
-            "Firebase Installation ID:",
-            installationId
-          );
+      const now = new Date();
+      const nowMs = now.getTime();
+      const previousCheckMs = lastCheckTime;
 
-          try {
-            const response = await fetch(
-              "/api/notifications/register",
+      // อัปเดตเวลาตรวจล่าสุด
+      lastCheckTime = nowMs;
+
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+
+      const [startHour, startMinute] = startTime
+        .split(":")
+        .map(Number);
+
+      const [endHour, endMinute] = endTime
+        .split(":")
+        .map(Number);
+
+      const currentMinutes =
+        currentHour * 60 + currentMinute;
+
+      const startMinutes =
+        startHour * 60 + startMinute;
+
+      const endMinutes =
+        endHour * 60 + endMinute;
+
+      // ใช้วันที่ Local ของเครื่อง
+      const today = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0"),
+      ].join("-");
+
+      // -----------------------------------------
+      // ตรวจสอบการลงเวลาของวันนี้
+      // -----------------------------------------
+
+      const todayRecord = records.find(
+        (r: any) => r.date === today
+      );
+
+      const checkInTime = todayRecord?.checkIn;
+      const checkOutTime = todayRecord?.checkOut;
+
+      const hasCheckedIn =
+        !!checkInTime && checkInTime !== "-";
+
+      const hasCheckedOut =
+        !!checkOutTime && checkOutTime !== "-";
+
+      // -----------------------------------------
+      // ฟังก์ชันแสดง Notification
+      // -----------------------------------------
+
+      const showNotification = async (
+        title: string,
+        body: string,
+        tag: string
+      ) => {
+        try {
+          if ("serviceWorker" in navigator) {
+            const registration =
+              await navigator.serviceWorker.ready;
+
+            await registration.showNotification(
+              title,
               {
-                method: "POST",
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                },
-                body: JSON.stringify({
-                  installationId,
-                }),
+                body,
+                icon: "/icon-192.png",
+                badge: "/icon-192.png",
+                tag,
               }
             );
 
-            const result =
-              await response.json();
-
-            console.log(
-              "Push registration result:",
-              result
-            );
-          } catch (error) {
-            console.error(
-              "ไม่สามารถบันทึก Push registration:",
-              error
-            );
+            return;
           }
+
+          new Notification(title, {
+            body,
+            icon: "/icon-192.png",
+            badge: "/icon-192.png",
+            tag,
+          });
+        } catch (error) {
+          console.warn(
+            "ไม่สามารถแสดง Notification ได้:",
+            error
+          );
+
+          throw error;
         }
-      );
+      };
 
-      // Register FCM
-      await register(messaging, {
-        vapidKey:
-          process.env
-            .NEXT_PUBLIC_FIREBASE_VAPID_KEY,
-      });
+      // -----------------------------------------
+      // ตรวจว่าเวลาที่ต้องแจ้งถูก "ข้ามผ่าน" หรือยัง
+      // -----------------------------------------
 
-      // กรณีหน้าเว็บเปิดอยู่
-      const unsubscribe =
-        onMessage(
-          messaging,
-          (payload) => {
-            console.log(
-              "Foreground FCM:",
-              payload
-            );
+      const isNotificationDue = (
+        targetMinutes: number
+      ) => {
+        const targetTime = new Date(now);
 
-            const title =
-              payload.notification?.title ||
-              "แจ้งเตือน";
-
-            const body =
-              payload.notification?.body || "";
-
-            new Notification(title, {
-              body,
-              icon: "/icon-192.png",
-            });
-          }
+        targetTime.setHours(
+          Math.floor(targetMinutes / 60),
+          targetMinutes % 60,
+          0,
+          0
         );
 
-      console.log(
-        "FCM Push Notification พร้อมใช้งาน"
-      );
+        const targetMs = targetTime.getTime();
 
-      return unsubscribe;
+        /*
+         * ต้องเป็นกรณี:
+         *
+         * รอบก่อนหน้า < เวลาที่ต้องแจ้ง
+         * รอบปัจจุบัน >= เวลาที่ต้องแจ้ง
+         *
+         * และต้องไม่ช้ากว่า 2 นาที
+         * เพื่อไม่ให้เปิดเว็บตอนสายแล้วแจ้งย้อนหลัง
+         */
+        return (
+          previousCheckMs < targetMs &&
+          nowMs >= targetMs &&
+          nowMs - targetMs <= 2 * 60 * 1000
+        );
+      };
+
+      // =========================================
+      // เวลาเข้างาน 3 ครั้ง
+      // =========================================
+
+      // 1. 5 นาทีก่อนเข้างาน
+      const checkInNotify1Minutes =
+        startMinutes - 5;
+
+      const checkInKey1 =
+        `attendance_checkin_notify1_${today}`;
+
+      if (
+        isNotificationDue(checkInNotify1Minutes) &&
+        !hasCheckedIn &&
+        !localStorage.getItem(checkInKey1)
+      ) {
+        await showNotification(
+          "แจ้งเตือนเข้างาน",
+          `อีก 5 นาทีจะถึงเวลาเข้างาน ${startTime.slice(
+            0,
+            5
+          )} อย่าลืมลงชื่อเข้างาน`,
+          "attendance-checkin-5min"
+        );
+
+        localStorage.setItem(
+          checkInKey1,
+          "true"
+        );
+      }
+
+      // 2. ถึงเวลาเข้างาน
+      const checkInKey2 =
+        `attendance_checkin_notify2_${today}`;
+
+      if (
+        isNotificationDue(startMinutes) &&
+        !hasCheckedIn &&
+        !localStorage.getItem(checkInKey2)
+      ) {
+        await showNotification(
+          "แจ้งเตือนเข้างาน",
+          `ถึงเวลาเข้างาน ${startTime.slice(
+            0,
+            5
+          )} แล้ว อย่าลืมลงชื่อเข้างาน`,
+          "attendance-checkin-now"
+        );
+
+        localStorage.setItem(
+          checkInKey2,
+          "true"
+        );
+      }
+
+      // 3. 5 นาทีหลังเวลาเข้างาน
+      const checkInNotify3Minutes =
+        startMinutes + 5;
+
+      const checkInKey3 =
+        `attendance_checkin_notify3_${today}`;
+
+      if (
+        isNotificationDue(checkInNotify3Minutes) &&
+        !hasCheckedIn &&
+        !localStorage.getItem(checkInKey3)
+      ) {
+        await showNotification(
+          "แจ้งเตือนเข้างาน",
+          "ท่านยังไม่ได้ลงชื่อเข้างาน กรุณาลงชื่อเข้างาน",
+          "attendance-checkin-5min-after"
+        );
+
+        localStorage.setItem(
+          checkInKey3,
+          "true"
+        );
+      }
+
+      // =========================================
+      // เวลาออกงาน 4 ครั้ง
+      // =========================================
+
+      // 1. ถึงเวลาออกงาน
+      const checkOutNotify1Minutes =
+        endMinutes;
+
+      const checkOutKey1 =
+        `attendance_checkout_notify1_${today}`;
+
+      if (
+        isNotificationDue(checkOutNotify1Minutes) &&
+        !hasCheckedOut &&
+        !localStorage.getItem(checkOutKey1)
+      ) {
+        await showNotification(
+          "แจ้งเตือนออกงาน",
+          `ถึงเวลาออกงาน ${endTime.slice(
+            0,
+            5
+          )} แล้ว อย่าลืมลงชื่อออกงาน`,
+          "attendance-checkout-now"
+        );
+
+        localStorage.setItem(
+          checkOutKey1,
+          "true"
+        );
+      }
+
+      // 2. 5 นาทีหลังเวลาออกงาน
+      const checkOutNotify2Minutes =
+        endMinutes + 5;
+
+      const checkOutKey2 =
+        `attendance_checkout_notify2_${today}`;
+
+      if (
+        isNotificationDue(checkOutNotify2Minutes) &&
+        !hasCheckedOut &&
+        !localStorage.getItem(checkOutKey2)
+      ) {
+        await showNotification(
+          "แจ้งเตือนออกงาน",
+          "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
+          "attendance-checkout-5min"
+        );
+
+        localStorage.setItem(
+          checkOutKey2,
+          "true"
+        );
+      }
+
+      // 3. 10 นาทีหลังเวลาออกงาน
+      const checkOutNotify3Minutes =
+        endMinutes + 10;
+
+      const checkOutKey3 =
+        `attendance_checkout_notify3_${today}`;
+
+      if (
+        isNotificationDue(checkOutNotify3Minutes) &&
+        !hasCheckedOut &&
+        !localStorage.getItem(checkOutKey3)
+      ) {
+        await showNotification(
+          "แจ้งเตือนออกงาน",
+          "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
+          "attendance-checkout-10min"
+        );
+
+        localStorage.setItem(
+          checkOutKey3,
+          "true"
+        );
+      }
+
+      // 4. 15 นาทีหลังเวลาออกงาน
+      const checkOutNotify4Minutes =
+        endMinutes + 15;
+
+      const checkOutKey4 =
+        `attendance_checkout_notify4_${today}`;
+
+      if (
+        isNotificationDue(checkOutNotify4Minutes) &&
+        !hasCheckedOut &&
+        !localStorage.getItem(checkOutKey4)
+      ) {
+        await showNotification(
+          "แจ้งเตือนออกงาน",
+          "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
+          "attendance-checkout-15min"
+        );
+
+        localStorage.setItem(
+          checkOutKey4,
+          "true"
+        );
+      }
     } catch (error) {
       console.error(
-        "FCM setup error:",
+        "ไม่สามารถตรวจสอบ Notification Schedule ได้",
         error
       );
     }
   };
 
-  useEffect(() => {
-    setupPushNotification();
-  }, []);
+  checkAttendanceNotification().catch((error) => {
+    console.error(
+      "Notification check failed:",
+      error
+    );
+  });
+
+  const interval = window.setInterval(
+    () => {
+      checkAttendanceNotification().catch(
+        (error) => {
+          console.error(
+            "Notification check failed:",
+            error
+          );
+        }
+      );
+    },
+    30 * 1000
+  );
+
+  return () => {
+    window.clearInterval(interval);
+  };
+}, [records]);
 
   /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
 
