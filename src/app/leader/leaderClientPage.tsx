@@ -122,9 +122,6 @@ export default function LeaderClientPage({
   const [notificationPermission, setNotificationPermission] =
     useState<NotificationPermission>("default");
 
-  const NOTIFICATION_STORAGE_KEY =
-    "attendance_notification_schedule";
-
   // --- States ---
   const [records, setRecords] = useState<any[]>(myRecords);
   const [leaves, setLeaves] = useState<any[]>(initialLeaves);
@@ -206,7 +203,12 @@ export default function LeaderClientPage({
     reason: "",
   });
 
-  /* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
+  
+
+  /* ---------------- ATTENDANCE NOTIFICATION ---------------- */
+
+  const NOTIFICATION_STORAGE_KEY =
+    "attendance_notification_schedule";
 
   const requestAttendanceNotificationPermission = async () => {
     if (typeof window === "undefined") return;
@@ -231,27 +233,44 @@ export default function LeaderClientPage({
       };
 
       try {
-        localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(schedule));
+        localStorage.setItem(
+          NOTIFICATION_STORAGE_KEY,
+          JSON.stringify(schedule)
+        );
       } catch (storageError) {
-        console.warn("⚠️ localStorage not available:", storageError);
+        console.warn(
+          "⚠️ localStorage not available:",
+          storageError
+        );
       }
 
-      // 🔧 PATH ที่ถูกต้อง!
       if ("serviceWorker" in navigator) {
         try {
-          const registration = await navigator.serviceWorker.register("/sw.js", {
-            scope: "/",
-          });
-          console.log("✅ Service Worker registered:", registration);
+          const registration =
+            await navigator.serviceWorker.register("/sw.js", {
+              scope: "/",
+            });
+
+          console.log(
+            "✅ Service Worker registered:",
+            registration
+          );
         } catch (swError) {
-          console.warn("⚠️ Service Worker registration failed:", swError);
-          // Mobile อาจจะสำเร็จหรือล้มเหลว ก็ใช้งานได้ปกติ
+          console.warn(
+            "⚠️ Service Worker registration failed:",
+            swError
+          );
         }
       }
 
-      console.log("✅ Notification permission granted");
+      console.log(
+        "✅ Notification permission granted"
+      );
     } catch (error) {
-      console.error("❌ Notification permission error:", error);
+      console.error(
+        "❌ Notification permission error:",
+        error
+      );
     }
   };
 
@@ -260,9 +279,10 @@ export default function LeaderClientPage({
 
     if (!("Notification" in window)) return;
 
-    setNotificationPermission(Notification.permission);
+    setNotificationPermission(
+      Notification.permission
+    );
 
-    // Cache รอบเวลางาน
     const schedule = {
       startTime: userProfile?.startTime ?? null,
       endTime: userProfile?.endTime ?? null,
@@ -282,7 +302,11 @@ export default function LeaderClientPage({
     if (typeof window === "undefined") return;
     if (!("Notification" in window)) return;
 
-    const checkAttendanceNotification = () => {
+    // เก็บเวลาที่ตรวจสอบครั้งก่อน
+    // เพื่อรองรับกรณี browser/mobile หน่วง timer
+    let lastCheckTime = Date.now() - 30 * 1000;
+
+    const checkAttendanceNotification = async () => {
       const stored = localStorage.getItem(
         NOTIFICATION_STORAGE_KEY
       );
@@ -304,6 +328,11 @@ export default function LeaderClientPage({
         }
 
         const now = new Date();
+        const nowMs = now.getTime();
+        const previousCheckMs = lastCheckTime;
+
+        // อัปเดตเวลาตรวจล่าสุด
+        lastCheckTime = nowMs;
 
         const currentHour = now.getHours();
         const currentMinute = now.getMinutes();
@@ -325,7 +354,12 @@ export default function LeaderClientPage({
         const endMinutes =
           endHour * 60 + endMinute;
 
-        const today = now.toISOString().split("T")[0];
+        // ใช้วันที่ Local ของเครื่อง
+        const today = [
+          now.getFullYear(),
+          String(now.getMonth() + 1).padStart(2, "0"),
+          String(now.getDate()).padStart(2, "0"),
+        ].join("-");
 
         // -----------------------------------------
         // ตรวจสอบการลงเวลาของวันนี้
@@ -348,12 +382,29 @@ export default function LeaderClientPage({
         // ฟังก์ชันแสดง Notification
         // -----------------------------------------
 
-        const showNotification = (
+        const showNotification = async (
           title: string,
           body: string,
           tag: string
         ) => {
           try {
+            if ("serviceWorker" in navigator) {
+              const registration =
+                await navigator.serviceWorker.ready;
+
+              await registration.showNotification(
+                title,
+                {
+                  body,
+                  icon: "/icon-192.png",
+                  badge: "/icon-192.png",
+                  tag,
+                }
+              );
+
+              return;
+            }
+
             new Notification(title, {
               body,
               icon: "/icon-192.png",
@@ -365,7 +416,43 @@ export default function LeaderClientPage({
               "ไม่สามารถแสดง Notification ได้:",
               error
             );
+
+            throw error;
           }
+        };
+
+        // -----------------------------------------
+        // ตรวจว่าเวลาที่ต้องแจ้งถูก "ข้ามผ่าน" หรือยัง
+        // -----------------------------------------
+
+        const isNotificationDue = (
+          targetMinutes: number
+        ) => {
+          const targetTime = new Date(now);
+
+          targetTime.setHours(
+            Math.floor(targetMinutes / 60),
+            targetMinutes % 60,
+            0,
+            0
+          );
+
+          const targetMs = targetTime.getTime();
+
+          /*
+           * ต้องเป็นกรณี:
+           *
+           * รอบก่อนหน้า < เวลาที่ต้องแจ้ง
+           * รอบปัจจุบัน >= เวลาที่ต้องแจ้ง
+           *
+           * และต้องไม่ช้ากว่า 2 นาที
+           * เพื่อไม่ให้เปิดเว็บตอนสายแล้วแจ้งย้อนหลัง
+           */
+          return (
+            previousCheckMs < targetMs &&
+            nowMs >= targetMs &&
+            nowMs - targetMs <= 2 * 60 * 1000
+          );
         };
 
         // =========================================
@@ -380,11 +467,11 @@ export default function LeaderClientPage({
           `attendance_checkin_notify1_${today}`;
 
         if (
-          currentMinutes === checkInNotify1Minutes &&
+          isNotificationDue(checkInNotify1Minutes) &&
           !hasCheckedIn &&
           !localStorage.getItem(checkInKey1)
         ) {
-          showNotification(
+          await showNotification(
             "แจ้งเตือนเข้างาน",
             `อีก 5 นาทีจะถึงเวลาเข้างาน ${startTime.slice(
               0,
@@ -393,7 +480,10 @@ export default function LeaderClientPage({
             "attendance-checkin-5min"
           );
 
-          localStorage.setItem(checkInKey1, "true");
+          localStorage.setItem(
+            checkInKey1,
+            "true"
+          );
         }
 
         // 2. ถึงเวลาเข้างาน
@@ -401,11 +491,11 @@ export default function LeaderClientPage({
           `attendance_checkin_notify2_${today}`;
 
         if (
-          currentMinutes === startMinutes &&
+          isNotificationDue(startMinutes) &&
           !hasCheckedIn &&
           !localStorage.getItem(checkInKey2)
         ) {
-          showNotification(
+          await showNotification(
             "แจ้งเตือนเข้างาน",
             `ถึงเวลาเข้างาน ${startTime.slice(
               0,
@@ -414,7 +504,10 @@ export default function LeaderClientPage({
             "attendance-checkin-now"
           );
 
-          localStorage.setItem(checkInKey2, "true");
+          localStorage.setItem(
+            checkInKey2,
+            "true"
+          );
         }
 
         // 3. 5 นาทีหลังเวลาเข้างาน
@@ -425,17 +518,20 @@ export default function LeaderClientPage({
           `attendance_checkin_notify3_${today}`;
 
         if (
-          currentMinutes === checkInNotify3Minutes &&
+          isNotificationDue(checkInNotify3Minutes) &&
           !hasCheckedIn &&
           !localStorage.getItem(checkInKey3)
         ) {
-          showNotification(
+          await showNotification(
             "แจ้งเตือนเข้างาน",
-            `ท่านยังไม่ได้ลงชื่อเข้างาน กรุณาลงชื่อเข้างาน`,
+            "ท่านยังไม่ได้ลงชื่อเข้างาน กรุณาลงชื่อเข้างาน",
             "attendance-checkin-5min-after"
           );
 
-          localStorage.setItem(checkInKey3, "true");
+          localStorage.setItem(
+            checkInKey3,
+            "true"
+          );
         }
 
         // =========================================
@@ -450,11 +546,11 @@ export default function LeaderClientPage({
           `attendance_checkout_notify1_${today}`;
 
         if (
-          currentMinutes === checkOutNotify1Minutes &&
+          isNotificationDue(checkOutNotify1Minutes) &&
           !hasCheckedOut &&
           !localStorage.getItem(checkOutKey1)
         ) {
-          showNotification(
+          await showNotification(
             "แจ้งเตือนออกงาน",
             `ถึงเวลาออกงาน ${endTime.slice(
               0,
@@ -463,7 +559,10 @@ export default function LeaderClientPage({
             "attendance-checkout-now"
           );
 
-          localStorage.setItem(checkOutKey1, "true");
+          localStorage.setItem(
+            checkOutKey1,
+            "true"
+          );
         }
 
         // 2. 5 นาทีหลังเวลาออกงาน
@@ -474,17 +573,20 @@ export default function LeaderClientPage({
           `attendance_checkout_notify2_${today}`;
 
         if (
-          currentMinutes === checkOutNotify2Minutes &&
+          isNotificationDue(checkOutNotify2Minutes) &&
           !hasCheckedOut &&
           !localStorage.getItem(checkOutKey2)
         ) {
-          showNotification(
+          await showNotification(
             "แจ้งเตือนออกงาน",
-            `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
+            "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
             "attendance-checkout-5min"
           );
 
-          localStorage.setItem(checkOutKey2, "true");
+          localStorage.setItem(
+            checkOutKey2,
+            "true"
+          );
         }
 
         // 3. 10 นาทีหลังเวลาออกงาน
@@ -495,17 +597,20 @@ export default function LeaderClientPage({
           `attendance_checkout_notify3_${today}`;
 
         if (
-          currentMinutes === checkOutNotify3Minutes &&
+          isNotificationDue(checkOutNotify3Minutes) &&
           !hasCheckedOut &&
           !localStorage.getItem(checkOutKey3)
         ) {
-          showNotification(
+          await showNotification(
             "แจ้งเตือนออกงาน",
-            `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
+            "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
             "attendance-checkout-10min"
           );
 
-          localStorage.setItem(checkOutKey3, "true");
+          localStorage.setItem(
+            checkOutKey3,
+            "true"
+          );
         }
 
         // 4. 15 นาทีหลังเวลาออกงาน
@@ -516,17 +621,20 @@ export default function LeaderClientPage({
           `attendance_checkout_notify4_${today}`;
 
         if (
-          currentMinutes === checkOutNotify4Minutes &&
+          isNotificationDue(checkOutNotify4Minutes) &&
           !hasCheckedOut &&
           !localStorage.getItem(checkOutKey4)
         ) {
-          showNotification(
+          await showNotification(
             "แจ้งเตือนออกงาน",
-            `ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน`,
+            "ท่านยังไม่ได้ลงชื่อออกงาน กรุณาลงชื่อออกงาน",
             "attendance-checkout-15min"
           );
 
-          localStorage.setItem(checkOutKey4, "true");
+          localStorage.setItem(
+            checkOutKey4,
+            "true"
+          );
         }
       } catch (error) {
         console.error(
@@ -536,10 +644,24 @@ export default function LeaderClientPage({
       }
     };
 
-    checkAttendanceNotification();
+    checkAttendanceNotification().catch((error) => {
+      console.error(
+        "Notification check failed:",
+        error
+      );
+    });
 
     const interval = window.setInterval(
-      checkAttendanceNotification,
+      () => {
+        checkAttendanceNotification().catch(
+          (error) => {
+            console.error(
+              "Notification check failed:",
+              error
+            );
+          }
+        );
+      },
       30 * 1000
     );
 
@@ -547,6 +669,10 @@ export default function LeaderClientPage({
       window.clearInterval(interval);
     };
   }, [records]);
+
+
+/* ---------------- VALIDATION & CALCULATION LOGIC ---------------- */
+
 
   const calculateLeaveDays = (start: string, end: string): number => {
     if (!start || !end) return 0;
