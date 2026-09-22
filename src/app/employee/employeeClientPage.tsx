@@ -6,6 +6,7 @@ import { logoutAction } from "@/server/auth";
 import {
   getMessaging,
   getToken,
+  onMessage,
 } from "firebase/messaging";
 
 import { firebaseApp } from "@/lib/firebase";
