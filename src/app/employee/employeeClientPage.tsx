@@ -168,16 +168,18 @@ export default function EmployeeClientPage({
 }: Props) {
   const router = useRouter();
 
-  const [notificationPermission, setNotificationPermission] =
-    useState<NotificationPermission>("default");
-
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
   const [records, setRecords] = useState<any[]>(initialRecords);
   const [leaves, setLeaves] = useState<any[]>(initialLeaves);
-
-  // ✅ ต้องประกาศ State นี้เพื่อให้ UI ที่บรรทัด 1088 ใช้งานได้ และไม่ขึ้น undefined
   const [overtimeRequests, setOvertimeRequests] = useState<any[]>(initialOT);
-
   const [isProcessing, setIsProcessing] = useState(false);
+  const [leavePage, setLeavePage] = useState(1);
+  const [otPage, setOtPage] = useState(1);
+  const itemsPerPage = 2;
+  const leaveTotalPages = Math.ceil(leaves.length / itemsPerPage);
+  const otTotalPages = Math.ceil(overtimeRequests.length / itemsPerPage);
+  const currentLeaves = leaves.slice((leavePage - 1) * itemsPerPage, leavePage * itemsPerPage);
+  const currentOvertimeRequests = overtimeRequests.slice((otPage - 1) * itemsPerPage, otPage * itemsPerPage);
 
   // ✅ Sync ข้อมูลจาก Props เมื่อมีการสั่ง router.refresh()
   useEffect(() => {
@@ -1409,7 +1411,7 @@ export default function EmployeeClientPage({
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* ✅ นำ .slice().reverse() ออกเพื่อให้เรียงลำดับตามที่ API ส่งมา (createdAt desc) */}
-                    {leaves.map((l, i) => (
+                    {currentLeaves.map((l, i) => (
                       <div
                         key={i}
                         className="p-8 border border-gray-100 rounded-[2rem] bg-white hover:shadow-2xl hover:shadow-indigo-500/10 transition-all relative overflow-hidden group"
@@ -1489,6 +1491,43 @@ export default function EmployeeClientPage({
                   </div>
                 )}
               </div>
+              {leaveTotalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 mt-8">
+                  <button
+                    type="button"
+                    disabled={leavePage === 1}
+                    onClick={() => setLeavePage((prev) => prev - 1)}
+                    className="w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-600 font-black disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+                  >
+                    ◀
+                  </button>
+
+                  <div className="flex gap-1">
+                    {Array.from({ length: leaveTotalPages }, (_, i) => (
+                      <button
+                        key={i + 1}
+                        type="button"
+                        onClick={() => setLeavePage(i + 1)}
+                        className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${leavePage === i + 1
+                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
+                          : "bg-white text-gray-400 border border-gray-100 hover:border-indigo-200"
+                          }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={leavePage === leaveTotalPages}
+                    onClick={() => setLeavePage((prev) => prev + 1)}
+                    className="w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-600 font-black disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+                  >
+                    ▶
+                  </button>
+                </div>
+              )}
 
               {/* {ตารางคำขอOT} */}
 
@@ -1509,7 +1548,7 @@ export default function EmployeeClientPage({
                 ) : (
                   /* Grid List */
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {overtimeRequests.map((ot, i) => (
+                    {currentOvertimeRequests.map((ot, i) => (
                       <div
                         key={i}
                         className="p-8 border border-gray-100 rounded-[2rem] bg-white hover:shadow-2xl hover:shadow-indigo-500/10 transition-all relative overflow-hidden group"
@@ -1590,6 +1629,43 @@ export default function EmployeeClientPage({
                   </div>
                 )}
               </div>
+              {otTotalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 mt-8">
+                  <button
+                    type="button"
+                    disabled={otPage === 1}
+                    onClick={() => setOtPage((prev) => prev - 1)}
+                    className="w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-600 font-black disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+                  >
+                    ◀
+                  </button>
+
+                  <div className="flex gap-1">
+                    {Array.from({ length: otTotalPages }, (_, i) => (
+                      <button
+                        key={i + 1}
+                        type="button"
+                        onClick={() => setOtPage(i + 1)}
+                        className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${otPage === i + 1
+                            ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
+                            : "bg-white text-gray-400 border border-gray-100 hover:border-indigo-200"
+                          }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={otPage === otTotalPages}
+                    onClick={() => setOtPage((prev) => prev + 1)}
+                    className="w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-600 font-black disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+                  >
+                    ▶
+                  </button>
+                </div>
+              )}
             </>
           )}
 

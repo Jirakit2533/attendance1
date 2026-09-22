@@ -113,8 +113,6 @@ export default async function Page() {
     .where(eq(leaveTable.user_id, user.id))
     /* ✅ แก้ไข: ใช้ createdAt เรียงลำดับรายการที่เพิ่งสร้างล่าสุดไว้บนสุด (แม่นยำกว่าใช้วันที่ลา) */
     .orderBy(desc(leaveTable.createdAt))
-    .limit(2); // 🔥 จำกัดจำนวนคำขอลางานให้เหลือเพียง 2 รายการล่าสุดตามที่สั่ง
-
   // 🔍 3. ดึงข้อมูล OT พร้อม Join หาชื่อผู้อนุมัติ
   const otApprover = alias(usersTable, "otApprover");
   const dbOT = await db
@@ -138,7 +136,6 @@ export default async function Page() {
     )
     .where(eq(overtimeRequestsTable.userId, user.id))
     .orderBy(desc(overtimeRequestsTable.createdAt))
-    .limit(10); // 🔥 ดึงประวัติ OT 10 รายการล่าสุด
 
   // 4. Mapping ข้อมูล (เพิ่มฟิลด์สถานะเพื่อให้ตรงกับ UI)
   const initialRecords = (dbRecords || []).map((r) => ({
