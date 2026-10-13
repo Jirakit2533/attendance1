@@ -210,88 +210,105 @@ export async function GET(request: Request) {
       const executedRequestIds: string[] = [];
 
       // -------------------------------------------------------
-      // 8. Loop OT ทุก attendanceId ของ User + Date
+      // 8. รวม OT ที่ทำจริงทั้งหมดของ User + Date
       // -------------------------------------------------------
-      for (const rawOT of rawOTs) {
-        console.log("PROCESS OT:", {
-          id: rawOT.id,
-          attendanceId: rawOT.attendanceId,
-          userId: rawOT.userId,
-          date: rawOT.date,
+      const totalRawMinutes = rawOTs.reduce(
+        (sum, ot) =>
+          sum +
+          Number(ot.overtimeBefore || 0) +
+          Number(ot.overtimeAfter || 0),
+        0
+      );
+
+      let remainingTotalOTMinutes = totalRawMinutes;
+
+      console.log("TOTAL OT:", {
+        groupKey,
+        otCount: rawOTs.length,
+        totalRawMinutes,
+      });
+
+      // -------------------------------------------------------
+      // 9. ตัด Request ตามลำดับ
+      // -------------------------------------------------------
+      for (const requestItem of requestPool) {
+        if (remainingTotalOTMinutes <= 0) {
+          break;
+        }
+
+        if (requestItem.remainingMinutes <= 0) {
+          continue;
+        }
+
+        const allocatedMinutes = Math.min(
+          remainingTotalOTMinutes,
+          requestItem.remainingMinutes
+        );
+
+        requestItem.remainingMinutes -= allocatedMinutes;
+        remainingTotalOTMinutes -= allocatedMinutes;
+
+        console.log("REQUEST ALLOCATION:", {
+          requestId: requestItem.request.id,
+          requestedMinutes:
+            Number(requestItem.request.overtimeByRequest || 0),
+          allocatedMinutes,
+          remainingRequestMinutes:
+            requestItem.remainingMinutes,
+          remainingTotalOTMinutes,
         });
 
-        const totalRawMinutes =
+        // Request ใช้ครบจริงเท่านั้นจึง executed
+        if (requestItem.remainingMinutes === 0) {
+          executedRequestIds.push(
+            requestItem.request.id
+          );
+        }
+      }
+
+      console.log("REQUEST ALLOCATION COMPLETE:", {
+        groupKey,
+        totalRawMinutes,
+        allocatedMinutes:
+          totalRawMinutes - remainingTotalOTMinutes,
+        remainingOTMinutes:
+          remainingTotalOTMinutes,
+      });
+
+      // -------------------------------------------------------
+      // 10. กระจายยอด OT ที่อนุมัติกลับไปยัง OT แต่ละรายการ
+      // -------------------------------------------------------
+      let remainingApprovedMinutes =
+        totalRawMinutes - remainingTotalOTMinutes;
+
+      for (const rawOT of rawOTs) {
+        const rawMinutes =
           Number(rawOT.overtimeBefore || 0) +
           Number(rawOT.overtimeAfter || 0);
 
-        let remainingOTMinutes =
-          totalRawMinutes;
-
-        let approvedMinutes = 0;
-
-        // -----------------------------------------------------
-        // 9. Allocate Request ให้ OT ตัวนี้
-        // -----------------------------------------------------
-        for (const requestItem of requestPool) {
-          if (
-            remainingOTMinutes <= 0 ||
-            requestItem.remainingMinutes <= 0
-          ) {
-            continue;
-          }
-
-          const allocatedMinutes = Math.min(
-            remainingOTMinutes,
-            requestItem.remainingMinutes
-          );
-
-          approvedMinutes +=
-            allocatedMinutes;
-
-          remainingOTMinutes -=
-            allocatedMinutes;
-
-          requestItem.remainingMinutes -=
-            allocatedMinutes;
-
-          // Request ตัวนี้ถูกใช้หมด
-          if (
-            requestItem.remainingMinutes === 0
-          ) {
-            executedRequestIds.push(
-              requestItem.request.id
-            );
-          }
-        }
+        const approvedMinutes = Math.min(
+          rawMinutes,
+          remainingApprovedMinutes
+        );
 
         console.log("OT CALCULATION:", {
           id: rawOT.id,
           attendanceId: rawOT.attendanceId,
-          rawMinutes: totalRawMinutes,
+          rawMinutes,
           approvedMinutes,
-          remainingOTMinutes,
+          remainingApprovedMinutes,
         });
 
-        // -----------------------------------------------------
-        // 10. Update OT ตัวนี้
-        // -----------------------------------------------------
         const [updated] = await db
           .update(overtimeTable)
           .set({
-            overtimeApproved:
-              approvedMinutes,
+            overtimeApproved: approvedMinutes,
             status: "approved",
           })
           .where(
             and(
-              eq(
-                overtimeTable.id,
-                rawOT.id
-              ),
-              eq(
-                overtimeTable.status,
-                "pending"
-              )
+              eq(overtimeTable.id, rawOT.id),
+              eq(overtimeTable.status, "pending")
             )
           )
           .returning();
@@ -306,13 +323,13 @@ export async function GET(request: Request) {
           continue;
         }
 
+        remainingApprovedMinutes -= approvedMinutes;
         autoExecutedCount++;
 
         console.log(
-          `EXECUTED: OT ID ${rawOT.id} | Attendance ${rawOT.attendanceId} | Raw ${totalRawMinutes} min | Approved ${approvedMinutes} min`
+          `EXECUTED: OT ID ${rawOT.id} | Attendance ${rawOT.attendanceId} | Raw ${rawMinutes} min | Approved ${approvedMinutes} min`
         );
       }
-
       // -------------------------------------------------------
       // 11. ปิด Request ที่ถูกใช้จนหมด
       // -------------------------------------------------------

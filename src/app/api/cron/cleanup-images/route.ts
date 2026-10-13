@@ -4,11 +4,20 @@ import { NextResponse } from "next/server";
 import { db } from "../../../../db/db"; 
 import { attendanceTable, automationLogTable } from "../../../../db/schema"; // ปรับ Path ตามโครงสร้างโปรเจกต์ของคุณ
 import { UTApi } from "uploadthing/server";
-import { lt, and, or, isNotNull } from "drizzle-orm";
+import { lt, and, or, isNotNull, inArray } from "drizzle-orm";
 
 const utapi = new UTApi({
   token: process.env.UPLOADTHING_TOKEN,
 });
+
+// ฟังก์ชันช่วยแบ่งข้อมูลเป็นชุดย่อย (Chunking) เพื่อป้องกันข้อจำกัดเรื่องขนาด Request และ Timeout
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const result = [];
+  for (let i = 0; i < array.length; i += size) {
+    result.push(array.slice(i, i + size));
+  }
+  return result;
+}
 
 export async function GET(req: Request) {
   const startTime = new Date();
@@ -16,12 +25,13 @@ export async function GET(req: Request) {
   const jobName = "cleanup-attendance-images";
 
   let readCount = 0;
-  let deletedCount = 0;
+  let deletedFileCount = 0;
+  let updatedRecordCount = 0;
   let status = "success";
   let errorDetails: any = null;
 
   try {
-    // 1. ตรวจสอบความปลอดภัย (Security Check สำหรับ Cron Job เช่น GitHub Actions)
+    // 1. ตรวจสอบความปลอดภัย
     const authHeader = req.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
@@ -64,32 +74,40 @@ export async function GET(req: Request) {
         attendanceIdsToUpdate.push(record.id);
       }
 
-      // 5. สั่งลบไฟล์ออกจาก UploadThing (รองรับการลบแบบ Array ทีละหลายไฟล์)
+      // 5. สั่งลบไฟล์ออกจาก UploadThing (แบ่งลบทีละ 500 ไฟล์ ป้องกัน API Rate Limit/Timeout)
       if (fileIdsToDelete.length > 0) {
-        // UploadThing ลบได้สูงสุดครั้งละหลายไฟล์ (ตามขีดจำกัด SDK หรือตัดแบ่งย่อยถ้ามีจำนวนมาก)
-        await utapi.deleteFiles(fileIdsToDelete);
-        deletedCount = fileIdsToDelete.length;
+        const fileChunks = chunkArray(fileIdsToDelete, 500);
+        for (const chunk of fileChunks) {
+          const utResponse = await utapi.deleteFiles(chunk);
+          if (utResponse) {
+            deletedFileCount += chunk.length;
+          }
+        }
       }
 
-      // 6. เคลียร์ค่ารูปภาพใน Database เพื่อไม่ให้ลิงก์ที่ถูกลบไปแล้วแสดงผลซากรูปภาพบนเว็บ
-      // (อัปเดตให้ imageIn / imageOut และ Key เป็นค่าว่างหรือ null)
-      for (const id of attendanceIdsToUpdate) {
-        await db
-          .update(attendanceTable)
-          .set({
-            imageIn: "",
-            imageInId: null,
-            imageOut: null,
-            imageOutId: null,
-          })
-          .where(lt(attendanceTable.id, id)); // หรือใช้ eq(attendanceTable.id, id)
+      // 6. เคลียร์ค่ารูปภาพใน Database (Batch Update ทีเดียว ป้องกัน N+1 Query และ Database Overload)
+      if (attendanceIdsToUpdate.length > 0) {
+        const dbChunks = chunkArray(attendanceIdsToUpdate, 500);
+        for (const chunk of dbChunks) {
+          await db
+            .update(attendanceTable)
+            .set({
+              imageIn: "", // หรือ null ตามโครงสร้าง Schema เดิมของคุณ
+              imageInId: null,
+              imageOut: null,
+              imageOutId: null,
+            })
+            .where(inArray(attendanceTable.id, chunk)); // ใช้ inArray แทนการวนลูปทีละแถว
+          
+          updatedRecordCount += chunk.length;
+        }
       }
     }
 
     const endTime = new Date();
     const durationMs = endTime.getTime() - startTime.getTime();
 
-    // 7. บันทึก Log ลง automation_logs สำเร็จ
+    // 7. บันทึก Log สำเร็จ
     await db.insert(automationLogTable).values({
       jobName,
       date: currentDateStr,
@@ -97,18 +115,21 @@ export async function GET(req: Request) {
       endAt: endTime,
       durationMs,
       readCount,
-      changeCount: deletedCount,
-      executedCount: deletedCount,
-      deletedCount,
+      changeCount: updatedRecordCount,
+      executedCount: deletedFileCount,
+      deletedCount: deletedFileCount,
       status: "success",
-      details: { message: `Successfully deleted ${deletedCount} files from ${readCount} attendance records.` },
+      details: { 
+        message: `Successfully deleted ${deletedFileCount} files from ${updatedRecordCount} attendance records.` 
+      },
     });
 
     return NextResponse.json({
       success: true,
       message: "Cleanup completed successfully",
       readCount,
-      deletedCount,
+      deletedFileCount,
+      updatedRecordCount,
     });
 
   } catch (error: any) {
