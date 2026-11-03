@@ -1811,6 +1811,36 @@ export default function AdminClientPage({
     return `${diffDays} วัน`;
   };
 
+  const getPageNumbers = () => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    if (currentPage <= 3) {
+      return [1, 2, 3, "...", totalPages];
+    }
+
+    if (currentPage >= totalPages - 2) {
+      return [
+        1,
+        "...",
+        totalPages - 2,
+        totalPages - 1,
+        totalPages,
+      ];
+    }
+
+    return [
+      1,
+      "...",
+      currentPage - 1,
+      currentPage,
+      currentPage + 1,
+      "...",
+      totalPages,
+    ];
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 overflow-x-hidden">
       {/* --- 💎 REFINED PROFESSIONAL ADMIN HEADER (STATIC - อยู่กับที่ ไม่เลื่อนตาม) --- */}
@@ -3472,7 +3502,9 @@ export default function AdminClientPage({
                     {/* --- Pagination Controls --- */}
                     {totalPages > 1 && (
                       <div className="flex justify-center items-center gap-2 mt-8 mb-12">
+                        {/* Previous */}
                         <button
+                          type="button"
                           disabled={currentPage === 1}
                           onClick={() => setCurrentPage((prev) => prev - 1)}
                           className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
@@ -3480,22 +3512,54 @@ export default function AdminClientPage({
                           {"<"}
                         </button>
 
+                        {/* Page Numbers */}
                         <div className="flex gap-1">
-                          {[...Array(totalPages)].map((_, i) => (
-                            <button
-                              key={i + 1}
-                              onClick={() => setCurrentPage(i + 1)}
-                              className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${currentPage === i + 1
-                                ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
-                                : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
-                                }`}
-                            >
-                              {i + 1}
-                            </button>
-                          ))}
+                          {(() => {
+                            const pages = [];
+                            const range = 1;
+
+                            for (let i = 1; i <= totalPages; i++) {
+                              if (
+                                i === 1 ||
+                                i === totalPages ||
+                                (i >= currentPage - range &&
+                                  i <= currentPage + range)
+                              ) {
+                                pages.push(
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => setCurrentPage(i)}
+                                    className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${currentPage === i
+                                      ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
+                                      : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                                      }`}
+                                  >
+                                    {i}
+                                  </button>
+                                );
+                              } else if (
+                                i === currentPage - range - 1 ||
+                                i === currentPage + range + 1
+                              ) {
+                                pages.push(
+                                  <span
+                                    key={`ellipsis-${i}`}
+                                    className="w-10 h-10 flex items-center justify-center text-slate-400 font-bold"
+                                  >
+                                    ...
+                                  </span>
+                                );
+                              }
+                            }
+
+                            return pages;
+                          })()}
                         </div>
 
+                        {/* Next */}
                         <button
+                          type="button"
                           disabled={currentPage === totalPages}
                           onClick={() => setCurrentPage((prev) => prev + 1)}
                           className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
@@ -3529,21 +3593,24 @@ export default function AdminClientPage({
                   value={searchOT}
                   onChange={(e) => {
                     setSearchOT(e.target.value);
-                    setCurrentPage(1); // Reset หน้าเมื่อมีการค้นหา
+                    setCurrentPage(1);
                   }}
                 />
               </div>
 
-              {/* Logic สำหรับ Pagination */}
+              {/* --- Pagination Logic: 5 Items Per Page --- */}
               {(() => {
+                const itemsPerPage = 5;
+                const totalPages = Math.ceil(
+                  filteredOvertimeRequests.length / itemsPerPage
+                );
+
                 const indexOfLastItem = currentPage * itemsPerPage;
                 const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-                const currentItems = filteredLeaves.slice(
+
+                const currentItems = filteredOvertimeRequests.slice(
                   indexOfFirstItem,
                   indexOfLastItem
-                );
-                const totalPages = Math.ceil(
-                  filteredLeaves.length / itemsPerPage
                 );
 
                 return (
@@ -3554,48 +3621,27 @@ export default function AdminClientPage({
                         <table className="min-w-[1400px] w-full text-sm border-separate border-spacing-0">
                           <thead className="sticky top-0 z-20 bg-white">
                             <tr className="text-gray-400 font-bold uppercase text-[11px] tracking-widest border-b border-gray-100">
-                              <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">
-                                รูป
-                              </th>
-                              <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                                พนักงาน
-                              </th>
-                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                                วันที่ขอ OT
-                              </th>
-                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                                วันที่ทำ OT
-                              </th>
-                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                                เวลาที่ขอ
-                              </th>
-                              <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
-                                เหตุผล
-                              </th>
-                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                                สถานะคำขอ
-                              </th>
-                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                                จัดการคำขอ
-                              </th>
-                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">
-                                หมายเหตุ
-                              </th>
+                              <th className="py-5 px-6 text-left w-20 bg-white border-b border-gray-100">รูป</th>
+                              <th className="py-5 px-6 text-left bg-white border-b border-gray-100">พนักงาน</th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">วันที่ขอ OT</th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">วันที่ทำ OT</th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">เวลาที่ขอ</th>
+                              <th className="py-5 px-6 text-left bg-white border-b border-gray-100">เหตุผล</th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">สถานะคำขอ</th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">จัดการคำขอ</th>
+                              <th className="py-5 px-6 text-center bg-white border-b border-gray-100">หมายเหตุ</th>
                             </tr>
                           </thead>
+
                           <tbody className="divide-y divide-gray-50">
-                            {overtimeRequest.length > 0 ? (
-                              filteredOvertimeRequests.map((l) => {
-                                // ✅ ใช้ฟังก์ชัน getEffectiveRemark ที่เราเขียนไว้ใน State
-                                const currentRemark =
-                                  otRemarks[l.id] ?? l.remark ?? "";
+                            {currentItems.length > 0 ? (
+                              currentItems.map((l) => {
+                                const currentRemark = otRemarks[l.id] ?? l.remark ?? "";
 
                                 return (
-                                  <tr
-                                    key={l.id}
-                                    className="group hover:bg-blue-50/40 transition-colors"
-                                  >
-                                    {/* 1. รูปพนักงาน */}
+                                  <tr key={l.id} className="group hover:bg-blue-50/40 transition-colors">
+
+                                    {/* รูปพนักงาน */}
                                     <td className="py-4 px-6">
                                       <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100">
                                         <Image
@@ -3612,7 +3658,7 @@ export default function AdminClientPage({
                                       </div>
                                     </td>
 
-                                    {/* 2. ชื่อพนักงาน */}
+                                    {/* ชื่อพนักงาน */}
                                     <td className="py-4 px-6">
                                       <div className="font-black text-gray-800 text-base">
                                         {l.employeeName || "ไม่ระบุชื่อ"}
@@ -3622,7 +3668,7 @@ export default function AdminClientPage({
                                       </div>
                                     </td>
 
-                                    {/* 3. วันที่ขอ OT */}
+                                    {/* วันที่ขอ OT */}
                                     <td className="py-4 px-6 text-center text-gray-800 font-bold text-sm">
                                       {l.requestDate
                                         ? new Date(l.requestDate).toLocaleDateString("th-TH", {
@@ -3633,7 +3679,7 @@ export default function AdminClientPage({
                                         : "-"}
                                     </td>
 
-                                    {/* 4. วันที่ทำ OT */}
+                                    {/* วันที่ทำ OT */}
                                     <td className="py-4 px-6 text-center text-gray-800 font-bold text-sm">
                                       {l.workingDate
                                         ? new Date(l.workingDate).toLocaleDateString("th-TH", {
@@ -3644,7 +3690,7 @@ export default function AdminClientPage({
                                         : "-"}
                                     </td>
 
-                                    {/* 5. เวลาที่ขอ */}
+                                    {/* เวลาที่ขอ */}
                                     <td className="py-4 px-6 text-center">
                                       <div className="text-gray-800 font-bold text-xs">
                                         {l.timeStart?.slice(0, 5) || "00:00"} -{" "}
@@ -3657,13 +3703,10 @@ export default function AdminClientPage({
                                           ? (() => {
                                             const [startH, startM] = l.timeStart.split(":").map(Number);
                                             const [endH, endM] = l.timeEnd.split(":").map(Number);
+                                            let minutes =
+                                              endH * 60 + endM - (startH * 60 + startM);
 
-                                            let minutes = endH * 60 + endM - (startH * 60 + startM);
-
-                                            // กรณีข้ามเที่ยงคืน
-                                            if (minutes < 0) {
-                                              minutes += 24 * 60;
-                                            }
+                                            if (minutes < 0) minutes += 24 * 60;
 
                                             return minutes;
                                           })()
@@ -3672,21 +3715,21 @@ export default function AdminClientPage({
                                       </div>
                                     </td>
 
-                                    {/* 6. เหตุผล */}
+                                    {/* เหตุผล */}
                                     <td className="py-4 px-6 text-gray-600 italic text-xs max-w-[200px] truncate">
                                       "{l.reason || "ไม่มีระบุเหตุผล"}"
                                     </td>
 
-                                    {/* 7. สถานะ */}
+                                    {/* สถานะ */}
                                     <td className="py-4 px-6 text-center">
                                       <span
                                         className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${l.status === "pending"
-                                          ? "bg-orange-100 text-orange-600 border-orange-200"
-                                          : l.status === "approved"
-                                            ? "bg-emerald-100 text-emerald-600 border-emerald-200"
-                                            : l.status === "executed"
-                                              ? "bg-blue-100 text-blue-600 border-blue-200"
-                                              : "bg-red-100 text-red-600 border-red-200"
+                                            ? "bg-orange-100 text-orange-600 border-orange-200"
+                                            : l.status === "approved"
+                                              ? "bg-emerald-100 text-emerald-600 border-emerald-200"
+                                              : l.status === "executed"
+                                                ? "bg-blue-100 text-blue-600 border-blue-200"
+                                                : "bg-red-100 text-red-600 border-red-200"
                                           }`}
                                       >
                                         {l.status === "pending"
@@ -3699,25 +3742,21 @@ export default function AdminClientPage({
                                       </span>
                                     </td>
 
-                                    {/* 8. ปุ่มจัดการ */}
+                                    {/* จัดการคำขอ */}
                                     <td className="py-4 px-6">
                                       <div className="flex justify-center gap-2">
                                         {l.status === "pending" ? (
                                           <>
                                             <button
                                               disabled={isProcessing}
-                                              onClick={() =>
-                                                handleApproveOT(l.id)
-                                              }
+                                              onClick={() => handleApproveOT(l.id)}
                                               className="disabled:opacity-50 bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-md"
                                             >
                                               อนุมัติ
                                             </button>
                                             <button
                                               disabled={isProcessing}
-                                              onClick={() =>
-                                                handleRejectOT(l.id)
-                                              }
+                                              onClick={() => handleRejectOT(l.id)}
                                               className="disabled:opacity-50 bg-white border border-red-200 text-red-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-50"
                                             >
                                               ปฏิเสธ
@@ -3739,27 +3778,21 @@ export default function AdminClientPage({
                                       </div>
                                     </td>
 
-                                    {/* 9. ช่องหมายเหตุ */}
+                                    {/* หมายเหตุ */}
                                     <td className="py-4 px-6">
                                       <div className="relative flex items-center gap-2 min-w-[200px]">
                                         <input
                                           type="text"
                                           placeholder="ระบุหมายเหตุ..."
                                           className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${l.status !== "pending"
-                                            ? "bg-slate-50 text-slate-500 border-slate-100"
-                                            : "bg-white border-slate-200 focus:border-blue-400"
+                                              ? "bg-slate-50 text-slate-500 border-slate-100"
+                                              : "bg-white border-slate-200 focus:border-blue-400"
                                             }`}
                                           value={currentRemark}
                                           onChange={(e) =>
-                                            handleOTRemarkChange(
-                                              l.id,
-                                              e.target.value
-                                            )
+                                            handleOTRemarkChange(l.id, e.target.value)
                                           }
-                                          readOnly={
-                                            l.status !== "pending" ||
-                                            isProcessing
-                                          }
+                                          readOnly={l.status !== "pending" || isProcessing}
                                         />
                                       </div>
                                     </td>
@@ -3768,10 +3801,7 @@ export default function AdminClientPage({
                               })
                             ) : (
                               <tr>
-                                <td
-                                  colSpan={9}
-                                  className="py-24 text-center text-slate-400 italic font-black"
-                                >
+                                <td colSpan={9} className="py-24 text-center text-slate-400 italic font-black">
                                   ไม่พบคำขอ OT ในขณะนี้...
                                 </td>
                               </tr>
@@ -3783,10 +3813,9 @@ export default function AdminClientPage({
 
                     {/* --- Mobile Card View --- */}
                     <div className="lg:hidden grid grid-cols-1 gap-4 px-4 pb-20">
-                      {overtimeRequest.length > 0 ? (
-                        filteredOvertimeRequests.map((l) => {
-                          const currentRemark =
-                            otRemarks[l.id] ?? l.remark ?? "";
+                      {currentItems.length > 0 ? (
+                        currentItems.map((l) => {
+                          const currentRemark = otRemarks[l.id] ?? l.remark ?? "";
 
                           return (
                             <div
@@ -3796,12 +3825,12 @@ export default function AdminClientPage({
                               {/* Status Badge */}
                               <div
                                 className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${l.status === "pending"
-                                  ? "bg-orange-100 text-orange-600"
-                                  : l.status === "approved"
-                                    ? "bg-emerald-100 text-emerald-600"
-                                    : l.status === "executed"
-                                      ? "bg-blue-100 text-blue-600"
-                                      : "bg-red-100 text-red-600"
+                                    ? "bg-orange-100 text-orange-600"
+                                    : l.status === "approved"
+                                      ? "bg-emerald-100 text-emerald-600"
+                                      : l.status === "executed"
+                                        ? "bg-blue-100 text-blue-600"
+                                        : "bg-red-100 text-red-600"
                                   }`}
                               >
                                 {l.status === "pending"
@@ -3817,14 +3846,13 @@ export default function AdminClientPage({
                               <div className="absolute top-4 right-4">
                                 <button
                                   onClick={() =>
-                                    setViewRemarkId(
-                                      viewRemarkId === l.id ? null : l.id
-                                    )
+                                    setViewRemarkId(viewRemarkId === l.id ? null : l.id)
                                   }
                                   className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-50 transition-colors text-slate-400 text-xl"
                                 >
                                   ⋮
                                 </button>
+
                                 {viewRemarkId === l.id && (
                                   <>
                                     <div
@@ -3835,21 +3863,17 @@ export default function AdminClientPage({
                                       <p className="text-[10px] font-black text-slate-400 uppercase mb-3 px-1 text-left">
                                         จัดการคำขอ OT / หมายเหตุ
                                       </p>
+
                                       <textarea
                                         placeholder="ระบุหมายเหตุที่นี่..."
                                         className="w-full h-24 p-3 rounded-2xl border border-slate-100 bg-slate-50 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none text-left"
                                         value={currentRemark}
                                         onChange={(e) =>
-                                          handleOTRemarkChange(
-                                            l.id,
-                                            e.target.value
-                                          )
+                                          handleOTRemarkChange(l.id, e.target.value)
                                         }
-                                        readOnly={
-                                          isProcessing ||
-                                          l.status === "executed"
-                                        }
+                                        readOnly={isProcessing || l.status === "executed"}
                                       />
+
                                       {l.status !== "executed" ? (
                                         <div className="grid grid-cols-2 gap-2">
                                           <button
@@ -3890,7 +3914,7 @@ export default function AdminClientPage({
                                 )}
                               </div>
 
-                              {/* Card Content - Profile & Info */}
+                              {/* Profile & Info */}
                               <div className="flex items-start gap-4 mb-4 mt-2">
                                 <div className="w-14 h-14 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100 shrink-0">
                                   <Image
@@ -3905,6 +3929,7 @@ export default function AdminClientPage({
                                     className="object-cover"
                                   />
                                 </div>
+
                                 <div className="flex-1 pr-6">
                                   <h3 className="font-black text-gray-800 text-base leading-tight">
                                     {l.employeeName || "ไม่ระบุชื่อ"}
@@ -3914,29 +3939,24 @@ export default function AdminClientPage({
                                   </p>
 
                                   <div className="grid grid-cols-2 gap-2 text-xs">
-                                    {/* เพิ่มส่วน วันที่ขอ OT */}
                                     <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
                                       <span className="block text-[10px] text-slate-400 font-bold mb-0.5">
                                         วันที่ขอ OT
                                       </span>
                                       <span className="font-bold text-gray-700">
                                         {l.requestDate
-                                          ? new Date(
-                                            l.requestDate
-                                          ).toLocaleDateString("th-TH")
+                                          ? new Date(l.requestDate).toLocaleDateString("th-TH")
                                           : "-"}
                                       </span>
                                     </div>
-                                    {/* ส่วน วันที่ทำ OT */}
+
                                     <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
                                       <span className="block text-[10px] text-slate-400 font-bold mb-0.5">
                                         วันที่ทำ OT
                                       </span>
                                       <span className="font-bold text-gray-700">
                                         {l.workingDate
-                                          ? new Date(
-                                            l.workingDate
-                                          ).toLocaleDateString("th-TH", {
+                                          ? new Date(l.workingDate).toLocaleDateString("th-TH", {
                                             day: "numeric",
                                             month: "short",
                                             year: "numeric",
@@ -3986,7 +4006,10 @@ export default function AdminClientPage({
                     {/* --- Pagination Controls --- */}
                     {totalPages > 1 && (
                       <div className="flex justify-center items-center gap-2 mt-8 mb-12">
+
+                        {/* Previous */}
                         <button
+                          type="button"
                           disabled={currentPage === 1}
                           onClick={() => setCurrentPage((prev) => prev - 1)}
                           className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
@@ -3994,22 +4017,55 @@ export default function AdminClientPage({
                           {"<"}
                         </button>
 
+                        {/* Page Numbers */}
                         <div className="flex gap-1">
-                          {[...Array(totalPages)].map((_, i) => (
-                            <button
-                              key={i + 1}
-                              onClick={() => setCurrentPage(i + 1)}
-                              className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${currentPage === i + 1
-                                ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
-                                : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
-                                }`}
-                            >
-                              {i + 1}
-                            </button>
-                          ))}
+                          {(() => {
+                            const pages = [];
+                            const range = 1;
+
+                            for (let i = 1; i <= totalPages; i++) {
+                              if (
+                                i === 1 ||
+                                i === totalPages ||
+                                (i >= currentPage - range &&
+                                  i <= currentPage + range)
+                              ) {
+                                pages.push(
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => setCurrentPage(i)}
+                                    aria-current={currentPage === i ? "page" : undefined}
+                                    className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${currentPage === i
+                                        ? "bg-blue-600 text-white shadow-lg shadow-blue-100"
+                                        : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                                      }`}
+                                  >
+                                    {i}
+                                  </button>
+                                );
+                              } else if (
+                                i === currentPage - range - 1 ||
+                                i === currentPage + range + 1
+                              ) {
+                                pages.push(
+                                  <span
+                                    key={`ellipsis-${i}`}
+                                    className="w-10 h-10 flex items-center justify-center text-slate-400 font-bold"
+                                  >
+                                    ...
+                                  </span>
+                                );
+                              }
+                            }
+
+                            return pages;
+                          })()}
                         </div>
 
+                        {/* Next */}
                         <button
+                          type="button"
                           disabled={currentPage === totalPages}
                           onClick={() => setCurrentPage((prev) => prev + 1)}
                           className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all font-bold"
@@ -4017,6 +4073,14 @@ export default function AdminClientPage({
                           {">"}
                         </button>
                       </div>
+                    )}
+
+                    {/* จำนวนรายการ */}
+                    {filteredOvertimeRequests.length > 0 && (
+                      <p className="text-center text-xs text-slate-400 font-medium pb-8">
+                        แสดง {indexOfFirstItem + 1}–{Math.min(indexOfLastItem, filteredOvertimeRequests.length)}
+                        {" "}จากทั้งหมด {filteredOvertimeRequests.length} รายการ
+                      </p>
                     )}
                   </>
                 );

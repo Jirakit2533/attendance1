@@ -2,6 +2,7 @@
 import Image from "next/image";
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { logoutAction } from "@/server/auth";
 import {
   getMessaging,
@@ -977,6 +978,14 @@ export default function EmployeeClientPage({
     }
   };
 
+  const getLeavePageNumbers = () => {
+    if (leaveTotalPages <= 3) {
+      return Array.from({ length: leaveTotalPages }, (_, i) => i + 1);
+    }
+
+    return [1, 2, 3, "...", leaveTotalPages];
+  };
+
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {/* 🟢 TOP NAVIGATION */}
@@ -1492,40 +1501,78 @@ export default function EmployeeClientPage({
                 )}
               </div>
               {leaveTotalPages > 1 && (
-                <div className="flex justify-center items-center gap-2 mt-8">
+                <div className="flex justify-center items-center gap-2 mt-8 mb-12">
+
+                  {/* Previous */}
                   <button
                     type="button"
                     disabled={leavePage === 1}
-                    onClick={() => setLeavePage((prev) => prev - 1)}
-                    className="w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-600 font-black disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+                    onClick={() => setLeavePage((prev) => Math.max(1, prev - 1))}
+                    aria-label="Previous page"
+                    className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all font-bold"
                   >
-                    ◀
+                    {"<"}
                   </button>
 
+                  {/* Page Numbers */}
                   <div className="flex gap-1">
-                    {Array.from({ length: leaveTotalPages }, (_, i) => (
-                      <button
-                        key={i + 1}
-                        type="button"
-                        onClick={() => setLeavePage(i + 1)}
-                        className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${leavePage === i + 1
-                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
-                          : "bg-white text-gray-400 border border-gray-100 hover:border-indigo-200"
-                          }`}
-                      >
-                        {i + 1}
-                      </button>
-                    ))}
+                    {(() => {
+                      const pages = [];
+                      const range = 1;
+
+                      for (let i = 1; i <= leaveTotalPages; i++) {
+                        if (
+                          i === 1 ||
+                          i === leaveTotalPages ||
+                          (i >= leavePage - range &&
+                            i <= leavePage + range)
+                        ) {
+                          pages.push(
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setLeavePage(i)}
+                              aria-current={leavePage === i ? "page" : undefined}
+                              className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${leavePage === i
+                                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
+                                : "bg-white text-gray-400 border border-gray-100 hover:border-indigo-200"
+                                }`}
+                            >
+                              {i}
+                            </button>
+                          );
+                        } else if (
+                          i === leavePage - range - 1 ||
+                          i === leavePage + range + 1
+                        ) {
+                          pages.push(
+                            <span
+                              key={`ellipsis-${i}`}
+                              className="w-10 h-10 flex items-center justify-center text-gray-400 font-bold"
+                            >
+                              ...
+                            </span>
+                          );
+                        }
+                      }
+
+                      return pages;
+                    })()}
                   </div>
 
+                  {/* Next */}
                   <button
                     type="button"
                     disabled={leavePage === leaveTotalPages}
-                    onClick={() => setLeavePage((prev) => prev + 1)}
-                    className="w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-600 font-black disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+                    onClick={() =>
+                      setLeavePage((prev) => Math.min(leaveTotalPages, prev + 1))
+                    }
+                    aria-label="Next page"
+                    className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all font-bold"
                   >
-                    ▶
+                    {">"}
                   </button>
+
                 </div>
               )}
 
@@ -1630,40 +1677,78 @@ export default function EmployeeClientPage({
                 )}
               </div>
               {otTotalPages > 1 && (
-                <div className="flex justify-center items-center gap-2 mt-8">
+                <div className="flex justify-center items-center gap-2 mt-8 mb-12">
+
+                  {/* Previous */}
                   <button
                     type="button"
                     disabled={otPage === 1}
-                    onClick={() => setOtPage((prev) => prev - 1)}
-                    className="w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-600 font-black disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+                    onClick={() => setOtPage((prev) => Math.max(1, prev - 1))}
+                    aria-label="Previous page"
+                    className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all font-bold"
                   >
-                    ◀
+                    {"<"}
                   </button>
 
+                  {/* Page Numbers */}
                   <div className="flex gap-1">
-                    {Array.from({ length: otTotalPages }, (_, i) => (
-                      <button
-                        key={i + 1}
-                        type="button"
-                        onClick={() => setOtPage(i + 1)}
-                        className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${otPage === i + 1
-                            ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
-                            : "bg-white text-gray-400 border border-gray-100 hover:border-indigo-200"
-                          }`}
-                      >
-                        {i + 1}
-                      </button>
-                    ))}
+                    {(() => {
+                      const pages = [];
+                      const range = 1;
+
+                      for (let i = 1; i <= otTotalPages; i++) {
+                        if (
+                          i === 1 ||
+                          i === otTotalPages ||
+                          (i >= otPage - range &&
+                            i <= otPage + range)
+                        ) {
+                          pages.push(
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setOtPage(i)}
+                              aria-current={otPage === i ? "page" : undefined}
+                              className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${otPage === i
+                                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
+                                  : "bg-white text-gray-400 border border-gray-100 hover:border-indigo-200"
+                                }`}
+                            >
+                              {i}
+                            </button>
+                          );
+                        } else if (
+                          i === otPage - range - 1 ||
+                          i === otPage + range + 1
+                        ) {
+                          pages.push(
+                            <span
+                              key={`ellipsis-${i}`}
+                              className="w-10 h-10 flex items-center justify-center text-gray-400 font-bold"
+                            >
+                              ...
+                            </span>
+                          );
+                        }
+                      }
+
+                      return pages;
+                    })()}
                   </div>
 
+                  {/* Next */}
                   <button
                     type="button"
                     disabled={otPage === otTotalPages}
-                    onClick={() => setOtPage((prev) => prev + 1)}
-                    className="w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-600 font-black disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+                    onClick={() =>
+                      setOtPage((prev) => Math.min(otTotalPages, prev + 1))
+                    }
+                    aria-label="Next page"
+                    className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 transition-all font-bold"
                   >
-                    ▶
+                    {">"}
                   </button>
+
                 </div>
               )}
             </>
