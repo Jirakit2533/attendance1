@@ -14,7 +14,7 @@
     "@capacitor/cli": "^8.4.2",
     "@capacitor/core": "^8.4.2",
     "@capacitor/geolocation": "^8.2.0",
-    "@neondatabase/serverless": "^1.0.2",
+    "@neondatabase/serverless": "^1.2.0",
     "@uploadthing/react": "^7.3.3",
     "bcryptjs": "^3.0.3",
     "browser-image-compression": "^2.0.2",

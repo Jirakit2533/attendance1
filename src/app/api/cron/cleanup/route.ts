@@ -1,12 +1,8 @@
-// src/app/api/cron/cleanup/route.ts
 
 import { cleanupExpiredOvertime } from "@/features/over-time/overtime-status-actions";
+import { executeOTAction } from "@/features/over-time/otExecutionActions";
 import { db } from "@/db/db";
-import {
-  overtimeTable,
-  overtimeRequestsTable,
-  automationLogTable,
-} from "@/db/schema";
+import { overtimeTable, automationLogTable } from "@/db/schema";
 import { and, eq, gte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -16,10 +12,21 @@ export const maxDuration = 60;
 export async function GET(request: Request) {
   const startTime = new Date();
   const todayDate = startTime.toISOString().split("T")[0];
+
   let logId: string | null = null;
 
   try {
-    // [LOG START]
+    // 1. Authorization
+    const authHeader = request.headers.get("authorization");
+
+    if (
+      !process.env.CRON_SECRET ||
+      authHeader !== `Bearer ${process.env.CRON_SECRET}`
+    ) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    // 2. Create Cron Log
     const [log] = await db
       .insert(automationLogTable)
       .values({
@@ -33,37 +40,19 @@ export async function GET(request: Request) {
 
     logId = log.id;
 
-    // 1. Check Authorization
-    const authHeader = request.headers.get("authorization");
-
-    if (
-      process.env.CRON_SECRET &&
-      authHeader !== `Bearer ${process.env.CRON_SECRET}`
-    ) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    console.log("CRON AUTH DEBUG:", {
-      secretExists: Boolean(process.env.CRON_SECRET),
-      authHeaderExists: Boolean(authHeader),
-      bearerFormat: authHeader?.startsWith("Bearer "),
-      tokenMatches:
-        authHeader === `Bearer ${process.env.CRON_SECRET}`,
-    });
-
-    // 2. Cleanup ของเก่า
+    // 3. Cleanup expired OT
     const cleanupResult = await cleanupExpiredOvertime();
 
-    // ---------------------------------------------------------
-    // 3. ดึง OT pending ที่ยังอยู่ในช่วง 7 วันล่าสุด
-    // ---------------------------------------------------------
+    // 4. Find pending OT attendance IDs (last 7 days)
     const dateLimit = new Date(startTime);
     dateLimit.setDate(dateLimit.getDate() - 7);
 
     const minDate = dateLimit.toISOString().split("T")[0];
 
     const pendingOTs = await db
-      .select()
+      .select({
+        attendanceId: overtimeTable.attendanceId,
+      })
       .from(overtimeTable)
       .where(
         and(
@@ -72,434 +61,164 @@ export async function GET(request: Request) {
         )
       );
 
-    console.log("PENDING OTS:", {
-      count: pendingOTs.length,
-      minDate,
-      items: pendingOTs.map((ot) => ({
-        id: ot.id,
-        attendanceId: ot.attendanceId,
-        userId: ot.userId,
-        date: ot.date,
-        status: ot.status,
-        overtimeBefore: ot.overtimeBefore,
-        overtimeAfter: ot.overtimeAfter,
-      })),
-    });
-
-    let autoExecutedCount = 0;
-    let matchCount = 0;
-    let skippedCount = 0;
-    let processedGroupCount = 0;
-    let processedRequestCount = 0;
-
-    // ---------------------------------------------------------
-    // 4. จัดกลุ่ม OT ตาม User + Date
-    // ---------------------------------------------------------
-    const groupedOTs = new Map<
-      string,
-      typeof pendingOTs
-    >();
-
-    for (const ot of pendingOTs) {
-      if (!ot.userId || !ot.date) {
-        skippedCount++;
-
-        console.log("SKIP INVALID OT:", {
-          id: ot.id,
-          attendanceId: ot.attendanceId,
-          userId: ot.userId,
-          date: ot.date,
-        });
-
-        continue;
-      }
-
-      const groupKey = `${ot.userId}_${ot.date}`;
-
-      const group = groupedOTs.get(groupKey);
-
-      if (group) {
-        group.push(ot);
-      } else {
-        groupedOTs.set(groupKey, [ot]);
-      }
-    }
-
-    console.log("OT GROUPS:", {
-      count: groupedOTs.size,
-      groups: Array.from(groupedOTs.entries()).map(
-        ([key, ots]) => ({
-          key,
-          otCount: ots.length,
-          attendanceIds: ots.map(
-            (ot) => ot.attendanceId
-          ),
-        })
+    // One attendance should be processed only once per Cron run.
+    const attendanceIds = [
+      ...new Set(
+        pendingOTs
+          .map((ot) => ot.attendanceId)
+          .filter((id): id is string => Boolean(id))
       ),
-    });
+    ];
 
-    // ---------------------------------------------------------
-    // 5. Process ทีละ User + Date
-    // ---------------------------------------------------------
-    for (const [groupKey, rawOTs] of groupedOTs) {
-      const firstOT = rawOTs[0];
+    // 5. Delegate all OT allocation and execution to otExecutionActions
+    let autoExecutedCount = 0;
+    let processedRequestCount = 0;
+    let failedCount = 0;
 
-      if (!firstOT.userId || !firstOT.date) {
-        skippedCount++;
-        continue;
-      }
+    const executionResults = [];
 
-      console.log("PROCESS GROUP:", {
-        groupKey,
-        userId: firstOT.userId,
-        date: firstOT.date,
-        otCount: rawOTs.length,
-        attendanceIds: rawOTs.map(
-          (ot) => ot.attendanceId
-        ),
-      });
-
-      // -------------------------------------------------------
-      // 6. ดึง Request approved ทั้งหมดของ User + Date
-      // -------------------------------------------------------
-      const requests = await db
-        .select()
-        .from(overtimeRequestsTable)
-        .where(
-          and(
-            eq(
-              overtimeRequestsTable.userId,
-              firstOT.userId
-            ),
-            eq(
-              overtimeRequestsTable.date,
-              firstOT.date
-            ),
-            eq(
-              overtimeRequestsTable.status,
-              "approved"
-            )
-          )
+    for (const attendanceId of attendanceIds) {
+      try {
+        const result = await executeOTAction(
+          attendanceId,
+          "SYSTEM"
         );
 
-      if (requests.length === 0) {
-        skippedCount++;
+        if (!result.success) {
+          failedCount++;
 
-        console.log(
-          `SKIP GROUP: User ${firstOT.userId} | Date ${firstOT.date} | No approved requests`
-        );
-
-        continue;
-      }
-
-      console.log("GROUP REQUESTS:", {
-        groupKey,
-        requestCount: requests.length,
-        totalRequestedMinutes: requests.reduce(
-          (sum, req) =>
-            sum +
-            Number(req.overtimeByRequest || 0),
-          0
-        ),
-      });
-
-      // -------------------------------------------------------
-      // 7. เตรียม Request Pool
-      // -------------------------------------------------------
-      const requestPool = requests.map(
-        (requestItem) => ({
-          request: requestItem,
-          remainingMinutes: Number(
-            requestItem.overtimeByRequest || 0
-          ),
-        })
-      );
-
-      const executedRequestIds: string[] = [];
-
-      // -------------------------------------------------------
-      // 8. รวม OT ที่ทำจริงทั้งหมดของ User + Date
-      // -------------------------------------------------------
-      const totalRawMinutes = rawOTs.reduce(
-        (sum, ot) =>
-          sum +
-          Number(ot.overtimeBefore || 0) +
-          Number(ot.overtimeAfter || 0),
-        0
-      );
-
-      let remainingTotalOTMinutes = totalRawMinutes;
-
-      console.log("TOTAL OT:", {
-        groupKey,
-        otCount: rawOTs.length,
-        totalRawMinutes,
-      });
-
-      // -------------------------------------------------------
-      // 9. ตัด Request ตามลำดับ
-      // -------------------------------------------------------
-      for (const requestItem of requestPool) {
-        if (remainingTotalOTMinutes <= 0) {
-          break;
-        }
-
-        if (requestItem.remainingMinutes <= 0) {
-          continue;
-        }
-
-        const allocatedMinutes = Math.min(
-          remainingTotalOTMinutes,
-          requestItem.remainingMinutes
-        );
-
-        requestItem.remainingMinutes -= allocatedMinutes;
-        remainingTotalOTMinutes -= allocatedMinutes;
-
-        console.log("REQUEST ALLOCATION:", {
-          requestId: requestItem.request.id,
-          requestedMinutes:
-            Number(requestItem.request.overtimeByRequest || 0),
-          allocatedMinutes,
-          remainingRequestMinutes:
-            requestItem.remainingMinutes,
-          remainingTotalOTMinutes,
-        });
-
-        // Request ใช้ครบจริงเท่านั้นจึง executed
-        if (requestItem.remainingMinutes === 0) {
-          executedRequestIds.push(
-            requestItem.request.id
-          );
-        }
-      }
-
-      console.log("REQUEST ALLOCATION COMPLETE:", {
-        groupKey,
-        totalRawMinutes,
-        allocatedMinutes:
-          totalRawMinutes - remainingTotalOTMinutes,
-        remainingOTMinutes:
-          remainingTotalOTMinutes,
-      });
-
-      // -------------------------------------------------------
-      // 10. กระจายยอด OT ที่อนุมัติกลับไปยัง OT แต่ละรายการ
-      // -------------------------------------------------------
-      let remainingApprovedMinutes =
-        totalRawMinutes - remainingTotalOTMinutes;
-
-      for (const rawOT of rawOTs) {
-        const rawMinutes =
-          Number(rawOT.overtimeBefore || 0) +
-          Number(rawOT.overtimeAfter || 0);
-
-        const approvedMinutes = Math.min(
-          rawMinutes,
-          remainingApprovedMinutes
-        );
-
-        console.log("OT CALCULATION:", {
-          id: rawOT.id,
-          attendanceId: rawOT.attendanceId,
-          rawMinutes,
-          approvedMinutes,
-          remainingApprovedMinutes,
-        });
-
-        const [updated] = await db
-          .update(overtimeTable)
-          .set({
-            overtimeApproved: approvedMinutes,
-            status: "approved",
-          })
-          .where(
-            and(
-              eq(overtimeTable.id, rawOT.id),
-              eq(overtimeTable.status, "pending")
-            )
-          )
-          .returning();
-
-        if (!updated) {
-          skippedCount++;
-
-          console.log(
-            `RACE: OT ID ${rawOT.id} | Attendance ${rawOT.attendanceId} was updated elsewhere`
-          );
+          executionResults.push({
+            attendanceId,
+            success: false,
+            error: result.error,
+          });
 
           continue;
         }
 
-        remainingApprovedMinutes -= approvedMinutes;
-        autoExecutedCount++;
+        autoExecutedCount +=
+          result.data?.processedOTCount ?? 0;
 
-        console.log(
-          `EXECUTED: OT ID ${rawOT.id} | Attendance ${rawOT.attendanceId} | Raw ${rawMinutes} min | Approved ${approvedMinutes} min`
-        );
+        processedRequestCount +=
+          result.data?.processedRequestCount ?? 0;
+
+        executionResults.push({
+          attendanceId,
+          success: true,
+          data: result.data,
+        });
+      } catch (error) {
+        failedCount++;
+
+        executionResults.push({
+          attendanceId,
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : String(error),
+        });
       }
-      // -------------------------------------------------------
-      // 11. ปิด Request ที่ถูกใช้จนหมด
-      // -------------------------------------------------------
-      const uniqueExecutedRequestIds = [
-        ...new Set(executedRequestIds),
-      ];
-
-      for (const requestId of uniqueExecutedRequestIds) {
-        await db
-          .update(overtimeRequestsTable)
-          .set({
-            status: "executed" as any,
-          })
-          .where(
-            and(
-              eq(
-                overtimeRequestsTable.id,
-                requestId
-              ),
-              eq(
-                overtimeRequestsTable.status,
-                "approved"
-              )
-            )
-          );
-      }
-
-      processedRequestCount +=
-        uniqueExecutedRequestIds.length;
-
-      processedGroupCount++;
-      matchCount++;
-
-      console.log("GROUP COMPLETE:", {
-        groupKey,
-        processedOTCount: rawOTs.length,
-        processedRequestCount:
-          uniqueExecutedRequestIds.length,
-        attendanceIds: rawOTs.map(
-          (ot) => ot.attendanceId
-        ),
-      });
     }
 
-    // ---------------------------------------------------------
-    // 12. LOG UPDATE
-    // ---------------------------------------------------------
-    if (logId) {
-      const endTime = new Date();
+    // 6. Update Cron Log
+    const endTime = new Date();
 
-      const totalChange =
-        cleanupResult.expiredRawCount +
-        cleanupResult.expiredRequestCount +
-        autoExecutedCount +
-        processedRequestCount;
+    const totalChange =
+      cleanupResult.expiredRawCount +
+      cleanupResult.expiredRequestCount +
+      autoExecutedCount +
+      processedRequestCount;
 
-      await db
-        .update(automationLogTable)
-        .set({
-          endAt: endTime,
-          durationMs:
-            endTime.getTime() -
-            startTime.getTime(),
+    await db
+      .update(automationLogTable)
+      .set({
+        status: failedCount > 0 ? "fault" : "success",
+        endAt: endTime,
+        durationMs:
+          endTime.getTime() - startTime.getTime(),
 
-          readCount:
-            pendingOTs.length +
-            processedRequestCount,
+        readCount: attendanceIds.length,
+        changeCount: totalChange,
+        executedCount: autoExecutedCount,
 
-          changeCount: totalChange,
+        deletedCount:
+          cleanupResult.expiredRawCount +
+          cleanupResult.expiredRequestCount,
 
-          executedCount:
-            autoExecutedCount,
+        details: {
+          ...cleanupResult,
+          minDate,
 
-          deletedCount:
-            cleanupResult.expiredRawCount +
-            cleanupResult.expiredRequestCount,
+          pendingOTCount: pendingOTs.length,
+          attendanceCount: attendanceIds.length,
 
-          details: {
-            ...cleanupResult,
+          autoExecutedCount,
+          processedRequestCount,
+          failedCount,
 
-            minDate,
-
-            totalReadInProcess:
-              pendingOTs.length,
-
-            processedGroupCount,
-
-            autoExecutedCount,
-
-            matchCount,
-
-            processedRequestCount,
-
-            skippedOrInvalid:
-              skippedCount,
-
-            performanceNote:
-              `Read ${pendingOTs.length} OT rows | Groups ${processedGroupCount} | Executed ${autoExecutedCount} OT | Executed ${processedRequestCount} Requests | Skipped ${skippedCount}`,
-          },
-        })
-        .where(
-          eq(
-            automationLogTable.id,
-            logId
-          )
-        );
-    }
+          executionResults,
+        },
+      })
+      .where(eq(automationLogTable.id, logId));
 
     return NextResponse.json({
-      success: true,
+      success: failedCount === 0,
 
       message:
-        "ระบบทำความสะอาดและประมวลผล OT อัตโนมัติเสร็จสิ้น",
+        "ระบบ Cleanup และประมวลผล OT อัตโนมัติเสร็จสิ้น",
 
-      timestamp:
-        new Date().toISOString(),
+      timestamp: endTime.toISOString(),
 
       details: {
         ...cleanupResult,
-
         minDate,
 
+        pendingOTCount: pendingOTs.length,
+        attendanceCount: attendanceIds.length,
+
         autoExecutedCount,
-
-        processedGroupCount,
-
         processedRequestCount,
-
-        readCount:
-          pendingOTs.length,
-
-        skippedCount,
+        failedCount,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
+    const endTime = new Date();
+
     if (logId) {
       await db
         .update(automationLogTable)
         .set({
           status: "fault",
+          endAt: endTime,
+          durationMs:
+            endTime.getTime() - startTime.getTime(),
+
           details: {
-            error: error.message,
-            stack: error.stack,
+            error:
+              error instanceof Error
+                ? error.message
+                : String(error),
+
+            stack:
+              error instanceof Error
+                ? error.stack
+                : undefined,
           },
         })
-        .where(
-          eq(
-            automationLogTable.id,
-            logId
-          )
-        );
+        .where(eq(automationLogTable.id, logId));
     }
 
-    console.error(
-      "🚨 Cron Job Critical Error:",
-      error
-    );
+    console.error("Cron Job Critical Error:", error);
 
     return NextResponse.json(
       {
+        success: false,
         error: "Internal Server Error",
-        details: error.message,
+        details:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
       { status: 500 }
     );
