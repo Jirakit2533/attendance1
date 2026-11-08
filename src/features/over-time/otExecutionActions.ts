@@ -91,16 +91,16 @@ export async function executeOTAction(
     const rawOTs: (typeof rawOT)[] = [];
 
     for (const attendance of attendances) {
-      const [ot] = await db
+      const rawOTs = await db
         .select()
         .from(overtimeTable)
         .where(
           and(
-            eq(overtimeTable.attendanceId, attendance.id),
+            eq(overtimeTable.userId, baseRequest.userId),
+            eq(overtimeTable.date, baseRequest.date),
             eq(overtimeTable.status, "pending")
           )
-        )
-        .limit(1);
+        );
 
       console.log("FIND OT BY ATTENDANCE:", {
         attendanceId: attendance.id,
@@ -138,18 +138,9 @@ export async function executeOTAction(
       .from(overtimeRequestsTable)
       .where(
         and(
-          eq(
-            overtimeRequestsTable.userId,
-            rawOT.userId!
-          ),
-          eq(
-            overtimeRequestsTable.date,
-            rawOT.date!
-          ),
-          eq(
-            overtimeRequestsTable.status,
-            "approved"
-          )
+          eq(overtimeRequestsTable.userId, baseRequest.userId),
+          eq(overtimeRequestsTable.date, baseRequest.date),
+          eq(overtimeRequestsTable.status, "approved"),
         )
       );
 

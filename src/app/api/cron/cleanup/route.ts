@@ -43,6 +43,14 @@ export async function GET(request: Request) {
       return new Response("Unauthorized", { status: 401 });
     }
 
+    console.log("CRON AUTH DEBUG:", {
+      secretExists: Boolean(process.env.CRON_SECRET),
+      authHeaderExists: Boolean(authHeader),
+      bearerFormat: authHeader?.startsWith("Bearer "),
+      tokenMatches:
+        authHeader === `Bearer ${process.env.CRON_SECRET}`,
+    });
+
     // 2. Cleanup ของเก่า
     const cleanupResult = await cleanupExpiredOvertime();
 
