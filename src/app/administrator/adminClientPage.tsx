@@ -123,6 +123,9 @@ export default function AdminClientPage({
   const [coords, setCoords] = useState("");
   const [isLocating, setIsLocating] = useState(false);
 
+  const [overtimeRequests, setOvertimeRequests] =
+  useState<OvertimeRequest[]>(initialOvertimeRequests);
+
   // State สำหรับ Company Profile 
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
@@ -2078,7 +2081,7 @@ export default function AdminClientPage({
       </>
       <main className="max-w-7xl mx-auto px-6 pt-12">
         {/* --- STATS CARDS --- */}
-        <div className="justify-center grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 print:hidden">
+        <div className="justify-center grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-16 print:hidden">
           {[
             {
               label: "พนักงานทั้งหมด",
@@ -2103,6 +2106,15 @@ export default function AdminClientPage({
               val: leaves.filter((l) => l.status === "pending").length,
               unit: "รอนุมัติ",
               icon: "📝",
+            },
+            {
+              label: "คำขอทำโอที",
+              val: overtimeRequests.filter(
+                (ot) => ot.status === "pending"
+              ).length,
+              unit: "รออนุมัติ",
+              icon: "⏱️",
+              color: "orange",
             },
           ].map((s, i) => (
             /* --- การ์ดปกติ 1-3: ปรับเป็นแนวนอนในมือถือ (flex-row) และแนวตั้งในจอใหญ่ (md:flex-col) --- */
@@ -3724,12 +3736,12 @@ export default function AdminClientPage({
                                     <td className="py-4 px-6 text-center">
                                       <span
                                         className={`min-w-[90px] py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm border text-center tracking-tight ${l.status === "pending"
-                                            ? "bg-orange-100 text-orange-600 border-orange-200"
-                                            : l.status === "approved"
-                                              ? "bg-emerald-100 text-emerald-600 border-emerald-200"
-                                              : l.status === "executed"
-                                                ? "bg-blue-100 text-blue-600 border-blue-200"
-                                                : "bg-red-100 text-red-600 border-red-200"
+                                          ? "bg-orange-100 text-orange-600 border-orange-200"
+                                          : l.status === "approved"
+                                            ? "bg-emerald-100 text-emerald-600 border-emerald-200"
+                                            : l.status === "executed"
+                                              ? "bg-blue-100 text-blue-600 border-blue-200"
+                                              : "bg-red-100 text-red-600 border-red-200"
                                           }`}
                                       >
                                         {l.status === "pending"
@@ -3785,8 +3797,8 @@ export default function AdminClientPage({
                                           type="text"
                                           placeholder="ระบุหมายเหตุ..."
                                           className={`border rounded-xl px-3 py-2 text-xs w-full transition-all outline-none ${l.status !== "pending"
-                                              ? "bg-slate-50 text-slate-500 border-slate-100"
-                                              : "bg-white border-slate-200 focus:border-blue-400"
+                                            ? "bg-slate-50 text-slate-500 border-slate-100"
+                                            : "bg-white border-slate-200 focus:border-blue-400"
                                             }`}
                                           value={currentRemark}
                                           onChange={(e) =>
@@ -3825,12 +3837,12 @@ export default function AdminClientPage({
                               {/* Status Badge */}
                               <div
                                 className={`absolute top-0 right-12 px-4 py-1 rounded-b-xl text-[9px] font-black uppercase ${l.status === "pending"
-                                    ? "bg-orange-100 text-orange-600"
-                                    : l.status === "approved"
-                                      ? "bg-emerald-100 text-emerald-600"
-                                      : l.status === "executed"
-                                        ? "bg-blue-100 text-blue-600"
-                                        : "bg-red-100 text-red-600"
+                                  ? "bg-orange-100 text-orange-600"
+                                  : l.status === "approved"
+                                    ? "bg-emerald-100 text-emerald-600"
+                                    : l.status === "executed"
+                                      ? "bg-blue-100 text-blue-600"
+                                      : "bg-red-100 text-red-600"
                                   }`}
                               >
                                 {l.status === "pending"
@@ -4037,8 +4049,8 @@ export default function AdminClientPage({
                                     onClick={() => setCurrentPage(i)}
                                     aria-current={currentPage === i ? "page" : undefined}
                                     className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${currentPage === i
-                                        ? "bg-blue-600 text-white shadow-lg shadow-blue-100"
-                                        : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                                      ? "bg-blue-600 text-white shadow-lg shadow-blue-100"
+                                      : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
                                       }`}
                                   >
                                     {i}
