@@ -1,4 +1,3 @@
-
 "use server";
 
 import { db } from "@/db/db";
@@ -79,12 +78,17 @@ const getOTType = (
 /**
  * API: Execute OT
  *
- * - ดึง OT Pending ของ User + Date
+ * - ค้นหา OT ที่เป็น pending หรือ approved
+ * - ต้องมี overtimeApproved = 0
  * - JOIN Attendance กับ Shift
- * - แยก Request Before / After
+ * - ค้นหาเฉพาะ Request ที่ approved และยังไม่ถูกลบ
+ * - ตรวจสอบ Request ให้ตรงกับประเภท Before / After
+ * - ไม่อนุมัติ OT ที่ไม่มี Request ตรงประเภทเลย
  * - คำนวณ OT แต่ละรายการแยกจากกัน
  * - ไม่หักยอด Request สะสมระหว่าง OT
- * - Update OT และ Request
+ * - เปลี่ยน pending เป็น approved ในขั้นตอน Update OT
+ * - รองรับการประมวลผล OT ที่ approved แล้วแต่ยังไม่คำนวณ
+ * - Update OT และ Request ภายใน Transaction
  */
 export async function executeOTAction(
   attendanceId: string,
@@ -125,17 +129,27 @@ export async function executeOTAction(
       .where(
         and(
           eq(overtimeTable.attendanceId, attendanceId),
-          eq(overtimeTable.status, "pending")
+
+          inArray(overtimeTable.status, [
+            "pending",
+            "approved",
+          ]),
+
+          eq(overtimeTable.overtimeApproved, 0)
         )
       )
       .limit(1);
 
     if (!rawOT) {
-      throw new Error("ไม่พบ OT ที่เป็น pending");
+      throw new Error(
+        "ไม่พบ OT ที่เป็น pending หรือ approved และยังไม่ได้คำนวณ"
+      );
     }
 
     if (!rawOT.userId || !rawOT.date) {
-      throw new Error("ข้อมูล User ID หรือ OT Date ไม่ถูกต้อง");
+      throw new Error(
+        "ข้อมูล User ID หรือ OT Date ไม่ถูกต้อง"
+      );
     }
 
     // =====================================================
@@ -221,7 +235,7 @@ export async function executeOTAction(
       ];
 
       // -------------------------------------------------
-      // 2.3 GET ALL PENDING OTS
+      // 2.3 GET ALL ELIGIBLE OTS
       // -------------------------------------------------
 
       const rawOTs = await tx
@@ -233,14 +247,25 @@ export async function executeOTAction(
               overtimeTable.userId,
               rawOT.userId!
             ),
+
             eq(
               overtimeTable.date,
               rawOT.date!
             ),
-            eq(
+
+            inArray(
               overtimeTable.status,
-              "pending"
+              [
+                "pending",
+                "approved",
+              ]
             ),
+
+            eq(
+              overtimeTable.overtimeApproved,
+              0
+            ),
+
             inArray(
               overtimeTable.attendanceId,
               attendanceIds
@@ -256,6 +281,7 @@ export async function executeOTAction(
           userId: ot.userId,
           date: ot.date,
           status: ot.status,
+          overtimeApproved: ot.overtimeApproved,
           timeStart: ot.timeStart,
           timeEnd: ot.timeEnd,
           overtimeBefore: ot.overtimeBefore,
@@ -265,7 +291,7 @@ export async function executeOTAction(
 
       if (rawOTs.length === 0) {
         throw new Error(
-          "ไม่พบ OT Pending ของ User และวันที่นี้"
+          "ไม่พบ OT ที่เป็น pending หรือ approved และยังไม่ได้คำนวณ"
         );
       }
 
@@ -282,17 +308,21 @@ export async function executeOTAction(
               overtimeRequestsTable.userId,
               rawOT.userId!
             ),
+
             eq(
               overtimeRequestsTable.date,
               rawOT.date!
             ),
+
             eq(
               overtimeRequestsTable.status,
               "approved"
             ),
+
             isNull(
               overtimeRequestsTable.deletedAt
             ),
+
             inArray(
               overtimeRequestsTable.shiftId,
               shiftIds
@@ -552,7 +582,54 @@ export async function executeOTAction(
         }
 
         // -------------------------------------------------
-        // 5.4 ALLOCATE BEFORE / AFTER SEPARATELY
+        // 5.4 VALIDATE MATCHING REQUEST
+        // -------------------------------------------------
+
+        const hasBeforeRequest =
+          otBefore > 0 &&
+          activeRequestPool.before.length > 0;
+
+        const hasAfterRequest =
+          otAfter > 0 &&
+          activeRequestPool.after.length > 0;
+
+        const hasMatchingRequest =
+          hasBeforeRequest || hasAfterRequest;
+
+        /**
+         * OT ที่มียอดมากกว่า 0 ต้องมี Request
+         * ที่ตรงกับประเภท Before หรือ After อย่างน้อยหนึ่งประเภท
+         *
+         * ถ้าไม่มี Request ตรงประเภทเลย:
+         * - ไม่ Update OT
+         * - ไม่เปลี่ยนสถานะเป็น approved
+         * - Throw เพื่อ Rollback Transaction
+         *
+         * กรณี OT มีทั้ง Before และ After
+         * แต่มี Request เพียงด้านเดียว:
+         * ยังคงคำนวณตาม Request ที่มีอยู่
+         */
+        if (
+          rawMinutes > 0 &&
+          !hasMatchingRequest
+        ) {
+          throw new Error(
+            `ไม่สามารถอนุมัติ OT ${ot.id} ได้: ไม่พบ Request ที่ approved และยังไม่ถูกลบ ซึ่งตรงกับประเภท OT (Before / After) ของ Shift นี้`
+          );
+        }
+
+        console.log("REQUEST VALIDATION:", {
+          otId: ot.id,
+          shiftId: attendance.shiftId,
+          otBefore,
+          otAfter,
+          hasBeforeRequest,
+          hasAfterRequest,
+          hasMatchingRequest,
+        });
+
+        // -------------------------------------------------
+        // 5.5 ALLOCATE BEFORE / AFTER SEPARATELY
         // -------------------------------------------------
 
         // Before ใช้เฉพาะ Request Before
@@ -578,7 +655,7 @@ export async function executeOTAction(
         totalApprovedMinutes += approvedMinutes;
 
         // -------------------------------------------------
-        // 5.5 DEBUG
+        // 5.6 DEBUG
         // -------------------------------------------------
 
         console.log("PROCESS OT:", {
@@ -609,10 +686,11 @@ export async function executeOTAction(
 
           rawMinutes,
           approvedMinutes,
+          previousStatus: ot.status,
         });
 
         // -------------------------------------------------
-        // 5.6 UPDATE OT
+        // 5.7 UPDATE OT + CHANGE STATUS
         // -------------------------------------------------
 
         const [updated] = await tx
@@ -627,9 +705,18 @@ export async function executeOTAction(
                 overtimeTable.id,
                 ot.id
               ),
-              eq(
+
+              inArray(
                 overtimeTable.status,
-                "pending"
+                [
+                  "pending",
+                  "approved",
+                ]
+              ),
+
+              eq(
+                overtimeTable.overtimeApproved,
+                0
               )
             )
           )
@@ -660,9 +747,14 @@ export async function executeOTAction(
                 overtimeRequestsTable.id,
                 requestId
               ),
+
               eq(
                 overtimeRequestsTable.status,
                 "approved"
+              ),
+
+              isNull(
+                overtimeRequestsTable.deletedAt
               )
             )
           )
@@ -672,7 +764,7 @@ export async function executeOTAction(
 
         if (!updatedRequest) {
           throw new Error(
-            `Request ${requestId} ถูกเปลี่ยนสถานะไปแล้ว`
+            `Request ${requestId} ถูกเปลี่ยนสถานะไปแล้ว หรือถูกลบ`
           );
         }
       }
@@ -705,15 +797,19 @@ export async function executeOTAction(
           endAt: endTime,
           durationMs:
             endTime.getTime() - startTime.getTime(),
+
           readCount:
             result.attendanceCount +
             result.processedOTCount +
             result.requestCount,
+
           changeCount:
             result.processedOTCount +
             result.processedRequestCount,
+
           executedCount:
             result.processedOTCount,
+
           details: {
             attendanceId,
             rawMinutes: result.totalRawMinutes,
