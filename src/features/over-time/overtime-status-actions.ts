@@ -1,13 +1,12 @@
-// @/lib/over-time/overtime-status-actions.ts
 
 import { db } from "@/db/db";
 import { overtimeTable, overtimeRequestsTable } from "@/db/schema";
 import { and, eq, lt, inArray, sql } from "drizzle-orm";
 
 export async function cleanupExpiredOvertime() {
-  // ใช้ timestamp ตรง ๆ (UTC-based, ปลอดภัยกว่า)
+  // ใช้ timestamp ตรง ๆ (UTC-based)
   const now = new Date();
-  const dateLimit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const dateLimit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   try {
     // --- ส่วนที่ 1: OT ดิบ ---
@@ -19,7 +18,7 @@ export async function cleanupExpiredOvertime() {
       .where(
         and(
           eq(overtimeTable.status, "pending"),
-          lt(overtimeTable.date, dateLimit) // เทียบ timestamp ตรง ๆ
+          lt(overtimeTable.date, dateLimit)
         )
       )
       .returning({ id: overtimeTable.id });
@@ -30,19 +29,18 @@ export async function cleanupExpiredOvertime() {
       .set({
         status: "expired",
         remarks: sql`
-          CASE 
-            WHEN remarks IS NULL OR remarks = '' 
-              THEN '[System: Auto-expired after 7 days]'
-            WHEN remarks LIKE '%Auto-expired after 7 days%' 
+          CASE
+            WHEN remarks IS NULL OR remarks = ''
+              THEN '[System: Auto-expired after 30 days]'
+            WHEN remarks LIKE '%Auto-expired after 30 days%'
               THEN remarks
-            ELSE CONCAT(remarks, ' [System: Auto-expired after 7 days]')
+            ELSE CONCAT(remarks, ' [System: Auto-expired after 30 days]')
           END
         `,
       })
       .where(
         and(
-          inArray(overtimeRequestsTable.status, ["pending"]), 
-          // 🔥 ตัด approved ออก (ถ้าอยากให้โดนด้วยค่อยใส่กลับ)
+          inArray(overtimeRequestsTable.status, ["pending"]),
           lt(overtimeRequestsTable.date, dateLimit)
         )
       )
@@ -53,7 +51,7 @@ export async function cleanupExpiredOvertime() {
       expiredRequestCount: expiredRequests.length || 0,
     };
   } catch (error) {
-    console.error("🚨 Cleanup Status Error:", error);
+    console.error("Cleanup Status Error:", error);
     throw error;
   }
 }

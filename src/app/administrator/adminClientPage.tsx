@@ -124,7 +124,7 @@ export default function AdminClientPage({
   const [isLocating, setIsLocating] = useState(false);
 
   const [overtimeRequests, setOvertimeRequests] =
-  useState<OvertimeRequest[]>(initialOvertimeRequests);
+    useState<OvertimeRequest[]>(initialOvertimeRequests);
 
   // State สำหรับ Company Profile 
   const [showCompanyModal, setShowCompanyModal] = useState(false);
@@ -874,15 +874,18 @@ export default function AdminClientPage({
       );
 
       if (res.success) {
-        setOvertimeReques((prev) =>
+        setOvertimeRequest((prev) =>
           prev.map((item) =>
             item.id === otId
-              ? {
-                ...item,
-                status: "approved",
-                remarks: remark,
-                approvedBy: currentAdminId,
-              }
+              ? { ...item, status: "approved", remark }
+              : item
+          )
+        );
+
+        setOvertimeRequests((prev) =>
+          prev.map((item) =>
+            item.id === otId
+              ? { ...item, status: "approved", remark }
               : item
           )
         );
@@ -912,15 +915,18 @@ export default function AdminClientPage({
       );
 
       if (res.success) {
-        setOvertimeReques((prev) =>
+        setOvertimeRequest((prev) =>
           prev.map((item) =>
             item.id === otId
-              ? {
-                ...item,
-                status: "rejected",
-                remarks: remark,
-                rejectedBy: currentAdminId,
-              }
+              ? { ...item, status: "rejected", remark }
+              : item
+          )
+        );
+
+        setOvertimeRequests((prev) =>
+          prev.map((item) =>
+            item.id === otId
+              ? { ...item, status: "rejected", remark }
               : item
           )
         );
@@ -1018,9 +1024,19 @@ export default function AdminClientPage({
       const res = await updateOvertimeStatusAction(otId, "pending", "");
 
       if (res.success) {
-        setOvertimeReques((prev) =>
+        setOvertimeRequest((prev) =>
           prev.map((item) =>
-            item.id === otId ? { ...item, status: "pending", remark: "" } : item
+            item.id === otId
+              ? { ...item, status: "pending", remark: "" }
+              : item
+          )
+        );
+
+        setOvertimeRequests((prev) =>
+          prev.map((item) =>
+            item.id === otId
+              ? { ...item, status: "pending", remark: "" }
+              : item
           )
         );
         router.refresh();
