@@ -1,5 +1,8 @@
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+
+type UserRole = 'employee' | 'leader' | 'admin' | 'superadmin';
 
 export function middleware(request: NextRequest) {
   const userId = request.cookies.get('session_user_id')?.value;
@@ -7,83 +10,160 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // รายการ Path ที่ต้องมีการ Login ก่อนเข้าถึง
-  const protectedPaths = ['/employee', '/leader', '/administrator', '/superAdmin'];
-  const isProtected = protectedPaths.some(path => pathname.startsWith(path));
+  const protectedPaths = [
+    '/employee',
+    '/leader',
+    '/administrator',
+    '/superAdmin',
+  ];
 
-  // --- LOGIC 0: ปล่อยให้ API Cleanup ทำงานได้เสมอ (สำคัญมาก) ---
+  const isProtected = protectedPaths.some(
+    path => pathname === path || pathname.startsWith(`${path}/`)
+  );
+
+  // ============================================================
+  // ROLE HELPERS
+  // ============================================================
+
+  function normalizeRole(value: string): UserRole | null {
+    const role = value.trim().toLowerCase();
+
+    const roles: Record<string, UserRole> = {
+      employee: 'employee',
+      leader: 'leader',
+      admin: 'admin',
+      administrator: 'admin',
+      superadmin: 'superadmin',
+      super_admin: 'superadmin',
+    };
+
+    return roles[role] ?? null;
+  }
+
+  function getRoleHome(role: UserRole): string {
+    const roleRedirects: Record<UserRole, string> = {
+      employee: '/employee',
+      leader: '/leader',
+      admin: '/administrator',
+      superadmin: '/superAdmin',
+    };
+
+    return roleRedirects[role];
+  }
+
+  // ============================================================
+  // LOGIC 0: ปล่อยให้ API Cleanup ทำงานได้เสมอ
+  // ============================================================
+
   if (pathname.startsWith('/api/auth/logout-cleanup')) {
     return NextResponse.next();
   }
 
-  // --- LOGIC 1: ถ้ายังไม่ได้ Login แต่อยากเข้าหน้า Protected ---
+  // ============================================================
+  // LOGIC 1: ยังไม่ได้ Login แต่ต้องการเข้าหน้า Protected
+  // ============================================================
+
   if (isProtected && !userId) {
-    // แก้ไข: เพิ่ม parameter error เพื่อให้ UI แสดงแจ้งเตือน และลบคุกกี้ที่ค้างอยู่ทิ้งทันที
     if (userRole) {
-      const response = NextResponse.redirect(new URL('/login?error=session_expired', request.url));
+      const response = NextResponse.redirect(
+        new URL('/login?error=session_expired', request.url)
+      );
+
       response.cookies.delete('session_user_id');
       response.cookies.delete('user_role');
+
       return response;
     }
-    return NextResponse.redirect(new URL('/login', request.url));
+
+    return NextResponse.redirect(
+      new URL('/login', request.url)
+    );
   }
 
-  // --- LOGIC 2: ถ้า Login อยู่แล้ว แต่พยายามจะเข้าหน้า /login ---
+  // ============================================================
+  // LOGIC 2: Login แล้ว แต่พยายามเข้าหน้า Login
+  // ============================================================
+
   if (userId && pathname === '/login') {
     if (!userRole) {
-      return NextResponse.redirect(new URL('/api/auth/logout-cleanup', request.url));
+      return NextResponse.redirect(
+        new URL('/api/auth/logout-cleanup', request.url)
+      );
     }
 
-    const roleRedirects: Record<string, string> = {
-      superAdmin: '/superAdmin',
-      superadmin: '/superAdmin',
-      super_Admin: '/superAdmin',
-      super_admin: '/superAdmin',
-      admin: '/administrator',
-      administrator: '/administrator',
-      leader: '/leader',
-      employee: '/employee',
-    };
+    const role = normalizeRole(userRole);
 
-    // ใช้ .trim() เพื่อป้องกันกรณีมี Space หลุดมาจาก DB เก่า
-    const roleKey = userRole.trim();
-    const targetPath = roleRedirects[roleKey] || roleRedirects[roleKey.toLowerCase()] || '/employee';
-    return NextResponse.redirect(new URL(targetPath, request.url));
+    if (!role) {
+      const response = NextResponse.redirect(
+        new URL('/login?error=invalid_role', request.url)
+      );
+
+      response.cookies.delete('session_user_id');
+      response.cookies.delete('user_role');
+
+      return response;
+    }
+
+    return NextResponse.redirect(
+      new URL(getRoleHome(role), request.url)
+    );
   }
 
-  // --- LOGIC 3: ป้องกันการเข้าหน้าผิดสิทธิ์ (Cross-Role Protection) ---
+  // ============================================================
+  // LOGIC 3: Cross-Role Protection
+  // ============================================================
+
   let response = NextResponse.next();
 
-  if (userId && userRole) {
-    // ใช้ .trim() และ .toLowerCase() เพื่อให้ข้อมูลเก่า-ใหม่เช็คได้ตรงกันเสมอ
-    const role = userRole.trim().toLowerCase();
+  if (userId && userRole && isProtected) {
+    const role = normalizeRole(userRole);
 
-    // 1. ถ้าเป็น Leader แต่หลงมาหน้า Employee
-    if (pathname.startsWith('/employee') && role === 'leader') {
-      return NextResponse.redirect(new URL('/leader', request.url));
+    // Role ไม่ถูกต้อง ห้ามเข้าทุก Protected Route
+    if (!role) {
+      const redirectResponse = NextResponse.redirect(
+        new URL('/login?error=invalid_role', request.url)
+      );
+
+      redirectResponse.cookies.delete('session_user_id');
+      redirectResponse.cookies.delete('user_role');
+
+      return redirectResponse;
     }
 
-    // 2. ป้องกันระดับสิทธิ์เด็ดขาด
-    if (pathname.startsWith('/leader') && role !== 'leader') {
-      const fallback = role === 'employee' ? '/employee' : '/login?error=session_expired';
-      return NextResponse.redirect(new URL(fallback, request.url));
-    }
+    // ตรวจสอบสิทธิ์ของแต่ละหน้า
+    const routeRoles: Record<string, UserRole> = {
+      '/employee': 'employee',
+      '/leader': 'leader',
+      '/administrator': 'admin',
+      '/superAdmin': 'superadmin',
+    };
 
-    if (pathname.startsWith('/administrator')) {
-      if (!(role === 'admin' || role === 'admin')) {
-        return NextResponse.redirect(new URL('/login?error=session_expired', request.url));
-      }
-    }
+    const requiredRole = protectedPaths.find(
+      path => pathname === path || pathname.startsWith(`${path}/`)
+    );
 
-    if (pathname.startsWith('/superAdmin')) {
-      if (!['superadmin', 'super_admin'].includes(role)) {
-        return NextResponse.redirect(new URL('/login?error=session_expired', request.url));
-      }
+    const expectedRole = requiredRole
+      ? routeRoles[requiredRole]
+      : null;
+
+    // เข้าได้เฉพาะหน้าที่ตรงกับ Role
+    if (expectedRole && role !== expectedRole) {
+      return NextResponse.redirect(
+        new URL(getRoleHome(role), request.url)
+      );
     }
   }
 
-  // --- LOGIC 4: ป้องกัน Browser Cache ---
+  // ============================================================
+  // LOGIC 4: ป้องกัน Browser Cache
+  // ============================================================
+
   if (isProtected || pathname === '/login') {
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, proxy-revalidate'
+    );
+
     response.headers.set('Pragma', 'no-cache');
     response.headers.set('Expires', '0');
   }
@@ -100,6 +180,6 @@ export const config = {
     '/administrator/:path*',
     '/superAdmin/:path*',
     '/login',
-    '/api/auth/logout-cleanup'
+    '/api/auth/logout-cleanup',
   ],
 };
