@@ -3501,7 +3501,7 @@ export default function AdminClientPage({
                               <div className="flex gap-2 mt-2">
                                 {l.fileUrl?.trim() ? (
                                   <button
-                                    onClick={() => setViewImage(l.fileUrl)}
+                                    onClick={() => window.open(l.fileUrl, "_blank", "noopener,noreferrer")}
                                     className="flex-1 py-3 bg-slate-900 text-white rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all"
                                   >
                                     📄 ดูเอกสาร
