@@ -1,10 +1,9 @@
-
 name: Hourly Cron Job
 
 on:
   schedule:
-    # Temporary test: Thailand 00:08 (UTC 17:08)
-    - cron: '8 17 * * *'
+    # Temporary test: Thailand 00:11 (UTC 17:11)
+    - cron: '11 17 * * *'
 
     # Existing schedule: Thailand 03:00, 07:00, 10:00, 15:00, 19:00, 22:00
     - cron: '0 20,0,3,8,12,15 * * *'
