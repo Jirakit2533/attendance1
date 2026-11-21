@@ -1,13 +1,14 @@
 
+
 import { cleanupExpiredOvertime } from "@/features/over-time/overtime-status-actions";
 import { executeOTAction } from "@/features/over-time/otExecutionActions";
 import { db } from "@/db/db";
 import { overtimeTable, automationLogTable } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const startTime = new Date();
@@ -40,67 +41,37 @@ export async function GET(request: Request) {
 
     logId = log.id;
 
-    // 3. Cleanup expired OT
+    // 3. Cleanup expired OT only
     const cleanupResult = await cleanupExpiredOvertime();
 
-    // 4. Find pending OT that has not been calculated
+    // 4. Find all pending OT without date restriction
     const pendingOTs = await db
       .select({
         attendanceId: overtimeTable.attendanceId,
-        userId: overtimeTable.userId,
-        date: overtimeTable.date,
       })
       .from(overtimeTable)
-      .where(
-        and(
-          eq(overtimeTable.status, "pending"),
-          eq(overtimeTable.overtimeApproved, 0)
-        )
-      );
+      .where(eq(overtimeTable.status, "pending"));
 
-    // 5. Group by User + Date
-    // executeOTAction processes all eligible OT
-    // belonging to the same user and date.
-    const groupedOTs = new Map<
-      string,
-      {
-        userId: string;
-        date: string;
-        attendanceId: string;
-      }
-    >();
+    // Process each attendance only once per Cron run
+    const attendanceIds = [
+      ...new Set(
+        pendingOTs
+          .map((ot) => ot.attendanceId)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
 
-    const attendanceIds = new Set<string>();
-
-    for (const ot of pendingOTs) {
-      if (!ot.userId || !ot.date || !ot.attendanceId) {
-        continue;
-      }
-
-      attendanceIds.add(ot.attendanceId);
-
-      const key = JSON.stringify([ot.userId, ot.date]);
-
-      if (!groupedOTs.has(key)) {
-        groupedOTs.set(key, {
-          userId: ot.userId,
-          date: ot.date,
-          attendanceId: ot.attendanceId,
-        });
-      }
-    }
-
-    // 6. Execute each User + Date group once
+    // 5. Delegate OT processing to executeOTAction
     let autoExecutedCount = 0;
     let processedRequestCount = 0;
     let failedCount = 0;
 
     const executionResults = [];
 
-    for (const group of groupedOTs.values()) {
+    for (const attendanceId of attendanceIds) {
       try {
         const result = await executeOTAction(
-          group.attendanceId,
+          attendanceId,
           "SYSTEM"
         );
 
@@ -108,9 +79,7 @@ export async function GET(request: Request) {
           failedCount++;
 
           executionResults.push({
-            userId: group.userId,
-            date: group.date,
-            attendanceId: group.attendanceId,
+            attendanceId,
             success: false,
             error: result.error,
           });
@@ -125,9 +94,7 @@ export async function GET(request: Request) {
           result.data?.processedRequestCount ?? 0;
 
         executionResults.push({
-          userId: group.userId,
-          date: group.date,
-          attendanceId: group.attendanceId,
+          attendanceId,
           success: true,
           data: result.data,
         });
@@ -135,9 +102,7 @@ export async function GET(request: Request) {
         failedCount++;
 
         executionResults.push({
-          userId: group.userId,
-          date: group.date,
-          attendanceId: group.attendanceId,
+          attendanceId,
           success: false,
           error:
             error instanceof Error
@@ -147,7 +112,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // 7. Update Cron Log
+    // 6. Update Cron Log
     const endTime = new Date();
 
     const totalChange =
@@ -178,8 +143,7 @@ export async function GET(request: Request) {
           dateFilter: "none",
 
           pendingOTCount: pendingOTs.length,
-          attendanceCount: attendanceIds.size,
-          groupCount: groupedOTs.size,
+          attendanceCount: attendanceIds.length,
 
           autoExecutedCount,
           processedRequestCount,
@@ -190,36 +154,27 @@ export async function GET(request: Request) {
       })
       .where(eq(automationLogTable.id, logId));
 
-    // 8. Return actual execution status
-    return NextResponse.json(
-      {
-        success: failedCount === 0,
+    return NextResponse.json({
+      success: failedCount === 0,
 
-        message:
-          failedCount === 0
-            ? "ระบบ Cleanup และประมวลผล OT สำเร็จ"
-            : "มีรายการ OT ที่ประมวลผลไม่สำเร็จ",
+      message:
+        "ระบบ Cleanup และประมวลผล OT อัตโนมัติเสร็จสิ้น",
 
-        timestamp: endTime.toISOString(),
+      timestamp: endTime.toISOString(),
 
-        details: {
-          ...cleanupResult,
+      details: {
+        ...cleanupResult,
 
-          dateFilter: "none",
+        dateFilter: "none",
 
-          pendingOTCount: pendingOTs.length,
-          attendanceCount: attendanceIds.size,
-          groupCount: groupedOTs.size,
+        pendingOTCount: pendingOTs.length,
+        attendanceCount: attendanceIds.length,
 
-          autoExecutedCount,
-          processedRequestCount,
-          failedCount,
-        },
+        autoExecutedCount,
+        processedRequestCount,
+        failedCount,
       },
-      {
-        status: failedCount > 0 ? 500 : 200,
-      }
-    );
+    });
   } catch (error) {
     const endTime = new Date();
 
@@ -262,3 +217,6 @@ export async function GET(request: Request) {
     );
   }
 }
+
+
+

@@ -1,3 +1,4 @@
+
 "use server";
 
 import { db } from "@/db/db";
@@ -13,6 +14,7 @@ import {
   and,
   inArray,
   isNull,
+  asc,
 } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
@@ -76,18 +78,16 @@ const getOTType = (
 };
 
 /**
- * API: Execute OT
+ * Execute OT
  *
- * - ค้นหา OT ที่เป็น pending หรือ approved
- * - ต้องมี overtimeApproved = 0
- * - JOIN Attendance กับ Shift
- * - ค้นหาเฉพาะ Request ที่ approved และยังไม่ถูกลบ
- * - ตรวจสอบ Request ให้ตรงกับประเภท Before / After
- * - ไม่อนุมัติ OT ที่ไม่มี Request ตรงประเภทเลย
- * - คำนวณ OT แต่ละรายการแยกจากกัน
- * - ไม่หักยอด Request สะสมระหว่าง OT
- * - เปลี่ยน pending เป็น approved ในขั้นตอน Update OT
- * - รองรับการประมวลผล OT ที่ approved แล้วแต่ยังไม่คำนวณ
+ * - ค้นหา OT ที่ pending หรือ approved และ overtimeApproved = 0
+ * - รวม OT และ Request ภายใน Shift เดียวกัน
+ * - แยกคำนวณ Before / After
+ * - Approved ไม่เกินยอด Request รวม
+ * - Approved ไม่เกินยอด OT จริงรวม
+ * - กระจาย Approved กลับไปยัง OT แต่ละรายการ
+ * - บันทึก Before + After ลง overtimeApproved ช่องเดียว
+ * - เปลี่ยน Request ที่ถูกนำมาใช้เป็น executed
  * - Update OT และ Request ภายใน Transaction
  */
 export async function executeOTAction(
@@ -129,12 +129,10 @@ export async function executeOTAction(
       .where(
         and(
           eq(overtimeTable.attendanceId, attendanceId),
-
           inArray(overtimeTable.status, [
             "pending",
             "approved",
           ]),
-
           eq(overtimeTable.overtimeApproved, 0)
         )
       )
@@ -184,11 +182,11 @@ export async function executeOTAction(
           and(
             eq(
               attendanceTable.user_id,
-              rawOT.userId!
+              rawOT.userId
             ),
             eq(
               attendanceTable.date,
-              rawOT.date!
+              rawOT.date
             )
           )
         );
@@ -245,14 +243,12 @@ export async function executeOTAction(
           and(
             eq(
               overtimeTable.userId,
-              rawOT.userId!
+              rawOT.userId
             ),
-
             eq(
               overtimeTable.date,
-              rawOT.date!
+              rawOT.date
             ),
-
             inArray(
               overtimeTable.status,
               [
@@ -260,17 +256,18 @@ export async function executeOTAction(
                 "approved",
               ]
             ),
-
             eq(
               overtimeTable.overtimeApproved,
               0
             ),
-
             inArray(
               overtimeTable.attendanceId,
               attendanceIds
             )
           )
+        )
+        .orderBy(
+          asc(overtimeTable.id)
         );
 
       console.log("RAW OTS:", {
@@ -282,8 +279,6 @@ export async function executeOTAction(
           date: ot.date,
           status: ot.status,
           overtimeApproved: ot.overtimeApproved,
-          timeStart: ot.timeStart,
-          timeEnd: ot.timeEnd,
           overtimeBefore: ot.overtimeBefore,
           overtimeAfter: ot.overtimeAfter,
         })),
@@ -306,28 +301,28 @@ export async function executeOTAction(
           and(
             eq(
               overtimeRequestsTable.userId,
-              rawOT.userId!
+              rawOT.userId
             ),
-
             eq(
               overtimeRequestsTable.date,
-              rawOT.date!
+              rawOT.date
             ),
-
             eq(
               overtimeRequestsTable.status,
               "approved"
             ),
-
             isNull(
               overtimeRequestsTable.deletedAt
             ),
-
             inArray(
               overtimeRequestsTable.shiftId,
               shiftIds
             )
           )
+        )
+        .orderBy(
+          asc(overtimeRequestsTable.timeStart),
+          asc(overtimeRequestsTable.id)
         );
 
       console.log("REQUESTS:", {
@@ -356,12 +351,21 @@ export async function executeOTAction(
         after: RequestItem[];
       };
 
+      type OTItem = {
+        ot: (typeof rawOTs)[number];
+        minutes: number;
+      };
+
+      type OTGroup = {
+        before: OTItem[];
+        after: OTItem[];
+      };
+
       const requestPoolByShift = new Map<
         string,
         RequestPool
       >();
 
-      // สร้าง Pool แยกตาม Shift
       for (const shiftId of shiftIds) {
         requestPoolByShift.set(shiftId, {
           before: [],
@@ -369,10 +373,24 @@ export async function executeOTAction(
         });
       }
 
+      // -------------------------------------------------
+      // 3.1 CLASSIFY REQUESTS
+      // -------------------------------------------------
+
+      const attendanceByShift = new Map(
+        attendances.map((attendance) => [
+          attendance.shiftId,
+          attendance,
+        ])
+      );
+
       for (const request of requests) {
-        const shift = attendances.find(
-          (attendance) =>
-            attendance.shiftId === request.shiftId
+        if (!request.shiftId) {
+          continue;
+        }
+
+        const shift = attendanceByShift.get(
+          request.shiftId
         );
 
         if (!shift) {
@@ -403,7 +421,7 @@ export async function executeOTAction(
         }
 
         const requestedMinutes = Number(
-          request.overtimeByRequest || 0
+          request.overtimeByRequest
         );
 
         if (
@@ -415,14 +433,14 @@ export async function executeOTAction(
           );
         }
 
+        if (requestedMinutes === 0) {
+          continue;
+        }
+
         const requestItem: RequestItem = {
           request,
           requestedMinutes,
         };
-
-        if (requestedMinutes === 0) {
-          continue;
-        }
 
         if (type === "before") {
           pool.before.push(requestItem);
@@ -460,63 +478,34 @@ export async function executeOTAction(
 
       const executedRequestIds = new Set<string>();
 
+      const approvedByOT = new Map<string, number>();
+
       let totalRawMinutes = 0;
       let totalApprovedMinutes = 0;
 
-      /**
-       * จัดสรรนาที OT จาก Request Pool
-       *
-       * - ใช้ยอด Request ตั้งต้นทุกครั้ง
-       * - ไม่แก้ไข requestedMinutes
-       * - ไม่หักยอด Request ระหว่าง OT แต่ละรายการ
-       * - คืนค่าเฉพาะ approvedMinutes
-       */
-      const allocateMinutes = (
-        targetMinutes: number,
-        requestPool: RequestItem[]
-      ): number => {
-        let remainingOTMinutes = targetMinutes;
-        let approvedMinutes = 0;
+      // -------------------------------------------------
+      // 4.1 GROUP OT BY SHIFT
+      // -------------------------------------------------
 
-        for (const item of requestPool) {
-          if (remainingOTMinutes <= 0) {
-            break;
-          }
+      const otGroupsByShift = new Map<
+        string,
+        OTGroup
+      >();
 
-          const allocatedMinutes = Math.min(
-            remainingOTMinutes,
-            item.requestedMinutes
-          );
-
-          if (allocatedMinutes <= 0) {
-            continue;
-          }
-
-          approvedMinutes += allocatedMinutes;
-          remainingOTMinutes -= allocatedMinutes;
-
-          // เก็บ Request ที่ถูกนำมาใช้
-          executedRequestIds.add(
-            item.request.id
-          );
-
-          console.log("ALLOCATE REQUEST:", {
-            requestId: item.request.id,
-            targetMinutes,
-            requestedMinutes: item.requestedMinutes,
-            allocatedMinutes,
-            remainingOTMinutes,
-          });
-        }
-
-        return approvedMinutes;
-      };
-
-      // =====================================================
-      // 5. PROCESS EACH OT
-      // =====================================================
+      for (const shiftId of shiftIds) {
+        otGroupsByShift.set(shiftId, {
+          before: [],
+          after: [],
+        });
+      }
 
       for (const ot of rawOTs) {
+        if (!ot.attendanceId) {
+          throw new Error(
+            `OT ${ot.id} ไม่มี Attendance ID`
+          );
+        }
+
         const attendance = attendanceMap.get(
           ot.attendanceId
         );
@@ -527,28 +516,12 @@ export async function executeOTAction(
           );
         }
 
-        // -------------------------------------------------
-        // 5.1 GET SHIFT TIME FROM DATABASE
-        // -------------------------------------------------
-
-        const shiftStartMinutes = toMinutes(
-          String(attendance.shiftStartTime)
-        );
-
-        const shiftEndMinutes = toMinutes(
-          String(attendance.shiftEndTime)
-        );
-
-        // -------------------------------------------------
-        // 5.2 GET OT MINUTES SEPARATELY
-        // -------------------------------------------------
-
         const otBefore = Number(
-          ot.overtimeBefore || 0
+          ot.overtimeBefore
         );
 
         const otAfter = Number(
-          ot.overtimeAfter || 0
+          ot.overtimeAfter
         );
 
         if (
@@ -566,132 +539,268 @@ export async function executeOTAction(
 
         totalRawMinutes += rawMinutes;
 
-        // -------------------------------------------------
-        // 5.3 GET REQUEST POOL BY SHIFT
-        // -------------------------------------------------
+        const group = otGroupsByShift.get(
+          attendance.shiftId
+        );
 
-        const activeRequestPool =
-          requestPoolByShift.get(
-            attendance.shiftId
-          );
-
-        if (!activeRequestPool) {
+        if (!group) {
           throw new Error(
-            `ไม่พบ Request Pool ของ Shift: ${attendance.shiftId}`
+            `ไม่พบ OT Group ของ Shift: ${attendance.shiftId}`
           );
         }
 
-        // -------------------------------------------------
-        // 5.4 VALIDATE MATCHING REQUEST
-        // -------------------------------------------------
+        if (otBefore > 0) {
+          group.before.push({
+            ot,
+            minutes: otBefore,
+          });
+        }
 
-        const hasBeforeRequest =
-          otBefore > 0 &&
-          activeRequestPool.before.length > 0;
+        if (otAfter > 0) {
+          group.after.push({
+            ot,
+            minutes: otAfter,
+          });
+        }
+      }
 
-        const hasAfterRequest =
-          otAfter > 0 &&
-          activeRequestPool.after.length > 0;
+      // =====================================================
+      // 5. AGGREGATE AND ALLOCATE OT
+      // =====================================================
 
-        const hasMatchingRequest =
-          hasBeforeRequest || hasAfterRequest;
+      /**
+       * กระจาย Approved กลับไปยัง OT
+       * ตามลำดับ UUID ที่ Query จัดเรียงไว้
+       */
+      const distributeApproved = (
+        items: OTItem[],
+        totalApproved: number
+      ) => {
+        let remainingMinutes = totalApproved;
+
+        for (const item of items) {
+          if (remainingMinutes <= 0) {
+            break;
+          }
+
+          const allocatedMinutes = Math.min(
+            item.minutes,
+            remainingMinutes
+          );
+
+          if (allocatedMinutes <= 0) {
+            continue;
+          }
+
+          const currentApproved =
+            approvedByOT.get(item.ot.id) || 0;
+
+          approvedByOT.set(
+            item.ot.id,
+            currentApproved + allocatedMinutes
+          );
+
+          remainingMinutes -= allocatedMinutes;
+
+          console.log("DISTRIBUTE OT:", {
+            otId: item.ot.id,
+            rawMinutes: item.minutes,
+            allocatedMinutes,
+            remainingMinutes,
+          });
+        }
+      };
+
+      /**
+       * เก็บ Request ที่ถูกนำมาใช้จริง
+       *
+       * หากใช้ Request เพียงบางส่วน
+       * จะเปลี่ยนสถานะทั้ง Request เป็น executed
+       */
+      const collectExecutedRequests = (
+        requestPool: RequestItem[],
+        totalApproved: number
+      ) => {
+        let remainingMinutes = totalApproved;
+
+        for (const item of requestPool) {
+          if (remainingMinutes <= 0) {
+            break;
+          }
+
+          const allocatedMinutes = Math.min(
+            item.requestedMinutes,
+            remainingMinutes
+          );
+
+          if (allocatedMinutes <= 0) {
+            continue;
+          }
+
+          executedRequestIds.add(
+            item.request.id
+          );
+
+          remainingMinutes -= allocatedMinutes;
+
+          console.log("CONSUME REQUEST:", {
+            requestId: item.request.id,
+            requestedMinutes: item.requestedMinutes,
+            allocatedMinutes,
+            remainingMinutes,
+          });
+        }
+      };
+
+      // -------------------------------------------------
+      // 5.1 PROCESS EACH SHIFT
+      // -------------------------------------------------
+
+      for (const [shiftId, otGroup] of otGroupsByShift) {
+        const requestPool = requestPoolByShift.get(
+          shiftId
+        );
+
+        if (!requestPool) {
+          throw new Error(
+            `ไม่พบ Request Pool ของ Shift: ${shiftId}`
+          );
+        }
+
+        // BEFORE TOTALS
+
+        const otBeforeTotal = otGroup.before.reduce(
+          (sum, item) => sum + item.minutes,
+          0
+        );
+
+        const requestBeforeTotal =
+          requestPool.before.reduce(
+            (sum, item) => sum + item.requestedMinutes,
+            0
+          );
+
+        // AFTER TOTALS
+
+        const otAfterTotal = otGroup.after.reduce(
+          (sum, item) => sum + item.minutes,
+          0
+        );
+
+        const requestAfterTotal =
+          requestPool.after.reduce(
+            (sum, item) => sum + item.requestedMinutes,
+            0
+          );
+
+        // ---------------------------------------------
+        // VALIDATE MATCHING REQUEST
+        // ---------------------------------------------
 
         /**
-         * OT ที่มียอดมากกว่า 0 ต้องมี Request
-         * ที่ตรงกับประเภท Before หรือ After อย่างน้อยหนึ่งประเภท
+         * Throw เฉพาะกรณี:
+         * - มี OT จริง
+         * - แต่ไม่มี Request ตรงกับทั้ง Before และ After
          *
-         * ถ้าไม่มี Request ตรงประเภทเลย:
-         * - ไม่ Update OT
-         * - ไม่เปลี่ยนสถานะเป็น approved
-         * - Throw เพื่อ Rollback Transaction
-         *
-         * กรณี OT มีทั้ง Before และ After
-         * แต่มี Request เพียงด้านเดียว:
-         * ยังคงคำนวณตาม Request ที่มีอยู่
+         * หากมี Request ตรงเพียงด้านเดียว
+         * จะอนุมัติเฉพาะด้านที่มี Request
          */
-        if (
-          rawMinutes > 0 &&
-          !hasMatchingRequest
-        ) {
+        const hasOT =
+          otBeforeTotal > 0 || otAfterTotal > 0;
+
+        const hasAnyMatchingRequest =
+          requestBeforeTotal > 0 ||
+          requestAfterTotal > 0;
+
+        if (hasOT && !hasAnyMatchingRequest) {
           throw new Error(
-            `ไม่สามารถอนุมัติ OT ${ot.id} ได้: ไม่พบ Request ที่ approved และยังไม่ถูกลบ ซึ่งตรงกับประเภท OT (Before / After) ของ Shift นี้`
+            `ไม่สามารถอนุมัติ OT ของ Shift ${shiftId} ได้: ไม่พบ Request ที่ approved และยังไม่ถูกลบ ซึ่งตรงกับประเภท OT Before / After`
           );
         }
 
-        console.log("REQUEST VALIDATION:", {
-          otId: ot.id,
-          shiftId: attendance.shiftId,
-          otBefore,
-          otAfter,
-          hasBeforeRequest,
-          hasAfterRequest,
-          hasMatchingRequest,
+        // ---------------------------------------------
+        // CALCULATE APPROVED TOTALS
+        // ---------------------------------------------
+
+        const approvedBeforeTotal = Math.min(
+          otBeforeTotal,
+          requestBeforeTotal
+        );
+
+        const approvedAfterTotal = Math.min(
+          otAfterTotal,
+          requestAfterTotal
+        );
+
+        // ---------------------------------------------
+        // DISTRIBUTE APPROVED BACK TO OT
+        // ---------------------------------------------
+
+        distributeApproved(
+          otGroup.before,
+          approvedBeforeTotal
+        );
+
+        distributeApproved(
+          otGroup.after,
+          approvedAfterTotal
+        );
+
+        // ---------------------------------------------
+        // COLLECT EXECUTED REQUESTS
+        // ---------------------------------------------
+
+        collectExecutedRequests(
+          requestPool.before,
+          approvedBeforeTotal
+        );
+
+        collectExecutedRequests(
+          requestPool.after,
+          approvedAfterTotal
+        );
+
+        console.log("SHIFT AGGREGATION:", {
+          shiftId,
+
+          before: {
+            otTotal: otBeforeTotal,
+            requestTotal: requestBeforeTotal,
+            approvedTotal: approvedBeforeTotal,
+          },
+
+          after: {
+            otTotal: otAfterTotal,
+            requestTotal: requestAfterTotal,
+            approvedTotal: approvedAfterTotal,
+          },
+
+          shiftRawMinutes:
+            otBeforeTotal + otAfterTotal,
+
+          shiftApprovedMinutes:
+            approvedBeforeTotal + approvedAfterTotal,
         });
+      }
 
-        // -------------------------------------------------
-        // 5.5 ALLOCATE BEFORE / AFTER SEPARATELY
-        // -------------------------------------------------
+      // =====================================================
+      // 5.2 UPDATE EACH OT
+      // =====================================================
 
-        // Before ใช้เฉพาะ Request Before
-        const approvedBefore = otBefore > 0
-          ? allocateMinutes(
-              otBefore,
-              activeRequestPool.before
-            )
-          : 0;
-
-        // After ใช้เฉพาะ Request After
-        const approvedAfter = otAfter > 0
-          ? allocateMinutes(
-              otAfter,
-              activeRequestPool.after
-            )
-          : 0;
-
-        // ผลรวม Approved ของ OT รายการนี้
+      for (const ot of rawOTs) {
         const approvedMinutes =
-          approvedBefore + approvedAfter;
+          approvedByOT.get(ot.id) || 0;
 
         totalApprovedMinutes += approvedMinutes;
-
-        // -------------------------------------------------
-        // 5.6 DEBUG
-        // -------------------------------------------------
 
         console.log("PROCESS OT:", {
           id: ot.id,
           attendanceId: ot.attendanceId,
-          shiftId: attendance.shiftId,
-
-          shiftStartMinutes,
-          shiftEndMinutes,
-
-          before: {
-            rawMinutes: otBefore,
-            requestMinutes: activeRequestPool.before.reduce(
-              (sum, item) => sum + item.requestedMinutes,
-              0
-            ),
-            approvedMinutes: approvedBefore,
-          },
-
-          after: {
-            rawMinutes: otAfter,
-            requestMinutes: activeRequestPool.after.reduce(
-              (sum, item) => sum + item.requestedMinutes,
-              0
-            ),
-            approvedMinutes: approvedAfter,
-          },
-
-          rawMinutes,
+          rawBefore: Number(ot.overtimeBefore),
+          rawAfter: Number(ot.overtimeAfter),
           approvedMinutes,
           previousStatus: ot.status,
         });
-
-        // -------------------------------------------------
-        // 5.7 UPDATE OT + CHANGE STATUS
-        // -------------------------------------------------
 
         const [updated] = await tx
           .update(overtimeTable)
@@ -705,7 +814,6 @@ export async function executeOTAction(
                 overtimeTable.id,
                 ot.id
               ),
-
               inArray(
                 overtimeTable.status,
                 [
@@ -713,7 +821,6 @@ export async function executeOTAction(
                   "approved",
                 ]
               ),
-
               eq(
                 overtimeTable.overtimeApproved,
                 0
@@ -739,7 +846,7 @@ export async function executeOTAction(
         const [updatedRequest] = await tx
           .update(overtimeRequestsTable)
           .set({
-            status: "executed" as any,
+            status: "executed",
           })
           .where(
             and(
@@ -747,12 +854,10 @@ export async function executeOTAction(
                 overtimeRequestsTable.id,
                 requestId
               ),
-
               eq(
                 overtimeRequestsTable.status,
                 "approved"
               ),
-
               isNull(
                 overtimeRequestsTable.deletedAt
               )
@@ -780,7 +885,6 @@ export async function executeOTAction(
         requestCount: requests.length,
         processedOTCount: updatedOTs.length,
         processedRequestCount: executedRequestIds.size,
-        updatedOTs,
       };
     });
 
@@ -841,11 +945,16 @@ export async function executeOTAction(
       },
     };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
 
     // =====================================================
     // 9. UPDATE FAILURE LOG
     // =====================================================
+
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ";
 
     if (logId) {
       await db
@@ -853,7 +962,7 @@ export async function executeOTAction(
         .set({
           status: "fault",
           details: {
-            error: error.message,
+            error: errorMessage,
             attendanceId,
             adminId,
           },
@@ -868,12 +977,12 @@ export async function executeOTAction(
 
     console.error(
       "OT Execution Failed:",
-      error.message
+      errorMessage
     );
 
     return {
       success: false,
-      error: error.message,
+      error: errorMessage,
     };
   }
 }
