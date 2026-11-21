@@ -1,16 +1,31 @@
+
 name: Hourly Cron Job
+
 on:
   schedule:
-    # ตั้งเวลาตามที่คุณต้องการ (เป็นเวลา UTC)
-    # 0 3,7,10,15,19,22 ของไทย (GMT+7) จะเท่ากับ:
-    - cron: '0 20,0,3,8,12,15 * * *' 
-  workflow_dispatch: # ช่วยให้คุณกดสั่งรันเองได้จากหน้า GitHub เพื่อทดสอบ
+    # Temporary test: Thailand 00:08 (UTC 17:08)
+    - cron: '8 17 * * *'
+
+    # Existing schedule: Thailand 03:00, 07:00, 10:00, 15:00, 19:00, 22:00
+    - cron: '0 20,0,3,8,12,15 * * *'
+
+  workflow_dispatch:
 
 jobs:
   cron:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
       - name: Call Cron API
         run: |
-          curl -X GET "https://attendance1-k1ds.vercel.app/api/cron/cleanup" \
-          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          curl \
+            --fail-with-body \
+            --show-error \
+            --silent \
+            --max-time 360 \
+            --retry 2 \
+            --retry-delay 10 \
+            --retry-all-errors \
+            -X GET "https://attendance1-k1ds.vercel.app/api/cron/cleanup" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
