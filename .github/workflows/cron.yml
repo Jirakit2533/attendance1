@@ -1,11 +1,9 @@
+
 name: Hourly Cron Job
 
 on:
   schedule:
-    # Temporary test: Thailand 00:11 (UTC 17:11)
-    - cron: '11 17 * * *'
-
-    # Existing schedule: Thailand 03:00, 07:00, 10:00, 15:00, 19:00, 22:00
+    # Thailand time: 03:00, 07:00, 10:00, 15:00, 19:00, 22:00
     - cron: '0 20,0,3,8,12,15 * * *'
 
   workflow_dispatch:
@@ -22,9 +20,6 @@ jobs:
             --fail-with-body \
             --show-error \
             --silent \
-            --max-time 360 \
-            --retry 2 \
-            --retry-delay 10 \
-            --retry-all-errors \
+            --max-time 330 \
             -X GET "https://attendance1-k1ds.vercel.app/api/cron/cleanup" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
