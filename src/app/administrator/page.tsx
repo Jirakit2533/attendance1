@@ -376,6 +376,8 @@ export default async function AdminDashboardPage() {
             overtimeRequestsTable.userName,
           workingDate:
             overtimeRequestsTable.date,
+          isAfterMidnight:
+            overtimeRequestsTable.isAfterMidnight,
           createdAt:
             overtimeRequestsTable.createdAt,
           timeStart:
@@ -492,7 +494,7 @@ export default async function AdminDashboardPage() {
             isUuid
               ? emp.firstName?.toLowerCase()
               : emp?.userName ||
-                "user";
+              "user";
 
           return {
             id: String(
@@ -513,13 +515,13 @@ export default async function AdminDashboardPage() {
               "ไม่ระบุชื่อ",
             role: String(
               emp?.role ||
-                "employee"
+              "employee"
             ),
             departmentId:
               emp?.departmentId
                 ? String(
-                    emp.departmentId
-                  )
+                  emp.departmentId
+                )
                 : null,
             departmentName:
               emp?.departmentName ||
@@ -527,8 +529,8 @@ export default async function AdminDashboardPage() {
             positionId:
               emp?.positionId
                 ? String(
-                    emp.positionId
-                  )
+                  emp.positionId
+                )
                 : null,
             positionName:
               emp?.positionName ||
@@ -536,19 +538,19 @@ export default async function AdminDashboardPage() {
             siteId:
               emp?.siteId
                 ? String(
-                    emp.siteId
-                  )
+                  emp.siteId
+                )
                 : null,
             site: String(
               emp?.siteName ||
-                "ไม่ระบุ"
+              "ไม่ระบุ"
             ),
             siteName:
               emp?.siteName ||
               "ไม่ระบุ",
             position: String(
               emp?.positionName ||
-                "พนักงาน"
+              "พนักงาน"
             ),
             avatarUrl:
               emp?.avatarUrl ||
@@ -640,12 +642,12 @@ export default async function AdminDashboardPage() {
             locationIn:
               String(
                 at?.locationIn ||
-                  "-"
+                "-"
               ),
             locationOut:
               String(
                 at?.locationOut ||
-                  "-"
+                "-"
               ),
             imageIn:
               at?.imageIn ||
@@ -664,8 +666,8 @@ export default async function AdminDashboardPage() {
             isEarlyExit:
               at.isEarlyExit
                 ? String(
-                    at.isEarlyExit
-                  )
+                  at.isEarlyExit
+                )
                 : "-",
           };
         }
@@ -693,10 +695,10 @@ export default async function AdminDashboardPage() {
       approvedMinutesByUserDate.set(
         key,
         current +
-          Number(
-            ot.overtimeApproved ||
-              0
-          )
+        Number(
+          ot.overtimeApproved ||
+          0
+        )
       );
     }
 
@@ -709,7 +711,7 @@ export default async function AdminDashboardPage() {
         (request) => ({
           id: String(
             request.requestId ||
-              ""
+            ""
           ),
 
           userId: String(
@@ -730,7 +732,7 @@ export default async function AdminDashboardPage() {
 
           employeeName: String(
             request.employeeName ||
-              "ไม่ระบุชื่อ"
+            "ไม่ระบุชื่อ"
           ),
 
           avatarUrl:
@@ -740,16 +742,19 @@ export default async function AdminDashboardPage() {
           date:
             request.workingDate
               ? String(
-                  request.workingDate
-                )
+                request.workingDate
+              )
               : "",
 
           workingDate:
             request.workingDate
               ? String(
-                  request.workingDate
-                )
+                request.workingDate
+              )
               : "",
+
+          isAfterMidnight:
+            request.isAfterMidnight === true,
 
           timeStart:
             request.timeStart ||
@@ -765,7 +770,7 @@ export default async function AdminDashboardPage() {
           overtimeByRequest:
             Number(
               request.overtimeByRequest ||
-                0
+              0
             ),
 
           overtimeBefore: 0,
@@ -775,7 +780,7 @@ export default async function AdminDashboardPage() {
 
           status: String(
             request.status ||
-              "pending"
+            "pending"
           ),
 
           positionName:
@@ -789,15 +794,15 @@ export default async function AdminDashboardPage() {
           requestDate:
             request.createdAt
               ? new Date(
-                  request.createdAt
-                ).toISOString()
+                request.createdAt
+              ).toISOString()
               : null,
 
           rawCreatedAt:
             request.createdAt
               ? new Date(
-                  request.createdAt
-                ).getTime()
+                request.createdAt
+              ).getTime()
               : 0,
         })
       );
@@ -859,9 +864,9 @@ export default async function AdminDashboardPage() {
       ) {
         if (
           request.status !==
-            "approved" &&
+          "approved" &&
           request.status !==
-            "executed"
+          "executed"
         ) {
           continue;
         }
@@ -946,7 +951,7 @@ export default async function AdminDashboardPage() {
         null,
       company: String(
         currentAdmin?.companyName ||
-          "บริษัท"
+        "บริษัท"
       ),
       role: "admin",
     };
@@ -972,19 +977,19 @@ export default async function AdminDashboardPage() {
             ),
             type: String(
               l?.type ||
-                "ลากิจ"
+              "ลากิจ"
             ),
             startDate:
               l?.startDate
                 ? String(
-                    l.startDate
-                  )
+                  l.startDate
+                )
                 : "",
             endDate:
               l?.endDate
                 ? String(
-                    l.endDate
-                  )
+                  l.endDate
+                )
                 : "",
             startTime:
               l?.startTime ||
@@ -994,7 +999,7 @@ export default async function AdminDashboardPage() {
               null,
             status: String(
               l?.status ||
-                "pending"
+              "pending"
             ),
             reason: String(
               l?.reason || ""
@@ -1023,8 +1028,8 @@ export default async function AdminDashboardPage() {
             createdAt:
               l?.createdAt
                 ? String(
-                    l.createdAt
-                  )
+                  l.createdAt
+                )
                 : null,
           })
         ),
@@ -1107,7 +1112,7 @@ export default async function AdminDashboardPage() {
   } catch (error: any) {
     if (
       error.message ===
-        "NEXT_REDIRECT" ||
+      "NEXT_REDIRECT" ||
       error.digest?.includes(
         "NEXT_REDIRECT"
       )

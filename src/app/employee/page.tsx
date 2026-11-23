@@ -114,15 +114,29 @@ export default async function Page() {
     /* ✅ แก้ไข: ใช้ createdAt เรียงลำดับรายการที่เพิ่งสร้างล่าสุดไว้บนสุด (แม่นยำกว่าใช้วันที่ลา) */
     .orderBy(desc(leaveTable.createdAt))
   // 🔍 3. ดึงข้อมูล OT พร้อม Join หาชื่อผู้อนุมัติ
+  // 3. ดึงข้อมูล OT พร้อม Join หาชื่อผู้อนุมัติ
   const otApprover = alias(usersTable, "otApprover");
+
   const dbOT = await db
     .select({
       id: overtimeRequestsTable.id,
+
+      // ข้อมูล OT
+      date: overtimeRequestsTable.date,
+      startTime: overtimeRequestsTable.timeStart,
+      endTime: overtimeRequestsTable.timeEnd,
+      isAfterMidnight: overtimeRequestsTable.isAfterMidnight,
+
+      // จำนวนและสถานะ
       overtimeByRequest: overtimeRequestsTable.overtimeByRequest,
       status: overtimeRequestsTable.status,
-      remark: overtimeRequestsTable.remarks, // ✅ เปลี่ยน Alias เป็น remark ให้ตรงกับที่ใช้
-      reason: overtimeRequestsTable.reason, // ✅ เพิ่ม: ดึงเหตุผลที่พนักงานกรอก
+
+      // รายละเอียด
+      remark: overtimeRequestsTable.remarks,
+      reason: overtimeRequestsTable.reason,
       createdAt: overtimeRequestsTable.createdAt,
+
+      // ผู้อนุมัติ
       approverFirst: otApprover.firstName,
       approverLast: otApprover.lastName,
     })
@@ -135,7 +149,7 @@ export default async function Page() {
       )
     )
     .where(eq(overtimeRequestsTable.userId, user.id))
-    .orderBy(desc(overtimeRequestsTable.createdAt))
+    .orderBy(desc(overtimeRequestsTable.createdAt));
 
   // 4. Mapping ข้อมูล (เพิ่มฟิลด์สถานะเพื่อให้ตรงกับ UI)
   const initialRecords = (dbRecords || []).map((r) => ({
@@ -162,12 +176,12 @@ export default async function Page() {
     // ✅ จัดการ Format createdAt เป็น วันที่/เดือน/ปี ชม.:นาที
     const formattedCreatedAt = (() => {
       if (!l.createdAt) return "-";
-      
+
       const dateObj = new Date(l.createdAt);
-      
+
       // 🛡️ ตรวจสอบว่า Date ถูกต้องหรือไม่
       if (isNaN(dateObj.getTime())) return "-";
-    
+
       try {
         return dateObj
           .toLocaleString("en-GB", {
@@ -199,10 +213,10 @@ export default async function Page() {
         l.status === "pending"
           ? "รออนุมัติ"
           : l.status === "approved"
-          ? "อนุมัติแล้ว"
-          : l.status === "rejected"
-          ? "ปฏิเสธ"
-          : l.status,
+            ? "อนุมัติแล้ว"
+            : l.status === "rejected"
+              ? "ปฏิเสธ"
+              : l.status,
       // ✅ ดึงชื่อผู้อนุมัติ และชื่อตำแหน่งผู้อนุมัติ จากข้อมูลที่ Join มา
       approverName: l.approverFirst
         ? `${l.approverFirst} ${l.approverLast || ""}`.trim()
@@ -213,11 +227,35 @@ export default async function Page() {
 
   // 5. Mapping ข้อมูล OT ให้ตรงกับคีย์ที่ UI ต้องการ
   const initialOT = (dbOT || []).map((ot) => ({
-    createdAt: ot.createdAt,
-    overtimeByRequest: ot.overtimeByRequest,
+    id: ot.id,
+
+    // วันที่อ้างอิงใน DB
+    date: ot.date,
+
+    // เวลาเริ่มต้นและสิ้นสุด
+    startTime: ot.startTime
+      ? String(ot.startTime).slice(0, 5)
+      : "-",
+
+    endTime: ot.endTime
+      ? String(ot.endTime).slice(0, 5)
+      : "-",
+
+    // ประเภท OT
+    isAfterMidnight: ot.isAfterMidnight,
+
+    // จำนวน OT
+    overtimeByRequest: Number(ot.overtimeByRequest),
+
+    // สถานะ
     status: ot.status,
-    remark: ot.remark, // ✅ ส่งหมายเหตุแอดมิน (remarks เดิม)
-    reason: ot.reason, // ✅ ส่งเหตุผลพนักงาน (reason ใหม่)
+
+    // รายละเอียด
+    remark: ot.remark,
+    reason: ot.reason,
+    createdAt: ot.createdAt,
+
+    // ผู้อนุมัติ
     approverName: ot.approverFirst
       ? `${ot.approverFirst} ${ot.approverLast || ""}`.trim()
       : "-",
@@ -234,7 +272,7 @@ export default async function Page() {
     userName: user.userName, // ✅ เพิ่มเพื่อให้ Badge Username แสดงผล
     position: user.positionName, // ✅ ส่งชื่อตำแหน่งเข้าไป
     site: user.siteName, // ✅ ส่งชื่อไซต์เข้าไป
-    department: user.departmentName, 
+    department: user.departmentName,
     // ✅ ส่งเวลาเข้า-ออกงานไปที่หน้า Client
     startTime: user.startTime,
     endTime: user.endTime,

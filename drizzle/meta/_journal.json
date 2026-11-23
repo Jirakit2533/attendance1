@@ -43,6 +43,13 @@
       "when": 1789990952433,
       "tag": "0005_calm_selene",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795447119018,
+      "tag": "0006_odd_moonstone",
+      "breakpoints": true
     }
   ]
 }

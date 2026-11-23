@@ -1,4 +1,4 @@
-
+//path: src/features/over-time/otExecutionActions.ts
 "use server";
 
 import { db } from "@/db/db";
@@ -333,6 +333,7 @@ export async function executeOTAction(
           timeStart: request.timeStart,
           timeEnd: request.timeEnd,
           overtimeByRequest: request.overtimeByRequest,
+          isAfterMidnight: request.isAfterMidnight,
           status: request.status,
         })),
       });
@@ -405,12 +406,18 @@ export async function executeOTAction(
           String(shift.shiftEndTime)
         );
 
-        const type = getOTType(
+        // ใช้ Algorithm เดิมจำแนกประเภท OT
+        const originalType = getOTType(
           String(request.timeStart),
           String(request.timeEnd),
           shiftStartMinutes,
           shiftEndMinutes
         );
+
+        // เพิ่มเงื่อนไขสำหรับ Request หลังเที่ยงคืน
+        const type: OTType = request.isAfterMidnight
+          ? "after"
+          : originalType;
 
         const pool = requestPoolByShift.get(
           request.shiftId
@@ -462,10 +469,12 @@ export async function executeOTAction(
           before: pool.before.map((item) => ({
             id: item.request.id,
             requestedMinutes: item.requestedMinutes,
+            isAfterMidnight: item.request.isAfterMidnight,
           })),
           after: pool.after.map((item) => ({
             id: item.request.id,
             requestedMinutes: item.requestedMinutes,
+            isAfterMidnight: item.request.isAfterMidnight,
           })),
         })),
       });

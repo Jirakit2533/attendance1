@@ -1074,6 +1074,7 @@ export default function AdminClientPage({
     }
   };
 
+
   const handleGenerateReport = async () => {
     // 1. ป้องกันการกดซ้ำ และตรวจสอบว่ามีการเลือกพนักงานหรือไม่
     if (isProcessing || selectedEmployees.length === 0) {
@@ -1096,63 +1097,111 @@ export default function AdminClientPage({
           ? "/api/attendance/generate-report"
           : "/api/overtime/generate-report";
 
-      // 3. ยิง API ตัวหลักเพียงตัวเดียว (Attendance จะรวมข้อมูล Leave มาให้แล้ว)
+      // 3. ยิง API
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           employeeIds: selectedEmployees,
-          startDate: startDate,
-          endDate: endDate,
+          startDate,
+          endDate,
           format: exportFormat,
-          reportType: reportType,
+          reportType,
         }),
       });
 
       const result = await response.json();
 
       if (response.ok && result.success) {
-        // 4. normalize data กัน undefined + กัน type mismatch
+        // 4. Normalize data
         let finalData = Array.isArray(result.data)
           ? result.data.filter(Boolean)
           : [];
 
-        // จัดการข้อมูลการลา (Leave Data) ที่แนบมากับ API Attendance
+        // จัดการข้อมูลการลา
         const finalLeaveData =
           result.leaveData && Array.isArray(result.leaveData)
             ? result.leaveData.map((leave: any) => ({
               ...leave,
-              // ประกันว่า key ชื่อผู้อนุมัติจะถูกส่งต่อไปยัง UI อย่างถูกต้อง
-              approvedByName: leave.approvedByName ?? "ไม่ระบุผู้อนุมัติ",
+              approvedByName:
+                leave.approvedByName ?? "ไม่ระบุผู้อนุมัติ",
             }))
             : [];
 
         if (reportType === "overtime") {
-          finalData = finalData.map((item: any) => ({
-            ...item,
-            // 1. เพิ่ม 3 ฟิลด์สำคัญที่หายไป ส่งต่อไปยัง UI/State
-            overtimeBefore: item.overtimeBefore ?? 0,
-            overtimeAfter: item.overtimeAfter ?? 0,
-            overtimeApproved: item.overtimeApproved ?? 0,
+          const getOTReportDate = (
+            date: string | Date,
+            isAfterMidnight: boolean
+          ): string => {
+            const rawDate =
+              typeof date === "string"
+                ? date.slice(0, 10)
+                : date.toISOString().slice(0, 10);
 
-            // 2. ข้อมูลอื่นๆ จาก Schema
-            approvedByName: item.approvedByName ?? "System Admin",
-            approvedBy: item.approvedBy ?? null,
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+              throw new Error(`Invalid OT date: ${String(date)}`);
+            }
 
-            // 3. otHours ส่งค่าจริงตรงๆ ไม่ fallback ข้ามไปเอา overtimeByRequest มาทับ
-            otHours: item.otHours ?? 0,
+            const [year, month, day] = rawDate.split("-").map(Number);
 
-            // 4. สถานะและรายละเอียด
-            status: item.otStatus ?? item.status,
-            reason: item.reason ?? "-",
-            remarks: item.remarks ?? "-",
-            timeStart: item.timeStart ?? "-",
-            timeEnd: item.timeEnd ?? "-",
-            date: item.date,
-            userName: item.userName ?? `${item.firstName || ""} ${item.lastName || ""}`.trim(),
-          }));
+            const reportDate = new Date(Date.UTC(year, month - 1, day));
 
-          // ล้าง State Leave เมื่อเป็นรายงาน OT
+            if (isAfterMidnight) {
+              reportDate.setUTCDate(reportDate.getUTCDate() + 1);
+            }
+
+            return [
+              reportDate.getUTCFullYear(),
+              String(reportDate.getUTCMonth() + 1).padStart(2, "0"),
+              String(reportDate.getUTCDate()).padStart(2, "0"),
+            ].join("-");
+          };
+
+          finalData = finalData.map((item: any) => {
+            const isAfterMidnight = item.isAfterMidnight === true;
+
+            const reportDate = getOTReportDate(
+              item.date,
+              isAfterMidnight
+            );
+
+            return {
+              ...item,
+              date: item.date,
+              reportDate,
+              isAfterMidnight,
+              otType: isAfterMidnight
+                ? "OT ข้ามเที่ยงคืน"
+                : "OT ปกติ",
+
+              overtimeBefore: item.overtimeBefore ?? 0,
+              overtimeAfter: item.overtimeAfter ?? 0,
+              overtimeApproved: item.overtimeApproved ?? 0,
+
+              approvedByName: item.approvedByName ?? "System Admin",
+              approvedBy: item.approvedBy ?? null,
+
+              otHours: item.otHours ?? 0,
+              status: item.otStatus ?? item.status,
+              reason: item.reason ?? "-",
+              remarks: item.remarks ?? "-",
+              timeStart: item.timeStart ?? "-",
+              timeEnd: item.timeEnd ?? "-",
+
+              userName:
+                item.userName ??
+                `${item.firstName || ""} ${item.lastName || ""}`.trim(),
+            };
+          });
+
+          finalData = finalData.filter((item: any) => {
+            return item.reportDate >= startDate && item.reportDate <= endDate;
+          });
+
+          finalData.sort((a: any, b: any) =>
+            a.reportDate.localeCompare(b.reportDate)
+          );
+
           setLeaveData([]);
         }
 
@@ -1186,6 +1235,7 @@ export default function AdminClientPage({
       setIsProcessing(false);
     }
   };
+
   const handleUpdateCompany = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSavingCompany(true);
@@ -3710,11 +3760,27 @@ export default function AdminClientPage({
                                     {/* วันที่ทำ OT */}
                                     <td className="py-4 px-6 text-center text-gray-800 font-bold text-sm">
                                       {l.workingDate
-                                        ? new Date(l.workingDate).toLocaleDateString("th-TH", {
-                                          day: "numeric",
-                                          month: "short",
-                                          year: "numeric",
-                                        })
+                                        ? (() => {
+                                          const [year, month, day] = String(l.workingDate)
+                                            .slice(0, 10)
+                                            .split("-")
+                                            .map(Number);
+
+                                          const date = new Date(
+                                            Date.UTC(year, month - 1, day)
+                                          );
+
+                                          if (l.isAfterMidnight === true) {
+                                            date.setUTCDate(date.getUTCDate() + 1);
+                                          }
+
+                                          return date.toLocaleDateString("th-TH", {
+                                            day: "numeric",
+                                            month: "short",
+                                            year: "numeric",
+                                            timeZone: "UTC",
+                                          });
+                                        })()
                                         : "-"}
                                     </td>
 
@@ -5629,32 +5695,65 @@ export default function AdminClientPage({
                   }))
                 );
 
-                // ============================================================
-                // OT Allocation
-                // overtimeApproved จาก DB = ยอด OT จริงรวมของ user + date
-                // overtimeByRequest = ยอดที่แต่ละ request ขอ
-                // นำยอดรวมมาแบ่งให้แต่ละ request ตามลำดับ createdAt
-                // ============================================================
-                // ============================================================
-                // OT Report Normalization
-                // ป้องกันกรณี Request ถูก JOIN กับ OT หลาย attendanceId
-                //
-                // ตัวอย่างข้อมูลที่อาจเข้ามา:
-                // Request 1 + OT 38
-                // Request 1 + OT 282
-                // Request 2 + OT 38
-                // Request 2 + OT 282
-                // Request 3 + OT 38
-                // Request 3 + OT 282
-                //
-                // สิ่งที่ต้องการ:
-                // Request 1
-                // Request 2
-                // Request 3
-                //
-                // และ OT จริงของวัน = 38 + 282 = 320 นาที
-                // ============================================================
+                const getOTReportDate = (
+                  date: string | Date,
+                  isAfterMidnight: boolean
+                ): string => {
+                  // รองรับ date ที่เป็น YYYY-MM-DD หรือ Date
+                  const rawDate =
+                    typeof date === "string"
+                      ? date.slice(0, 10)
+                      : [
+                        date.getFullYear(),
+                        String(date.getMonth() + 1).padStart(2, "0"),
+                        String(date.getDate()).padStart(2, "0"),
+                      ].join("-");
 
+                  const [year, month, day] = rawDate.split("-").map(Number);
+
+                  const result = new Date(Date.UTC(year, month - 1, day));
+
+                  if (isAfterMidnight) {
+                    result.setUTCDate(result.getUTCDate() + 1);
+                  }
+
+                  return [
+                    result.getUTCFullYear(),
+                    String(result.getUTCMonth() + 1).padStart(2, "0"),
+                    String(result.getUTCDate()).padStart(2, "0"),
+                  ].join("-");
+                };
+
+                // คำนวณวันที่จริงใหม่จากข้อมูล DB ทุกครั้ง
+                const normalizedReportData = isOTReport
+                  ? safeReportData.map((item: any) => {
+                    const isAfterMidnight =
+                      item.isAfterMidnight === true ||
+                      item.isAfterMidnight === "true" ||
+                      item.isAfterMidnight === 1;
+
+                    return {
+                      ...item,
+                      isAfterMidnight,
+                      reportDate: getOTReportDate(
+                        item.date,
+                        isAfterMidnight
+                      ),
+                    };
+                  })
+                  : safeReportData;
+
+                if (isOTReport) {
+                  console.table(
+                    normalizedReportData.map((item: any) => ({
+                      id: item.id,
+                      dbDate: item.date,
+                      isAfterMidnight: item.isAfterMidnight,
+                      reportDate: item.reportDate,
+                      originalType: typeof item.isAfterMidnight,
+                    }))
+                  );
+                }
                 const reportDataWithOTAllocation = isOTReport
                   ? (() => {
                     // --------------------------------------------
@@ -5664,9 +5763,8 @@ export default function AdminClientPage({
                     const approvedByUserDate =
                       new Map<string, Set<number>>();
 
-                    for (const item of safeReportData) {
-                      const key =
-                        `${item?.userId}_${item?.date}`;
+                    for (const item of normalizedReportData) {
+                      const key = `${item?.userId}_${item?.reportDate ?? item?.date}`;
 
                       if (!approvedByUserDate.has(key)) {
                         approvedByUserDate.set(
@@ -5713,7 +5811,7 @@ export default function AdminClientPage({
                     const uniqueRequests =
                       new Map<string, any>();
 
-                    for (const item of safeReportData) {
+                    for (const item of normalizedReportData) {
                       const requestId = String(
                         item?.id ?? ""
                       );
@@ -5745,8 +5843,7 @@ export default function AdminClientPage({
                       new Map<string, any[]>();
 
                     for (const request of result) {
-                      const key =
-                        `${request?.userId}_${request?.date}`;
+                      const key = `${request?.userId}_${request?.reportDate ?? request?.date}`;
 
                       if (!requestGroups.has(key)) {
                         requestGroups.set(
@@ -5954,6 +6051,9 @@ export default function AdminClientPage({
                               ) : (
                                 <>
                                   <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
+                                    ประเภท OT
+                                  </th>
+                                  <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
                                     เริ่ม (Time)
                                   </th>
                                   <th className="px-3 py-2 font-bold text-[10px] uppercase border border-slate-300 text-center w-20">
@@ -5972,8 +6072,8 @@ export default function AdminClientPage({
                           <tbody className="divide-y divide-slate-200">
                             {group.map((a: any, i: number) => (
                               <tr key={i} className="text-[10px] leading-tight">
-                                <td className="px-3 py-2 text-center border border-slate-200">
-                                  {a.date}
+                                <td className="px-3 py-2 text-center border border-slate-200 font-bold">
+                                  {isOTReport ? a.reportDate : a.date}
                                 </td>
                                 <td className="px-3 py-2 border border-slate-200 uppercase font-bold text-slate-900">
                                   {a.firstName} {a.lastName}
@@ -6018,24 +6118,44 @@ export default function AdminClientPage({
                                   </>
                                 ) : (
                                   <>
+                                    {/* ประเภท OT */}
+                                    <td className="px-3 py-2 text-center border border-slate-200">
+                                      <span
+                                        className={
+                                          a.isAfterMidnight === true
+                                            ? "inline-block px-2 py-1 rounded bg-orange-100 text-orange-700 font-bold text-[9px]"
+                                            : "inline-block px-2 py-1 rounded bg-blue-100 text-blue-700 font-bold text-[9px]"
+                                        }
+                                      >
+                                        {a.isAfterMidnight === true
+                                          ? "ข้ามเที่ยงคืน"
+                                          : "OT ปกติ"}
+                                      </span>
+                                    </td>
+
+                                    {/* เวลาเริ่ม */}
                                     <td className="px-3 py-2 text-center border border-slate-200">
                                       {a.timeStart?.substring(0, 5) || "-"}
                                     </td>
+
+                                    {/* เวลาสิ้นสุด */}
                                     <td className="px-3 py-2 text-center border border-slate-200">
                                       {a.timeEnd?.substring(0, 5) || "-"}
                                     </td>
+
+                                    {/* ชั่วโมงอนุมัติ */}
                                     <td className="px-3 py-2 text-center border border-slate-200 font-bold text-blue-600">
                                       {(() => {
-                                        // ดึงค่า overtimeApproved (นาที) ที่คำนวณผ่าน API มาแล้ว
                                         const approveVal = Number(a.overtimeApproved ?? 0);
 
-                                        // แปลงนาทีเป็นฟอร์แมต H.MM
                                         const hours = Math.floor(approveVal / 60);
-                                        const minutes = String(approveVal % 60).padStart(2, '0');
+                                        const minutes = String(approveVal % 60).padStart(2, "0");
 
                                         return `${hours}.${minutes} ชม.`;
                                       })()}
                                     </td>
+
+                                    {/* สถานะ/เหตุผล */}
                                     <td className="px-3 py-2 text-right border border-slate-200 truncate max-w-[120px]">
                                       {a.otRemark || a.reason || a.otStatus || "-"}
                                     </td>

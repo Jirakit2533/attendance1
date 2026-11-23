@@ -246,6 +246,7 @@ export default function EmployeeClientPage({
     endTime: "19:00",
     siteId: "",
     reason: "",
+    isAfterMidnight: false,
   });
 
 
@@ -920,27 +921,87 @@ export default function EmployeeClientPage({
     );
   }, [leaveStart, leaveEnd]);
 
+
+
   const handleOTSubmit = async () => {
     if (!userProfile?.id) {
       return setOtError("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่");
     }
 
-    if (!otData.date) return setOtError("กรุณาระบุวันที่ทำ OT");
-    if (!otData.reason.trim())
+    if (!otData.date) {
+      return setOtError("กรุณาระบุวันที่ทำ OT");
+    }
+
+    if (!otData.startTime || !otData.endTime) {
+      return setOtError("กรุณาระบุเวลาเริ่มต้นและสิ้นสุด OT");
+    }
+
+    if (!otData.reason.trim()) {
       return setOtError("กรุณาระบุเหตุผลหรือลักษณะงาน");
+    }
+
+    // แปลงเวลาเป็นนาที
+    // แปลงเวลาเป็นนาที
+    const [startHour, startMinute] = otData.startTime.split(":").map(Number);
+    const [endHour, endMinute] = otData.endTime.split(":").map(Number);
+
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+
+    // ป้องกันเวลาเริ่มต้นและสิ้นสุดเท่ากัน
+    if (startMinutes === endMinutes) {
+      return setOtError("เวลาเริ่มต้นและสิ้นสุดต้องไม่ตรงกัน");
+    }
+
+    // ตรวจสอบช่วงเวลา 00:00–06:00
+    const isStartAfterMidnight =
+      startMinutes >= 0 && startMinutes <= 360;
+
+    const isEndAfterMidnight =
+      endMinutes >= 0 && endMinutes <= 360;
+
+    if (otData.isAfterMidnight) {
+      // OT ข้ามเที่ยงคืน: ทั้งสองเวลาต้องอยู่ในช่วง 00:00–06:00
+      if (!isStartAfterMidnight || !isEndAfterMidnight) {
+        return setOtError(
+          "OT ข้ามเที่ยงคืน ต้องระบุเวลาเริ่มต้นและสิ้นสุดหลัง 00:00 และไม่เกิน 06:00 น."
+        );
+      }
+
+      // เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น
+      if (endMinutes <= startMinutes) {
+        return setOtError(
+          "เวลา OT ข้ามเที่ยงคืนต้องมีเวลาสิ้นสุดหลังเวลาเริ่มต้น"
+        );
+      }
+    }
 
     try {
       setIsProcessingOT(true);
       setOtError("");
 
-      const res = await createPersonalOTAction({
+      // คำนวณวันที่อ้างอิงสำหรับบันทึกใน DB
+      const [year, month, day] = otData.date.split("-").map(Number);
+
+      const dbDate = new Date(
+        Date.UTC(year, month - 1, day)
+      );
+
+      if (otData.isAfterMidnight) {
+        dbDate.setUTCDate(dbDate.getUTCDate() - 1);
+      }
+
+      const payload = {
         userId: userProfile.id,
         userName: userProfile.name,
-        date: otData.date,
+        date: dbDate.toISOString().slice(0, 10),
         startTime: otData.startTime,
         endTime: otData.endTime,
-        reason: otData.reason,
-      });
+        reason: otData.reason.trim(),
+        isAfterMidnight: otData.isAfterMidnight,
+      };
+
+      const res = await createPersonalOTAction(payload);
 
       if (res.success) {
         setOtSuccess(true);
@@ -949,22 +1010,27 @@ export default function EmployeeClientPage({
         setTimeout(() => {
           setShowOTModal(false);
           setOtSuccess(false);
+
           setOtData({
             date: "",
             startTime: "17:00",
             endTime: "19:00",
             reason: "",
+            isAfterMidnight: false,
           });
         }, 2500);
       } else {
         setOtError(res.error || res.message || "เกิดข้อผิดพลาด");
       }
     } catch (error) {
+      console.error("CREATE PERSONAL OT ERROR:", error);
       setOtError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
     } finally {
       setIsProcessingOT(false);
     }
   };
+
+
 
   /* ---------------- OTHER ACTIONS ---------------- */
   const handleLogout = async () => {
@@ -985,6 +1051,26 @@ export default function EmployeeClientPage({
 
     return [1, 2, 3, "...", leaveTotalPages];
   };
+
+
+  const referenceOTDate = (() => {
+    if (!otData.date) return "";
+
+    const [year, month, day] = otData.date.split("-").map(Number);
+
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    if (otData.isAfterMidnight) {
+      date.setUTCDate(date.getUTCDate() - 1);
+    }
+
+    const d = String(date.getUTCDate()).padStart(2, "0");
+    const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const y = date.getUTCFullYear();
+
+    return `${d}/${m}/${y}`;
+  })();
+
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
@@ -1578,6 +1664,7 @@ export default function EmployeeClientPage({
 
               {/* {ตารางคำขอOT} */}
 
+
               <div className="pt-10 border-t border-gray-50">
                 {/* Header Section */}
                 <div className="flex items-center gap-3 mb-8">
@@ -1595,87 +1682,155 @@ export default function EmployeeClientPage({
                 ) : (
                   /* Grid List */
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {currentOvertimeRequests.map((ot, i) => (
-                      <div
-                        key={i}
-                        className="p-8 border border-gray-100 rounded-[2rem] bg-white hover:shadow-2xl hover:shadow-indigo-500/10 transition-all relative overflow-hidden group"
-                      >
-                        {/* Accent Line */}
-                        <div className="absolute top-0 left-0 w-2 h-full bg-indigo-500"></div>
 
-                        <div className="flex justify-between items-start mb-6">
-                          <div>
-                            <div className="text-[13px] font-black text-gray-600">
-                              ส่งคำขอเมื่อ :{" "}
-                              {new Date(ot.createdAt).toLocaleDateString(
-                                "th-TH"
+                    {currentOvertimeRequests.map((ot) => {
+                      // DB เก็บวันที่ OT หลัก เช่น 25/11/2026
+                      // ถ้าเป็น OT ข้ามเที่ยงคืน ให้แสดงวันที่ 26/11/2026
+                      const actualOTDate = (() => {
+                        const dbDate = String(ot.date).slice(0, 10);
+                        const [year, month, day] = dbDate.split("-").map(Number);
+
+                        const date = new Date(Date.UTC(year, month - 1, day));
+
+                        if (ot.isAfterMidnight === true) {
+                          date.setUTCDate(date.getUTCDate() + 1);
+                        }
+
+                        const displayDay = String(date.getUTCDate()).padStart(2, "0");
+                        const displayMonth = String(date.getUTCMonth() + 1).padStart(2, "0");
+                        const displayYear = date.getUTCFullYear();
+
+                        return `${displayDay}/${displayMonth}/${displayYear}`;
+                      })();
+
+                      return (
+                        <div
+                          key={ot.id}
+                          className="p-8 border border-gray-100 rounded-[2rem] bg-white hover:shadow-2xl hover:shadow-indigo-500/10 transition-all relative overflow-hidden group"
+                        >
+                          {/* Accent Line */}
+                          <div className="absolute top-0 left-0 w-2 h-full bg-indigo-500"></div>
+
+                          <div className="flex justify-between items-start mb-6 gap-3">
+                            <div>
+                              <div className="text-[13px] font-black text-gray-600">
+                                ส่งคำขอเมื่อ :{" "}
+                                {new Date(ot.createdAt).toLocaleDateString("th-TH")}
+                              </div>
+
+                              <p className="font-black text-indigo-900 text-lg uppercase tracking-tight">
+                                ทำงานล่วงเวลา (OT)
+                              </p>
+                            </div>
+
+                            {/* Status Badge */}
+                            <span
+                              className={`text-[11px] px-4 py-2 rounded-full font-black border uppercase tracking-widest whitespace-nowrap ${ot.status === "approved"
+                                ? "bg-green-50 text-green-600 border-green-100"
+                                : ot.status === "rejected"
+                                  ? "bg-red-50 text-red-600 border-red-100"
+                                  : "bg-amber-50 text-amber-600 border-amber-100"
+                                }`}
+                            >
+                              {ot.status === "approved"
+                                ? "อนุมัติแล้ว"
+                                : ot.status === "rejected"
+                                  ? "ปฏิเสธ"
+                                  : "รออนุมัติ"}
+                            </span>
+                          </div>
+
+                          {/* OT Date & Time */}
+                          <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-4 space-y-3">
+                            <div>
+                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">
+                                วันที่ทำ OT จริง
+                              </p>
+                              <p className="text-base font-black text-indigo-900">
+                                {actualOTDate}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">
+                                  เวลาเริ่มต้น
+                                </p>
+                                <p className="text-lg font-black text-gray-800">
+                                  {String(ot.startTime).slice(0, 5)} น.
+                                </p>
+                              </div>
+
+                              <div className="text-indigo-300 font-black">→</div>
+
+                              <div>
+                                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">
+                                  เวลาสิ้นสุด
+                                </p>
+                                <p className="text-lg font-black text-gray-800">
+                                  {String(ot.endTime).slice(0, 5)} น.
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* OT Type */}
+                            <div className="pt-2 border-t border-indigo-100">
+                              {ot.isAfterMidnight === true ? (
+                                <span className="inline-flex items-center gap-2 text-[11px] font-black text-orange-600 bg-orange-50 border border-orange-100 px-3 py-2 rounded-full">
+                                  <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                  OT ข้ามเที่ยงคืน
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-2 text-[11px] font-black text-indigo-600 bg-white border border-indigo-100 px-3 py-2 rounded-full">
+                                  <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                                  OT ปกติ
+                                </span>
                               )}
                             </div>
-                            <p className="font-black text-indigo-900 text-lg uppercase tracking-tight">
-                              ทำงานล่วงเวลา (OT)
-                            </p>
-                            <p className="text-xs font-bold text-gray-500 mt-1">
-                              วันที่ทำ: {ot.date} | {ot.startTime} -{" "}
-                              {ot.endTime}
-                            </p>
                           </div>
 
-                          {/* Status Badge */}
-                          <span
-                            className={`text-[11px] px-4 py-2 rounded-full font-black border uppercase tracking-widest ${ot.status === "approved"
-                              ? "bg-green-50 text-green-600 border-green-100"
-                              : ot.status === "rejected"
-                                ? "bg-red-50 text-red-600 border-red-100"
-                                : "bg-amber-50 text-amber-600 border-amber-100"
-                              }`}
-                          >
-                            {ot.status === "approved"
-                              ? "อนุมัติแล้ว"
-                              : ot.status === "rejected"
-                                ? "ปฏิเสธ"
-                                : "รออนุมัติ"}
-                          </span>
-                        </div>
+                          <div className="mt-4 py-4 border-y border-gray-100 space-y-2">
+                            {/* OT Duration */}
+                            <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
+                              <span className="text-indigo-600 mr-2 font-black">
+                                รวมเวลาที่ขอ:
+                              </span>
+                              {ot.overtimeByRequest} นาที (~
+                              {(ot.overtimeByRequest / 60).toFixed(2)} ชม.)
+                            </div>
 
-                        <div className="mt-4 py-4 border-y border-gray-100">
-                          {/* OT Duration */}
-                          <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
-                            <span className="text-indigo-600 mr-2 font-black">
-                              รวมเวลาที่ขอ:
-                            </span>
-                            {ot.overtimeByRequest} นาที (~
-                            {(ot.overtimeByRequest / 60).toFixed(2)} ชม.)
+                            {/* Approver Info */}
+                            <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
+                              <span className="text-indigo-600 mr-2 font-black">
+                                ผู้อนุมัติ:
+                              </span>
+                              {ot.approverName || "-"}
+                            </div>
+
+                            {/* System Remark */}
+                            <div className="text-[12px] font-bold text-gray-400 leading-relaxed break-words">
+                              <span className="text-indigo-600 mr-2 font-black">
+                                บันทึกระบบ:
+                              </span>
+                              {ot.remark || "-"}
+                            </div>
                           </div>
 
-                          {/* Approver Info */}
-                          <div className="text-[16px] font-bold text-gray-900 leading-relaxed">
-                            <span className="text-indigo-600 mr-2 font-black">
-                              ผู้อนุมัติ:
+                          {/* Reason Box */}
+                          <div className="mt-4 bg-gray-50 p-5 rounded-2xl border border-gray-100 text-sm text-gray-600 font-medium italic">
+                            <span className="font-bold not-italic text-gray-900 block mb-1">
+                              เหตุผลที่ขอ:
                             </span>
-                            {ot.approverName || "-"}
-                          </div>
-
-                          {/* บันทึกระบบ (จากฝั่ง Admin/Leader) */}
-                          <div className="text-[12px] font-bold text-gray-400 leading-relaxed truncate">
-                            <span className="text-indigo-600 mr-2 font-black">
-                              บันทึกระบบ:
-                            </span>
-                            {ot.remark || "-"}
+                            {ot.reason || "ไม่ระบุเหตุผล"}
                           </div>
                         </div>
+                      );
+                    })}
 
-                        {/* Reason Box (เหตุผลที่พนักงานกรอก) */}
-                        <div className="mt-4 bg-gray-50 p-5 rounded-2xl border border-gray-100 text-sm text-gray-600 font-medium italic">
-                          <span className="font-bold not-italic text-gray-900 block mb-1">
-                            เหตุผลที่ขอ:
-                          </span>
-                          {ot.reason || "ไม่ระบุเหตุผล"}
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>
+
               {otTotalPages > 1 && (
                 <div className="flex justify-center items-center gap-2 mt-8 mb-12">
 
@@ -1710,8 +1865,8 @@ export default function EmployeeClientPage({
                               onClick={() => setOtPage(i)}
                               aria-current={otPage === i ? "page" : undefined}
                               className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${otPage === i
-                                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
-                                  : "bg-white text-gray-400 border border-gray-100 hover:border-indigo-200"
+                                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
+                                : "bg-white text-gray-400 border border-gray-100 hover:border-indigo-200"
                                 }`}
                             >
                               {i}
@@ -2311,29 +2466,41 @@ export default function EmployeeClientPage({
         </div>
       )}
 
+
       {/* {MODAL OT REQUEST} */}
+
       {showOTModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          {/* Background overlay */}
           <div
             className="absolute inset-0"
             onClick={() =>
               !isProcessingOT && !otSuccess && setShowOTModal(false)
             }
-          ></div>
+          />
 
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-300 relative z-10">
-            <div className="p-8 sm:p-10">
-              <div className="text-center mb-6">
+          {/* Modal */}
+          <div className="relative z-10 flex flex-col w-full max-w-md max-h-[90dvh] bg-white rounded-[2.5rem] shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300">
+
+            {/* Header - Fixed */}
+            <div className="shrink-0 px-8 pt-8 pb-5 sm:px-10 bg-white border-b border-gray-100">
+              <div className="text-center">
                 <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl">
                   ⏰
                 </div>
+
                 <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">
                   ขออนุมัติทำงานล่วงเวลา
                 </h3>
+
                 <p className="text-orange-500 text-[10px] font-black uppercase tracking-widest mt-1">
                   Overtime Request
                 </p>
               </div>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="ot-modal-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain px-8 py-6 sm:px-10">
 
               {otError && (
                 <div className="mb-4 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-[10px] font-black uppercase animate-shake">
@@ -2346,93 +2513,145 @@ export default function EmployeeClientPage({
                   <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white text-3xl shadow-lg">
                     ✓
                   </div>
+
                   <p className="font-black text-green-600 uppercase tracking-tighter">
                     ส่งคำขอ OT สำเร็จแล้ว!
                   </p>
+
                   <p className="text-[10px] font-bold text-gray-400 uppercase animate-pulse">
                     กำลังปิดหน้าต่างอัตโนมัติ...
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
+
                   {/* วันที่ต้องการทำ OT */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
-                      วันที่ต้องการทำ OT
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
+                        วันที่ต้องการทำ OT
+                      </label>
+
+                      <input
+                        type="date"
+                        className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all"
+                        value={otData.date}
+                        onChange={(e) => {
+                          setOtData({
+                            ...otData,
+                            date: e.target.value,
+                          });
+                          setOtError("");
+                        }}
+                      />
+                    </div>
+
+                    {/* OT ข้ามเที่ยงคืน */}
+                    <label className="flex items-start gap-3 p-4 bg-orange-50/50 border border-orange-100 rounded-2xl cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={otData.isAfterMidnight}
+                        onChange={(e) => {
+                          setOtData({
+                            ...otData,
+                            isAfterMidnight: e.target.checked,
+                          });
+                          setOtError("");
+                        }}
+                        className="mt-0.5 w-4 h-4 accent-orange-600 cursor-pointer"
+                      />
+
+                      <div className="space-y-1">
+                        <p className="text-xs font-black text-gray-800">
+                          OT ข้ามเที่ยงคืน
+                        </p>
+
+                        <p className="text-[16px] font-medium text-gray-500 leading-relaxed">
+                          ใช้สำหรับกรณีทำ OT ต่อเนื่องเลยเที่ยงคืน
+                          ตัวอย่างเช่น เริ่มทำ OT วันที่ 21 และทำต่อเนื่องจนเลยเที่ยงคืน เป็นวันที่ 22
+                          **ให้สร้างคำขอและเลือกวันที่ 22 และติ๊กตัวเลือกนี้**
+                        </p>
+
+                        {otData.isAfterMidnight && otData.date && (
+                          <p className="text-[10px] font-black text-orange-600 pt-1">
+                            ทำโอทีวันที่: {referenceOTDate} ต่อเนื่องไปจนถึงวันที่{" "}
+                            {otData.date
+                              ? (() => {
+                                const [year, month, day] = otData.date.split("-");
+                                return `${day}/${month}/${year}`;
+                              })()
+                              : ""}
+                          </p>
+                        )}
+                      </div>
                     </label>
-                    <input
-                      type="date"
-                      className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all"
-                      value={otData.date}
-                      onChange={(e) => {
-                        setOtData({ ...otData, date: e.target.value });
-                        setOtError("");
-                      }}
-                    />
                   </div>
 
-                  {/* 🕒 ส่วนเลือกเวลา เริ่ม - สิ้นสุด */}
+                  {/* เวลาเริ่มต้น - สิ้นสุด */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
                         ตั้งแต่กี่โมง
                       </label>
+
                       <input
                         type="time"
                         className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all cursor-pointer"
                         value={otData.startTime}
                         onChange={(e) =>
-                          setOtData({ ...otData, startTime: e.target.value })
+                          setOtData({
+                            ...otData,
+                            startTime: e.target.value,
+                          })
                         }
                       />
                     </div>
+
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
                         ถึงกี่โมง
                       </label>
+
                       <input
                         type="time"
                         className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all cursor-pointer"
                         value={otData.endTime}
                         onChange={(e) =>
-                          setOtData({ ...otData, endTime: e.target.value })
+                          setOtData({
+                            ...otData,
+                            endTime: e.target.value,
+                          })
                         }
                       />
                     </div>
                   </div>
 
-                  {/* 📊 แสดงจำนวนชั่วโมงที่คำนวณได้ */}
+                  {/* ชั่วโมงรวมทั้งหมด */}
                   {otData.startTime && otData.endTime && (
                     <div className="p-4 bg-orange-50/50 border border-dashed border-orange-200 rounded-2xl flex items-center justify-between">
                       <span className="text-[10px] font-black text-orange-600 uppercase ml-2 italic">
-                        Total Hours
+                        ชั่วโมงรวมทั้งหมด
                       </span>
+
                       <div className="flex items-baseline gap-1">
                         <span className="text-2xl font-black text-orange-600 italic">
                           {(() => {
-                            const start = otData.startTime.split(":");
-                            const end = otData.endTime.split(":");
-                            const startDate = new Date(
-                              0,
-                              0,
-                              0,
-                              parseInt(start[0]),
-                              parseInt(start[1]),
-                              0
-                            );
-                            const endDate = new Date(
-                              0,
-                              0,
-                              0,
-                              parseInt(end[0]),
-                              parseInt(end[1]),
-                              0
-                            );
-                            let diff = endDate.getTime() - startDate.getTime();
-                            if (diff < 0) diff += 24 * 60 * 60 * 1000; // รองรับเคสข้ามคืน
-                            return (diff / (1000 * 60 * 60)).toFixed(1);
+                            const [startHour, startMinute] = otData.startTime.split(":").map(Number);
+                            const [endHour, endMinute] = otData.endTime.split(":").map(Number);
+
+                            const startMinutes = startHour * 60 + startMinute;
+                            const endMinutes = endHour * 60 + endMinute;
+
+                            let diff = endMinutes - startMinutes;
+
+                            if (diff < 0) {
+                              diff += 24 * 60;
+                            }
+
+                            return (diff / 60).toFixed(1);
                           })()}
                         </span>
+
                         <span className="text-[10px] font-black text-orange-400 uppercase">
                           ชั่วโมง
                         </span>
@@ -2445,18 +2664,22 @@ export default function EmployeeClientPage({
                     <label className="text-[10px] font-black text-gray-400 uppercase ml-2">
                       เหตุผล/งานที่ทำ
                     </label>
+
                     <textarea
                       className="w-full bg-gray-50 p-4 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all min-h-[80px]"
                       placeholder="ระบุรายละเอียดสั้นๆ..."
                       value={otData.reason}
                       onChange={(e) =>
-                        setOtData({ ...otData, reason: e.target.value })
+                        setOtData({
+                          ...otData,
+                          reason: e.target.value,
+                        })
                       }
                     />
                   </div>
 
                   {/* ปุ่มกด */}
-                  <div className="flex gap-3 pt-4">
+                  <div className="flex gap-3 pt-4 pb-2">
                     <button
                       onClick={handleOTSubmit}
                       disabled={isProcessingOT}
@@ -2464,6 +2687,7 @@ export default function EmployeeClientPage({
                     >
                       {isProcessingOT ? "กำลังบันทึก..." : "ยืนยันส่งคำขอ"}
                     </button>
+
                     <button
                       onClick={() => {
                         setShowOTModal(false);
@@ -2475,12 +2699,15 @@ export default function EmployeeClientPage({
                       ปิด
                     </button>
                   </div>
+
                 </div>
               )}
             </div>
           </div>
         </div>
       )}
+
+
 
       {/* 📸 MODAL CAMERA */}
       {showCamera && (

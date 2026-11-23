@@ -1,4 +1,4 @@
-import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer, jsonb, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, varchar, timestamp, uuid, text, date, pgEnum, time, integer, boolean, jsonb, doublePrecision } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "employee"]);
@@ -149,6 +149,7 @@ export const overtimeRequestsTable = pgTable("overtime_requests", {
   timeStart: time("time_start").notNull(),
   timeEnd: time("time_end").notNull(),
   date: date("date").notNull(),
+  isAfterMidnight: boolean("is_after_midnight").default(false).notNull(),
   requestedWorkers: jsonb("requested_workers").$type<string[]>().default([]),
   reason: text("reason").notNull(),
   remarks: text("remarks"),

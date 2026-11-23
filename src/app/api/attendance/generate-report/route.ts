@@ -1,3 +1,5 @@
+//path: src/app/api/attendance/generate-report/route.ts
+
 import { db } from "@/db/db";
 import { attendanceTable, usersTable, shiftsTable, sitesTable, departmentsTable, positionsTable, leaveTable } from "@/db/schema";
 import { and, eq, gte, lte, inArray, asc, aliasedTable } from "drizzle-orm"; // เพิ่ม aliasedTable

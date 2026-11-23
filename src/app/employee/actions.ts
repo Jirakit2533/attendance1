@@ -82,10 +82,10 @@ export async function checkInAction(userId: string, base64Image: string, locatio
         otRoundingOption: companyTable.otRoundingOption,
         companyFeatureSelectedId: companyTable.companyFeatureSelectedId
       })
-      .from(companyTable)
-      .where(eq(companyTable.id, user.companyId || ""))
-      .limit(1)
-      .then(res => res[0]),
+        .from(companyTable)
+        .where(eq(companyTable.id, user.companyId || ""))
+        .limit(1)
+        .then(res => res[0]),
       FeatureService.isFeatureActive(user.companyId || "", "remarkAttendance")
     ]);
 
@@ -145,7 +145,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
 
     // 🚩 บันทึกตามที่หน้าบ้านส่งมาโดยตรง ทันทีที่กดตกลงจาก Modal
     const finalRemark = remark?.trim() || "";
-    
+
     // 🔍 LOG ตรวจสอบค่าก่อน Insert
     console.log("--- SERVER DEBUG ---");
     console.log("Remark Received:", remark);
@@ -157,7 +157,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       department_id: user.departmentId,
       site_id: validatedSite.id,
       siteInNameSnapshot: validatedSite.name || "",
-      siteCoordinatesSnapshot: validatedSite.coordinates || "", 
+      siteCoordinatesSnapshot: validatedSite.coordinates || "",
       shift_id: activeShiftId,
       temp_shift_id: activeTempShiftId,
       shiftStartTimeSnapshot: activeStartTime,
@@ -185,7 +185,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
     // 🚩 ตรวจสอบว่า Insert สำเร็จจริงก่อนไปทำ OT
     if (insertedAttendance?.id) {
       console.log("✅ Insert Success, ID:", insertedAttendance.id);
-      
+
       const otResult = calculateOvertime({
         checkIn: currentTimeStr,
         checkOut: currentTimeStr,
@@ -199,7 +199,7 @@ export async function checkInAction(userId: string, base64Image: string, locatio
         userName: user.name || "Unknown",
         companyId: user.companyId || "",
         shiftId: activeShiftId,
-        attendanceId: insertedAttendance.id, 
+        attendanceId: insertedAttendance.id,
         date: dateStr,
         overtimeBefore: otResult.beforeMinutes,
         otRoundingOption: companyRounding,
@@ -216,8 +216,8 @@ export async function checkInAction(userId: string, base64Image: string, locatio
       success: true,
       siteName: validatedSite.name,
       isOffsiteIn: finalIsOffsiteIn,
-      attendanceId: insertedAttendance.id, 
-      requiresRemark: isRemarkActive 
+      attendanceId: insertedAttendance.id,
+      requiresRemark: isRemarkActive
     };
   } catch (error: any) {
     console.error("Check-in error:", error);
@@ -407,17 +407,17 @@ export async function createLeaveRequest(data: {
       // กรณีลาเป็นชั่วโมง: คำนวณส่วนต่างชั่วโมงจากเวลาเริ่มต้น-สิ้นสุด
       const startDateTime = new Date(`${data.start}T${data.startTime}`);
       const endDateTime = new Date(`${data.end}T${data.endTime}`);
-      
+
       const diffMs = endDateTime.getTime() - startDateTime.getTime();
       totalHoursResult = Math.floor(diffMs / (1000 * 60 * 60)); // ใส่ตัวเลขชั่วโมงเข้าไปเลย
     } else {
       // กรณีลาปกติ: คำนวณจำนวนวัน (สิ้นสุด - เริ่มต้น + 1) แล้วคูณด้วย 24
       const start = new Date(data.start);
       const end = new Date(data.end);
-      
+
       const diffTime = Math.abs(end.getTime() - start.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      
+
       totalHoursResult = diffDays * 24; // จำนวนวันคูณ 24
     }
 
@@ -498,21 +498,26 @@ export async function changePasswordAction(data: {
 /* PERSONAL OT ACTIONS (OT ส่วนตัว)                                               */
 /* -------------------------------------------------------------------------- */
 
+
+
 export async function createPersonalOTAction(payload: {
   userId: string;
   userName: string;
-  date: string;       // วันที่พนักงานขอทำ OT
-  startTime: string;  // "18:00"
-  endTime: string;    // "20:00"
+  date: string;
+  startTime: string;
+  endTime: string;
   reason: string;
+  isAfterMidnight: boolean;
 }) {
   try {
-    // ตรวจสอบเบื้องต้นว่ามี userId ส่งมาหรือไม่
     if (!payload.userId) {
       throw new Error("ไม่พบรหัสพนักงาน (Missing User ID)");
     }
 
-    // 1. ดึงข้อมูลพนักงานจาก usersTable (ตาม Schema ของคุณ)
+    if (typeof payload.isAfterMidnight !== "boolean") {
+      throw new Error("ข้อมูลประเภท OT ไม่ถูกต้อง");
+    }
+
     const user = await db.query.usersTable.findFirst({
       where: eq(usersTable.id, payload.userId),
       columns: {
@@ -525,62 +530,102 @@ export async function createPersonalOTAction(payload: {
       },
     });
 
-    // หาก Query แล้วได้ค่าว่าง (user เป็น undefined)
     if (!user) {
       throw new Error(`ไม่พบข้อมูลพนักงานในระบบ (ID: ${payload.userId})`);
     }
 
-    // 2. ดึงข้อมูล shiftId ล่าสุดจาก shiftsTable เนื่องจากใน usersTable ไม่มีฟิลด์นี้
     const latestShift = await db.query.shiftsTable.findFirst({
       where: eq(shiftsTable.userId, user.id),
       orderBy: (shifts, { desc }) => [desc(shifts.createdAt)],
     });
 
-    // 3. คำนวณชั่วโมงเป็นนาที (Integer) ตามที่ DB ต้องการ (overtimeByRequest)
+    // คำนวณระยะเวลา OT
     const [startH, startM] = payload.startTime.split(":").map(Number);
     const [endH, endM] = payload.endTime.split(":").map(Number);
 
-    const startDate = new Date(0, 0, 0, startH, startM);
-    const endDate = new Date(0, 0, 0, endH, endM);
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
 
-    let diffMs = endDate.getTime() - startDate.getTime();
-    if (diffMs < 0) diffMs += 24 * 60 * 60 * 1000; // กรณีทำข้ามคืน
+    let totalMinutes = endMinutes - startMinutes;
 
-    const totalMinutes = Math.round(diffMs / (1000 * 60));
+    if (totalMinutes < 0) {
+      totalMinutes += 1440;
+    }
 
-    // 4. บันทึกลงตาราง overtime_requests ตาม Schema เป๊ะๆ (ห้ามลบ/ห้ามลด)
-    const newRequest = await db.insert(overtimeRequestsTable).values({
-      // id: UUID จะ defaultRandom() เองตาม Schema
-      userId: user.id,
-      userName: `${user.firstName} ${user.lastName}`,
+    if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) {
+      throw new Error("ช่วงเวลา OT ไม่ถูกต้อง");
+    }
 
-      // บันทึก IDs สังกัดที่ดึงมาจาก DB (ต้องตรงกับ Foreign Key Constraints)
-      companyId: user.companyId,
-      departmentId: user.departmentId,
-      siteId: user.site_id, // ใช้ค่าจาก site_id ของ usersTable
-      shiftId: latestShift?.id || null, // ใช้ id จาก shiftsTable (ถ้าไม่มีจะเป็น null)
+    // วันที่ที่ผู้ใช้เลือกจาก UI
+    // เป็นวันที่ทำ OT จริง
+    const [year, month, day] = payload.date.split("-").map(Number);
 
-      // ฟิลด์บังคับใน Schema (Update ใหม่)
-      overtimeByRequest: totalMinutes,
-      timeStart: payload.startTime, // ✨ บันทึกเข้า timeStart (notNull)
-      timeEnd: payload.endTime,     // ✨ บันทึกเข้า timeEnd (notNull)
-      date: payload.date,           // ✨ บันทึกเข้า date (notNull)
+    const selectedDate = new Date(Date.UTC(year, month - 1, day));
 
-      // บันทึกเป็น JSONB Array ตาม Schema ($type<string[]>)
-      requestedWorkers: [user.id],
+    if (
+      !Number.isInteger(year) ||
+      !Number.isInteger(month) ||
+      !Number.isInteger(day) ||
+      selectedDate.getUTCFullYear() !== year ||
+      selectedDate.getUTCMonth() !== month - 1 ||
+      selectedDate.getUTCDate() !== day
+    ) {
+      throw new Error("วันที่ OT ไม่ถูกต้อง");
+    }
 
-      // ✨ แก้ไขจุดเดียว: เปลี่ยนจากบันทึกใน remarks ไปเป็น reason ตาม Schema ใหม่
-      reason: payload.reason,
+    // วันที่สำหรับบันทึกใน DB
+    // ถ้าเป็น OT ข้ามเที่ยงคืน ให้ย้อนหลัง 1 วัน
+    const dbDate = new Date(selectedDate);
 
-      // สถานะเริ่มต้นตาม Enum ใน Schema
-      status: "pending",
+    if (payload.isAfterMidnight === true) {
+      dbDate.setUTCDate(dbDate.getUTCDate() - 1);
+    }
 
-      // ร่องรอยการสร้าง
-      createdBy: user.id,
-      createdAt: new Date(), // จะถูกเขียนทับด้วย timezone('UTC', now()) ใน DB
-    }).returning();
+    const dbDateString = [
+      dbDate.getUTCFullYear(),
+      String(dbDate.getUTCMonth() + 1).padStart(2, "0"),
+      String(dbDate.getUTCDate()).padStart(2, "0"),
+    ].join("-");
 
-    // 5. Update Cache เพื่อให้หน้าประวัติโชว์ข้อมูลใหม่ทันที
+    console.log("PERSONAL OT INSERT DEBUG:", {
+      selectedDate: payload.date,
+      databaseDate: dbDateString,
+      isAfterMidnight: payload.isAfterMidnight,
+      type: typeof payload.isAfterMidnight,
+      startTime: payload.startTime,
+      endTime: payload.endTime,
+      totalMinutes,
+    });
+
+    // บันทึกคำขอ OT
+    const newRequest = await db
+      .insert(overtimeRequestsTable)
+      .values({
+        userId: user.id,
+        userName: `${user.firstName} ${user.lastName}`,
+        companyId: user.companyId,
+        departmentId: user.departmentId,
+        siteId: user.site_id,
+        shiftId: latestShift?.id || null,
+
+        overtimeByRequest: totalMinutes,
+        timeStart: payload.startTime,
+        timeEnd: payload.endTime,
+
+        // วันที่บันทึกใน DB
+        date: dbDateString,
+
+        // ประเภท OT ที่ผู้ใช้เลือก
+        isAfterMidnight: payload.isAfterMidnight,
+
+        requestedWorkers: [user.id],
+        reason: payload.reason,
+        status: "pending",
+        createdBy: user.id,
+        createdAt: new Date(),
+      })
+      .returning();
+
     revalidatePath("/dashboard/ot-status");
     revalidatePath("/employee");
     revalidatePath("/leader");
@@ -588,15 +633,16 @@ export async function createPersonalOTAction(payload: {
     return {
       success: true,
       message: "ส่งคำขอ OT รายบุคคลเรียบร้อยแล้ว",
-      data: newRequest[0]
+      data: newRequest[0],
     };
 
   } catch (error: any) {
     console.error("PERSONAL_OT_ERROR_DETAIL:", error);
-    // ส่งข้อความ Error ที่ละเอียดขึ้นเพื่อให้แก้ไขได้ตรงจุด
+
     return {
       success: false,
-      error: "ส่งคำขอ OT ล้มเหลว: " + (error.message || "Database Constraint Error")
+      error: "ส่งคำขอ OT ล้มเหลว: " +
+        (error.message || "Database Constraint Error"),
     };
   }
 }
