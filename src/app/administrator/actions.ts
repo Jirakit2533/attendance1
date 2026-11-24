@@ -177,7 +177,36 @@ export async function saveStaffAction(data: any) {
   try {
     const admin = await getAdminContext();
     if (!admin || !admin.companyId) return { success: false, error: "Unauthorized: ไม่ได้รับอนุญาต" };
+    // ตรวจสอบเวลาทำงานก่อนเริ่มบันทึกข้อมูล
+    const hasStartTime = Boolean(data.startTime);
+    const hasEndTime = Boolean(data.endTime);
 
+    // ลงทะเบียนใหม่ต้องกำหนดเวลาเข้างานและเลิกงาน
+    if (!data.id && (!hasStartTime || !hasEndTime)) {
+      return {
+        success: false,
+        error: "กรุณากำหนดเวลาเข้างานและเวลาเลิกงานก่อนลงทะเบียน",
+      };
+    }
+
+    // กรณีแก้ไข หากส่งเวลามา ต้องส่งมาทั้งสองค่า
+    if (data.id && hasStartTime !== hasEndTime) {
+      return {
+        success: false,
+        error: "กรุณาระบุเวลาเข้างานและเวลาเลิกงานให้ครบ",
+      };
+    }
+
+    // ตรวจสอบรูปแบบเวลา HH:mm
+    if (
+      (hasStartTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(data.startTime)) ||
+      (hasEndTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(data.endTime))
+    ) {
+      return {
+        success: false,
+        error: "รูปแบบเวลาไม่ถูกต้อง",
+      };
+    }
     // --- 1. จัดการ Username ---
     let inputUsername = data.userName || data.username;
 
@@ -538,22 +567,22 @@ export async function deleteDepartmentAction(id: string) {
     console.error("Delete Department Error:", error);
 
     // ตรวจสอบว่าติด Foreign Key Constraint (มีข้อมูลพนักงาน/ตำแหน่ง/ประวัติ ค้างอยู่) หรือไม่
-    const isLinked = 
-      error.message?.toLowerCase().includes("foreign key") || 
+    const isLinked =
+      error.message?.toLowerCase().includes("foreign key") ||
       error.code === "23503" || // Postgres
       error.code === "1451";    // MySQL
 
     if (isLinked) {
-      return { 
-        success: false, 
-        error: "ไม่สามารถลบแผนกได้ หากต้องการลบแผนกกรุณาติดต่อผู้ให้บริการ" 
+      return {
+        success: false,
+        error: "ไม่สามารถลบแผนกได้ หากต้องการลบแผนกกรุณาติดต่อผู้ให้บริการ"
       };
     }
 
     // กรณี Error อื่นๆ ที่ไม่ใช่เรื่องข้อมูลเชื่อมโยง
-    return { 
-      success: false, 
-      error: "เกิดข้อผิดพลาดจากระบบ ไม่สามารถลบข้อมูลได้ในขณะนี้" 
+    return {
+      success: false,
+      error: "เกิดข้อผิดพลาดจากระบบ ไม่สามารถลบข้อมูลได้ในขณะนี้"
     };
   }
 }
@@ -624,9 +653,9 @@ export async function updateDepartmentAction(data: { id: string; name: string })
 
     await db
       .update(departmentsTable)
-      .set({ 
-        name: name, 
-        updatedAt: new Date() 
+      .set({
+        name: name,
+        updatedAt: new Date()
       })
       .where(
         and(
@@ -659,9 +688,9 @@ export async function updatePositionAction(data: { id: string; name: string }) {
     // 3. สั่ง Update ลง Database (เช็ค ID และ Company เพื่อความปลอดภัย)
     await db
       .update(positionsTable)
-      .set({ 
-        name: name, 
-        updatedAt: new Date() 
+      .set({
+        name: name,
+        updatedAt: new Date()
       })
       .where(
         and(
@@ -672,7 +701,7 @@ export async function updatePositionAction(data: { id: string; name: string }) {
 
     // 4. Revalidate เพื่อให้หน้าจอเห็นข้อมูลล่าสุด
     revalidatePath("/administrator");
-    
+
     return { success: true, message: "อัปเดตตำแหน่งสำเร็จ", id: id };
   } catch (error) {
     console.error("Update Position Error:", error);
@@ -882,42 +911,42 @@ export async function updateCompanyAction(data: any) {
 /* ==========================================================================
    ADMIN DIRECT RESET PASSWORD (ทางด่วนรีเซ็ตรหัสผ่าน)
    ========================================================================== */
-   export async function resetStaffPasswordAction(targetUserId: string) {
-    try {
-      // 1. เช็คสิทธิ์ Admin ก่อน (ใช้ Helper ที่คุณมีอยู่แล้ว)
-      const admin = await getAdminContext();
-      if (!admin) return { success: false, error: "Unauthorized: เซสชันหมดอายุ" };
-  
-      // 2. เข้ารหัสรหัสผ่านใหม่ "1234"
-      const hashedNewPassword = await bcrypt.hash("1234", 10);
-  
-      // 3. เขียนทับลงฐานข้อมูลโดยตรง (อ้างอิงตาม usersTable.id)
-      await db.update(usersTable)
-        .set({ 
-          passwordHash: hashedNewPassword, // ใช้ชื่อฟิลด์ passwordHash ตาม schema ของคุณ
-          updatedAt: new Date(),
-          updateBy: admin.id 
-        })
-        .where(eq(usersTable.id, targetUserId));
-  
-      // 4. Revalidate หน้าจัดการพนักงาน
-      revalidatePath("/administrator");
-  
-      return { success: true, message: "รีเซ็ตรหัสผ่านเป็น '1234' สำเร็จ" };
-    } catch (error) {
-      console.error("Direct Reset Password Error:", error);
-      return { success: false, error: "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล" };
-    }
-  }
+export async function resetStaffPasswordAction(targetUserId: string) {
+  try {
+    // 1. เช็คสิทธิ์ Admin ก่อน (ใช้ Helper ที่คุณมีอยู่แล้ว)
+    const admin = await getAdminContext();
+    if (!admin) return { success: false, error: "Unauthorized: เซสชันหมดอายุ" };
 
- /* ==========================================================================
-   ADMIN UPDATE OVERTIME STATUS (STRICT SCHEMA MATCH)
-   ========================================================================== */
+    // 2. เข้ารหัสรหัสผ่านใหม่ "1234"
+    const hashedNewPassword = await bcrypt.hash("1234", 10);
+
+    // 3. เขียนทับลงฐานข้อมูลโดยตรง (อ้างอิงตาม usersTable.id)
+    await db.update(usersTable)
+      .set({
+        passwordHash: hashedNewPassword, // ใช้ชื่อฟิลด์ passwordHash ตาม schema ของคุณ
+        updatedAt: new Date(),
+        updateBy: admin.id
+      })
+      .where(eq(usersTable.id, targetUserId));
+
+    // 4. Revalidate หน้าจัดการพนักงาน
+    revalidatePath("/administrator");
+
+    return { success: true, message: "รีเซ็ตรหัสผ่านเป็น '1234' สำเร็จ" };
+  } catch (error) {
+    console.error("Direct Reset Password Error:", error);
+    return { success: false, error: "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล" };
+  }
+}
+
+/* ==========================================================================
+  ADMIN UPDATE OVERTIME STATUS (STRICT SCHEMA MATCH)
+  ========================================================================== */
 export async function updateOvertimeStatusAction(
-  id: string, 
+  id: string,
   status: "pending" | "approved" | "rejected",
   remark?: string,
-  adminId?: string 
+  adminId?: string
 ) {
   try {
     if (!id) return { success: false, error: "ID is required" };
@@ -937,7 +966,7 @@ export async function updateOvertimeStatusAction(
         rejectedAt: null,
         rejectedBy: null,
       };
-    } 
+    }
     else if (status === "rejected") {
       updateData = {
         ...updateData,
@@ -946,7 +975,7 @@ export async function updateOvertimeStatusAction(
         approvedAt: null,
         approvedBy: null,
       };
-    } 
+    }
     else if (status === "pending") {
       updateData = {
         ...updateData,
@@ -964,8 +993,8 @@ export async function updateOvertimeStatusAction(
       .where(eq(overtimeRequestsTable.id, id));
 
     // 4. Revalidate
-    revalidatePath("/administrator"); 
-    
+    revalidatePath("/administrator");
+
     return { success: true };
   } catch (error) {
     // ตรวจสอบ Error ใน Terminal หากชื่อ Column ไม่ตรงกับ pgTable

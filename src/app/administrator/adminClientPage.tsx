@@ -120,37 +120,30 @@ export default function AdminClientPage({
   const [allPositions, setAllPositions] = useState(positions);
   const [allDepartments, setAllDepartments] = useState(departments);
 
-  const [coords, setCoords] = useState("");
-  const [isLocating, setIsLocating] = useState(false);
-
   const [overtimeRequests, setOvertimeRequests] =
     useState<OvertimeRequest[]>(initialOvertimeRequests);
 
   // State สำหรับ Company Profile 
+  const router = useRouter();
+
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
   const [companyLogoPreview, setCompanyLogoPreview] = useState<string | null>(
     null
   );
-
   const [activeTab, setActiveTab] = useState("employee");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [isAllSite, setIsAllSite] = useState(false);
-
   const [showAddSite, setShowAddSite] = useState(false);
   const [showAddPosition, setShowAddPosition] = useState(false);
   const [showAddDepartment, setShowAddDepartment] = useState(false);
   const [editingDept, setEditingDept] = useState<any>(null);
-
   const [searchEmp, setSearchEmp] = useState("");
   const [searchAtt, setSearchAtt] = useState("");
   const [searchLeave, setSearchLeave] = useState("");
   const [searchOT, setSearchOT] = useState("");
-  const router = useRouter();
-
   const [showAdminEdit, setShowAdminEdit] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
@@ -159,14 +152,12 @@ export default function AdminClientPage({
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [viewImage, setViewImage] = useState<string | null>(null);
-
   const [isProcessing, setIsProcessing] = useState(false);
-
   const [showManageModal, setShowManageModal] = useState(false);
   const [editingSite, setEditingSite] = useState<any>(null);
   const [editingPos, setEditingPos] = useState<any>(null);
   const [selectedRole, setSelectedRole] = useState("employee"); // ใช้ในหน้า Register เพื่อเช็คสิทธิ์ Leader
+  const [registrationStep, setRegistrationStep] = useState(1);
 
   //  1. [STATE] ข้อมูลพื้นฐานสำหรับ Report
   const [showFilterModal, setShowFilterModal] = useState(false); // เปิด/ปิดหน้าเลือกพนักงาน
@@ -4765,6 +4756,7 @@ export default function AdminClientPage({
           <form
             onSubmit={(e) => {
               e.preventDefault();
+
               const formData = new FormData(e.currentTarget);
               const pwd = formData.get("password") as string;
               const confirmPwd = formData.get("confirmPassword") as string;
@@ -4780,6 +4772,13 @@ export default function AdminClientPage({
                 return;
               }
 
+              // ลงทะเบียนใหม่: Step 1 ไป Step 2 โดยยังไม่บันทึก
+              if (!editingEmployee && registrationStep === 1) {
+                setRegistrationStep(2);
+                return;
+              }
+
+              // บันทึกจริงเมื่อถึง Step 2 หรือเป็นการแก้ไขพนักงาน
               handleSaveEmployee(e);
             }}
             className="bg-white p-8 rounded-[3.5rem] w-full max-w-2xl space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl custom-scrollbar"
@@ -4807,7 +4806,7 @@ export default function AdminClientPage({
               )}
             </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${!editingEmployee && registrationStep === 2 ? "hidden" : ""}`}>
               {/* รูปโปรไฟล์ */}
               <div className="col-span-1 sm:col-span-2 space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
@@ -5082,31 +5081,131 @@ export default function AdminClientPage({
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-6 border-t mt-4">
-              <button
-                type="button"
-                disabled={isProcessing}
-                onClick={() => {
-                  setShowRegister(false);
-                  setEditingEmployee(null);
-                  setPreviewImage(null);
-                  setSelectedRole("employee");
-                }}
-                className="px-6 py-4 font-bold text-slate-400 uppercase text-xs hover:text-slate-600 transition-colors disabled:opacity-50"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="submit"
-                disabled={isProcessing}
-                className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 hover:bg-slate-800 transition-all disabled:bg-slate-300 flex items-center gap-2"
-              >
-                {isProcessing
-                  ? "กำลังบันทึก..."
-                  : editingEmployee
-                    ? "💾 บันทึกการแก้ไข"
-                    : "➕ ลงทะเบียนพนักงาน"}
-              </button>
+            {!editingEmployee && registrationStep === 2 && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+
+                {/* Header */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-black">
+                      STEP 02 / 02
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">
+                      WORK SHIFT CONFIGURATION
+                    </span>
+                  </div>
+
+                  <h3 className="text-xl font-black text-slate-900">
+                    กำหนดเวลาทำงาน
+                  </h3>
+
+                  <p className="text-sm text-slate-500">
+                    กำหนดเวลาเข้างานและเวลาเลิกงานของพนักงาน
+                    ข้อมูลนี้จะใช้ในการคำนวณเวลาทำงานและ OT
+                  </p>
+                </div>
+
+                {/* Shift Inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 ml-1">
+                      เวลาเข้างาน
+                    </label>
+
+                    <div className="relative">
+                      <input
+                        type="time"
+                        name="startTime"
+                        defaultValue="08:00"
+                        required
+                        className="w-full p-5 bg-blue-50 border-2 border-blue-100 focus:border-blue-500 rounded-2xl font-black text-2xl text-slate-800 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 ml-1">
+                      เวลาเลิกงาน
+                    </label>
+
+                    <div className="relative">
+                      <input
+                        type="time"
+                        name="endTime"
+                        defaultValue="17:00"
+                        required
+                        className="w-full p-5 bg-blue-50 border-2 border-blue-100 focus:border-blue-500 rounded-2xl font-black text-2xl text-slate-800 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Information */}
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3">
+                  <div className="text-amber-800">
+                    <p className="font-black text-xs">
+                      ข้อมูลสำคัญ
+                    </p>
+                    <p className="text-xs mt-1 leading-relaxed">
+                      กรุณาตรวจสอบเวลาทำงานให้ถูกต้อง
+                      เนื่องจากระบบจะนำข้อมูล Shift ไปใช้เป็นฐานในการคำนวณ
+                      การมาสาย ชั่วโมงทำงาน และ OT ของพนักงาน
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            <div className="flex justify-between items-center gap-3 pt-6 border-t mt-4">
+              {/* ปุ่มย้อนกลับ: แสดงเฉพาะลงทะเบียนใหม่ Step 2 */}
+              {!editingEmployee && registrationStep === 2 && (
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={() => setRegistrationStep(1)}
+                  className="px-6 py-4 font-bold text-slate-500 uppercase text-xs hover:text-slate-800 transition-colors disabled:opacity-50"
+                >
+                  ← ย้อนกลับ
+                </button>
+              )}
+
+              <div className="flex gap-3 ml-auto">
+                {/* ปุ่มยกเลิก */}
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={() => {
+                    setShowRegister(false);
+                    setEditingEmployee(null);
+                    setPreviewImage(null);
+                    setSelectedRole("employee");
+                    setRegistrationStep(1);
+                  }}
+                  className="px-6 py-4 font-bold text-slate-400 uppercase text-xs hover:text-slate-600 transition-colors disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+
+                {/* ปุ่มถัดไป / บันทึก */}
+                <button
+                  type="submit"
+                  disabled={isProcessing}
+                  className={`px-10 py-4 text-white rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all disabled:bg-slate-300 flex items-center gap-2 ${!editingEmployee && registrationStep === 1
+                      ? "bg-slate-900 hover:bg-slate-800"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
+                >
+                  {isProcessing
+                    ? "กำลังบันทึก..."
+                    : editingEmployee
+                      ? "💾 บันทึกการแก้ไข"
+                      : registrationStep === 1
+                        ? "ถัดไป →"
+                        : "✓ ลงทะเบียนพนักงาน"}
+                </button>
+              </div>
             </div>
           </form>
         </div>
