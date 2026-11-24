@@ -113,7 +113,7 @@ export const shiftsTable = pgTable("shifts", {
   endTime: time("end_time").notNull(),
   
   //Dayoff enum for shifts  note: To Develop at later stage 
-  dayOff: dayOffEnum("day_off").notNull(),
+  // dayOff: dayOffEnum("day_off").notNull(),
 
 
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
