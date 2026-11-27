@@ -2394,16 +2394,18 @@ export default function AdminClientPage({
                 </div>
 
                 {/* --- Mobile & Tablet Card View (5 Items Per Page) --- */}
+
                 <div className="lg:hidden">
                   <div className="grid grid-cols-1 gap-4 mb-6">
                     {filteredEmployees.length > 0 ? (
                       filteredEmployees
-                        .slice((currentPage - 1) * 5, currentPage * 5) // จำกัด 5 รายการต่อหน้า
+                        .slice((currentPage - 1) * 5, currentPage * 5)
                         .map((e) => (
                           <div
                             key={e.id}
                             className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm relative"
                           >
+                            {/* PROFILE */}
                             <div className="flex items-start gap-4 mb-4">
                               <div className="w-16 h-16 relative rounded-[1.5rem] overflow-hidden border-2 border-slate-50 shadow-sm bg-slate-100 flex-shrink-0">
                                 <Image
@@ -2420,60 +2422,83 @@ export default function AdminClientPage({
                                   unoptimized
                                 />
                               </div>
+
                               <div className="flex-1 min-w-0">
                                 <div className="font-black text-gray-800 text-base truncate">
                                   {e.firstName} {e.lastName}
                                 </div>
+
                                 <div className="text-blue-500 font-mono text-xs truncate">
                                   @{e.userName || e.id}
                                 </div>
+
+                                {/* ROLE */}
                                 <div className="mt-1">
                                   <span
                                     className={`inline-block font-black text-[9px] uppercase px-2 py-0.5 rounded-md ${e.role === "leader"
-                                      ? "bg-blue-600 text-white"
-                                      : "bg-slate-100 text-slate-400"
+                                        ? "bg-blue-600 text-white"
+                                        : "bg-slate-100 text-slate-400"
                                       }`}
                                   >
-                                    {e.role === "leader"
-                                      ? "หัวหน้า"
-                                      : "พนักงาน"}
+                                    {e.role === "leader" ? "หัวหน้า" : "พนักงาน"}
                                   </span>
                                 </div>
                               </div>
+
+                              {/* ACTION MENU */}
                               <div className="relative group">
-                                <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-50 transition-colors">
+                                <button
+                                  type="button"
+                                  disabled={isProcessing}
+                                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
                                   <span className="text-gray-400 text-lg">
                                     ⋮
                                   </span>
                                 </button>
+
                                 <div className="absolute right-0 top-8 w-32 bg-white border border-slate-100 rounded-2xl shadow-xl z-30 hidden group-hover:block group-focus-within:block transition-all">
                                   <div className="p-2 flex flex-col gap-1">
                                     <button
+                                      type="button"
                                       onClick={() => handleEditEmployee(e)}
-                                      className="flex items-center gap-2 w-full px-3 py-2 text-xs font-bold text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
+                                      disabled={isProcessing}
+                                      className="flex items-center gap-2 w-full px-3 py-2 text-xs font-bold text-amber-600 hover:bg-amber-50 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
-                                      <span>✏️</span> แก้ไข
+                                      <span>✏️</span>
+                                      แก้ไข
                                     </button>
+
                                     <button
+                                      type="button"
                                       onClick={() => handleDeleteEmployee(e.id)}
-                                      className="flex items-center gap-2 w-full px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                      disabled={isProcessing}
+                                      className="flex items-center gap-2 w-full px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
-                                      <span>{isProcessing ? "⏳" : "🗑️"}</span>{" "}
+                                      <span>
+                                        {isProcessing ? "⏳" : "🗑️"}
+                                      </span>
                                       ลบข้อมูล
                                     </button>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+
+                            {/* EMPLOYEE DETAILS */}
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-4 pt-4 border-t border-slate-50">
+
+                              {/* DEPARTMENT */}
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
                                   แผนก
                                 </span>
                                 <span className="text-xs font-bold text-slate-600 truncate">
-                                  {e.departmentName || "ไม่ระบุ"}
+                                  {e.departmentName || "ไม่ระบุแผนก"}
                                 </span>
                               </div>
+
+                              {/* POSITION */}
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
                                   ตำแหน่ง
@@ -2482,6 +2507,8 @@ export default function AdminClientPage({
                                   {e.position || "พนักงาน"}
                                 </span>
                               </div>
+
+                              {/* SITE */}
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
                                   ไซต์งาน
@@ -2492,19 +2519,49 @@ export default function AdminClientPage({
                                     : e.site}
                                 </span>
                               </div>
+
+                              {/* WORKING TIME */}
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
                                   รอบเข้างาน
                                 </span>
-                                <span className="text-xs font-bold text-slate-800">
-                                  {e.startTime && e.endTime
-                                    ? `${e.startTime.slice(
-                                      0,
-                                      5
-                                    )} - ${e.endTime.slice(0, 5)}`
-                                    : "ยังไม่ระบุ"}
+                                {e.startTime && e.endTime ? (
+                                  <span className="text-xs font-bold text-gray-800">
+                                    {e.startTime.slice(0, 5)} -{" "}
+                                    {e.endTime.slice(0, 5)}
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400 font-medium italic">
+                                    ยังไม่ได้ระบุ
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* DAY OFF */}
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                                  วันหยุด
+                                </span>
+                                <span className="text-xs font-bold text-gray-600 truncate">
+                                  {dayOffLabels[e.dayOff] || "ไม่ระบุวันหยุด"}
                                 </span>
                               </div>
+
+                              {/* ROLE */}
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                                  ระดับสิทธิ์
+                                </span>
+                                <span
+                                  className={`inline-block w-fit font-black text-[10px] uppercase px-2 py-1 rounded-lg ${e.role === "leader"
+                                      ? "bg-blue-600 text-white"
+                                      : "bg-slate-100 text-slate-400"
+                                    }`}
+                                >
+                                  {e.role === "leader" ? "หัวหน้า" : "พนักงาน"}
+                                </span>
+                              </div>
+
                             </div>
                           </div>
                         ))
@@ -2515,10 +2572,11 @@ export default function AdminClientPage({
                     )}
                   </div>
 
-                  {/* --- Pagination Controls for Mobile --- */}
+                  {/* PAGINATION CONTROLS FOR MOBILE */}
                   {filteredEmployees.length > 5 && (
                     <div className="flex justify-center items-center gap-2 mt-8 mb-12">
-                      {/* ปุ่มย้อนกลับ */}
+
+                      {/* PREVIOUS PAGE */}
                       <button
                         disabled={currentPage === 1}
                         onClick={() => setCurrentPage((prev) => prev - 1)}
@@ -2527,17 +2585,17 @@ export default function AdminClientPage({
                         {"<"}
                       </button>
 
-                      {/* รายการตัวเลขหน้า (Logic ใหม่: ป้องกันตัวเลขยาวเหยียด) */}
+                      {/* PAGE NUMBERS */}
                       <div className="flex gap-1">
                         {(() => {
                           const totalPages = Math.ceil(
                             filteredEmployees.length / 5
                           );
+
                           const pages = [];
-                          const range = 1; // จำนวนหน้าที่จะโชว์ข้างๆ หน้าปัจจุบัน
+                          const range = 1;
 
                           for (let i = 1; i <= totalPages; i++) {
-                            // เงื่อนไขการโชว์เลขหน้า: หน้าแรก, หน้าสุดท้าย, หน้าปัจจุบัน, และหน้ารอบข้างหน้าปัจจุบัน
                             if (
                               i === 1 ||
                               i === totalPages ||
@@ -2549,8 +2607,8 @@ export default function AdminClientPage({
                                   key={i}
                                   onClick={() => setCurrentPage(i)}
                                   className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${currentPage === i
-                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
-                                    : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
+                                      ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110"
+                                      : "bg-white text-slate-400 border border-slate-100 hover:border-blue-200"
                                     }`}
                                 >
                                   {i}
@@ -2560,7 +2618,6 @@ export default function AdminClientPage({
                               i === currentPage - range - 1 ||
                               i === currentPage + range + 1
                             ) {
-                              // แสดงจุดไข่ปลา (...)
                               pages.push(
                                 <span
                                   key={i}
@@ -2571,11 +2628,12 @@ export default function AdminClientPage({
                               );
                             }
                           }
+
                           return pages;
                         })()}
                       </div>
 
-                      {/* ปุ่มไปข้างหน้า */}
+                      {/* NEXT PAGE */}
                       <button
                         disabled={
                           currentPage ===
@@ -2589,6 +2647,7 @@ export default function AdminClientPage({
                     </div>
                   )}
                 </div>
+
 
                 {/* --- Desktop Table View (แสดงทั้งหมดพร้อม Scroll) --- */}
                 <div className="hidden lg:block rounded-4xl border border-slate-100 overflow-hidden bg-white shadow-sm">
