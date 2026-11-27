@@ -39,7 +39,7 @@ export default function LoginPage() {
     startTransition(async () => {
       try {
         const result = await handleLoginServer(formData);
-        
+
         if (result.success) {
           setIsProcessing(true);
           // ใช้ window.location.replace เพื่อไม่ให้ User กด Back กลับมาหน้า Login ได้หลังเข้าสู่ระบบ
@@ -65,7 +65,7 @@ export default function LoginPage() {
 
       <section className="w-full max-w-md z-10">
         <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white p-8">
-          
+
           <header className="text-center mb-8">
             <div className="flex justify-center mb-4">
               <div className="w-20 h-20 bg-gradient-to-tr from-white to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 overflow-hidden">
@@ -76,7 +76,11 @@ export default function LoginPage() {
             <p className="text-gray-500 text-sm mt-1 uppercase tracking-widest font-medium">Time Attendance</p>
           </header>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form
+            method="POST"
+            onSubmit={handleLogin}
+            className="space-y-5"
+          >
             {/* Username Field */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-gray-600 ml-1 uppercase">ชื่อผู้ใช้</label>
@@ -87,6 +91,7 @@ export default function LoginPage() {
                 <input
                   name="username"
                   type="text"
+                   autoComplete="username"
                   required
                   disabled={isLoading}
                   placeholder="username"
@@ -109,6 +114,7 @@ export default function LoginPage() {
                 <input
                   name="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   required
                   disabled={isLoading}
                   placeholder="••••••••"

@@ -1,4 +1,4 @@
-//path: src/features/over-time/otExecutionActions.ts
+
 "use server";
 
 import { db } from "@/db/db";
@@ -39,7 +39,7 @@ const toMinutes = (time: string): number => {
   return hours * 60 + minutes;
 };
 
-type OTType = "before" | "after" | "invalid";
+type OTType = "before" | "after" | "dayOff" | "invalid";
 
 /**
  * จำแนกประเภท OT ตามเวลาเริ่มงานและเลิกงานของ Shift
@@ -80,13 +80,13 @@ const getOTType = (
 /**
  * Execute OT
  *
- * - ค้นหา OT ที่ pending หรือ approved และ overtimeApproved = 0
- * - รวม OT และ Request ภายใน Shift เดียวกัน
- * - แยกคำนวณ Before / After
+ * - วันทำงานปกติใช้ overtimeBefore + overtimeAfter
+ * - วันหยุดใช้ overtimeOnDayOff เท่านั้น
+ * - Request วันหยุดใช้ isDayOffOt = true
+ * - Request ปกติใช้ Before / After ตาม Logic เดิม
  * - Approved ไม่เกินยอด Request รวม
  * - Approved ไม่เกินยอด OT จริงรวม
  * - กระจาย Approved กลับไปยัง OT แต่ละรายการ
- * - บันทึก Before + After ลง overtimeApproved ช่องเดียว
  * - เปลี่ยน Request ที่ถูกนำมาใช้เป็น executed
  * - Update OT และ Request ภายใน Transaction
  */
@@ -281,6 +281,7 @@ export async function executeOTAction(
           overtimeApproved: ot.overtimeApproved,
           overtimeBefore: ot.overtimeBefore,
           overtimeAfter: ot.overtimeAfter,
+          overtimeOnDayOff: ot.overtimeOnDayOff,
         })),
       });
 
@@ -334,6 +335,7 @@ export async function executeOTAction(
           timeEnd: request.timeEnd,
           overtimeByRequest: request.overtimeByRequest,
           isAfterMidnight: request.isAfterMidnight,
+          isDayOffOt: request.isDayOffOt,
           status: request.status,
         })),
       });
@@ -350,6 +352,7 @@ export async function executeOTAction(
       type RequestPool = {
         before: RequestItem[];
         after: RequestItem[];
+        dayOff: RequestItem[];
       };
 
       type OTItem = {
@@ -360,6 +363,7 @@ export async function executeOTAction(
       type OTGroup = {
         before: OTItem[];
         after: OTItem[];
+        dayOff: OTItem[];
       };
 
       const requestPoolByShift = new Map<
@@ -371,6 +375,7 @@ export async function executeOTAction(
         requestPoolByShift.set(shiftId, {
           before: [],
           after: [],
+          dayOff: [],
         });
       }
 
@@ -397,27 +402,6 @@ export async function executeOTAction(
         if (!shift) {
           continue;
         }
-
-        const shiftStartMinutes = toMinutes(
-          String(shift.shiftStartTime)
-        );
-
-        const shiftEndMinutes = toMinutes(
-          String(shift.shiftEndTime)
-        );
-
-        // ใช้ Algorithm เดิมจำแนกประเภท OT
-        const originalType = getOTType(
-          String(request.timeStart),
-          String(request.timeEnd),
-          shiftStartMinutes,
-          shiftEndMinutes
-        );
-
-        // เพิ่มเงื่อนไขสำหรับ Request หลังเที่ยงคืน
-        const type: OTType = request.isAfterMidnight
-          ? "after"
-          : originalType;
 
         const pool = requestPoolByShift.get(
           request.shiftId
@@ -449,6 +433,46 @@ export async function executeOTAction(
           requestedMinutes,
         };
 
+        // ---------------------------------------------
+        // DAY-OFF REQUEST
+        // ---------------------------------------------
+
+        // Request วันหยุดไม่ต้องจำแนก Before / After
+        if (request.isDayOffOt === true) {
+          pool.dayOff.push(requestItem);
+
+          console.log("DAY-OFF REQUEST:", {
+            requestId: request.id,
+            requestedMinutes,
+          });
+
+          continue;
+        }
+
+        // ---------------------------------------------
+        // NORMAL REQUEST
+        // ---------------------------------------------
+
+        const shiftStartMinutes = toMinutes(
+          String(shift.shiftStartTime)
+        );
+
+        const shiftEndMinutes = toMinutes(
+          String(shift.shiftEndTime)
+        );
+
+        const originalType = getOTType(
+          String(request.timeStart),
+          String(request.timeEnd),
+          shiftStartMinutes,
+          shiftEndMinutes
+        );
+
+        // รองรับ Request หลังเที่ยงคืน
+        const type: OTType = request.isAfterMidnight
+          ? "after"
+          : originalType;
+
         if (type === "before") {
           pool.before.push(requestItem);
         } else if (type === "after") {
@@ -466,15 +490,20 @@ export async function executeOTAction(
           requestPoolByShift.entries()
         ).map(([shiftId, pool]) => ({
           shiftId,
+
           before: pool.before.map((item) => ({
             id: item.request.id,
             requestedMinutes: item.requestedMinutes,
-            isAfterMidnight: item.request.isAfterMidnight,
           })),
+
           after: pool.after.map((item) => ({
             id: item.request.id,
             requestedMinutes: item.requestedMinutes,
-            isAfterMidnight: item.request.isAfterMidnight,
+          })),
+
+          dayOff: pool.dayOff.map((item) => ({
+            id: item.request.id,
+            requestedMinutes: item.requestedMinutes,
           })),
         })),
       });
@@ -505,6 +534,7 @@ export async function executeOTAction(
         otGroupsByShift.set(shiftId, {
           before: [],
           after: [],
+          dayOff: [],
         });
       }
 
@@ -533,20 +563,22 @@ export async function executeOTAction(
           ot.overtimeAfter
         );
 
+        const otOnDayOff = Number(
+          ot.overtimeOnDayOff
+        );
+
         if (
           !Number.isFinite(otBefore) ||
           !Number.isFinite(otAfter) ||
+          !Number.isFinite(otOnDayOff) ||
           otBefore < 0 ||
-          otAfter < 0
+          otAfter < 0 ||
+          otOnDayOff < 0
         ) {
           throw new Error(
             `ยอด OT ไม่ถูกต้อง: ${ot.id}`
           );
         }
-
-        const rawMinutes = otBefore + otAfter;
-
-        totalRawMinutes += rawMinutes;
 
         const group = otGroupsByShift.get(
           attendance.shiftId
@@ -557,6 +589,36 @@ export async function executeOTAction(
             `ไม่พบ OT Group ของ Shift: ${attendance.shiftId}`
           );
         }
+
+        // ---------------------------------------------
+        // DAY-OFF OT
+        // ---------------------------------------------
+
+        // ถ้ามียอด overtimeOnDayOff ให้ใช้ยอดนี้เท่านั้น
+        // ไม่รวม overtimeBefore และ overtimeAfter
+        if (otOnDayOff > 0) {
+          group.dayOff.push({
+            ot,
+            minutes: otOnDayOff,
+          });
+
+          totalRawMinutes += otOnDayOff;
+
+          console.log("DAY-OFF OT:", {
+            otId: ot.id,
+            overtimeOnDayOff: otOnDayOff,
+          });
+
+          continue;
+        }
+
+        // ---------------------------------------------
+        // NORMAL OT
+        // ---------------------------------------------
+
+        const rawMinutes = otBefore + otAfter;
+
+        totalRawMinutes += rawMinutes;
 
         if (otBefore > 0) {
           group.before.push({
@@ -676,7 +738,9 @@ export async function executeOTAction(
           );
         }
 
+        // ---------------------------------------------
         // BEFORE TOTALS
+        // ---------------------------------------------
 
         const otBeforeTotal = otGroup.before.reduce(
           (sum, item) => sum + item.minutes,
@@ -689,7 +753,9 @@ export async function executeOTAction(
             0
           );
 
+        // ---------------------------------------------
         // AFTER TOTALS
+        // ---------------------------------------------
 
         const otAfterTotal = otGroup.after.reduce(
           (sum, item) => sum + item.minutes,
@@ -703,27 +769,37 @@ export async function executeOTAction(
           );
 
         // ---------------------------------------------
+        // DAY-OFF TOTALS
+        // ---------------------------------------------
+
+        const otDayOffTotal = otGroup.dayOff.reduce(
+          (sum, item) => sum + item.minutes,
+          0
+        );
+
+        const requestDayOffTotal =
+          requestPool.dayOff.reduce(
+            (sum, item) => sum + item.requestedMinutes,
+            0
+          );
+
+        // ---------------------------------------------
         // VALIDATE MATCHING REQUEST
         // ---------------------------------------------
 
-        /**
-         * Throw เฉพาะกรณี:
-         * - มี OT จริง
-         * - แต่ไม่มี Request ตรงกับทั้ง Before และ After
-         *
-         * หากมี Request ตรงเพียงด้านเดียว
-         * จะอนุมัติเฉพาะด้านที่มี Request
-         */
         const hasOT =
-          otBeforeTotal > 0 || otAfterTotal > 0;
+          otBeforeTotal > 0 ||
+          otAfterTotal > 0 ||
+          otDayOffTotal > 0;
 
         const hasAnyMatchingRequest =
           requestBeforeTotal > 0 ||
-          requestAfterTotal > 0;
+          requestAfterTotal > 0 ||
+          requestDayOffTotal > 0;
 
         if (hasOT && !hasAnyMatchingRequest) {
           throw new Error(
-            `ไม่สามารถอนุมัติ OT ของ Shift ${shiftId} ได้: ไม่พบ Request ที่ approved และยังไม่ถูกลบ ซึ่งตรงกับประเภท OT Before / After`
+            `ไม่สามารถอนุมัติ OT ของ Shift ${shiftId} ได้: ไม่พบ Request ที่ approved และยังไม่ถูกลบ ซึ่งตรงกับประเภท OT`
           );
         }
 
@@ -741,6 +817,11 @@ export async function executeOTAction(
           requestAfterTotal
         );
 
+        const approvedDayOffTotal = Math.min(
+          otDayOffTotal,
+          requestDayOffTotal
+        );
+
         // ---------------------------------------------
         // DISTRIBUTE APPROVED BACK TO OT
         // ---------------------------------------------
@@ -755,6 +836,11 @@ export async function executeOTAction(
           approvedAfterTotal
         );
 
+        distributeApproved(
+          otGroup.dayOff,
+          approvedDayOffTotal
+        );
+
         // ---------------------------------------------
         // COLLECT EXECUTED REQUESTS
         // ---------------------------------------------
@@ -767,6 +853,11 @@ export async function executeOTAction(
         collectExecutedRequests(
           requestPool.after,
           approvedAfterTotal
+        );
+
+        collectExecutedRequests(
+          requestPool.dayOff,
+          approvedDayOffTotal
         );
 
         console.log("SHIFT AGGREGATION:", {
@@ -784,11 +875,21 @@ export async function executeOTAction(
             approvedTotal: approvedAfterTotal,
           },
 
+          dayOff: {
+            otTotal: otDayOffTotal,
+            requestTotal: requestDayOffTotal,
+            approvedTotal: approvedDayOffTotal,
+          },
+
           shiftRawMinutes:
-            otBeforeTotal + otAfterTotal,
+            otBeforeTotal +
+            otAfterTotal +
+            otDayOffTotal,
 
           shiftApprovedMinutes:
-            approvedBeforeTotal + approvedAfterTotal,
+            approvedBeforeTotal +
+            approvedAfterTotal +
+            approvedDayOffTotal,
         });
       }
 
@@ -807,6 +908,7 @@ export async function executeOTAction(
           attendanceId: ot.attendanceId,
           rawBefore: Number(ot.overtimeBefore),
           rawAfter: Number(ot.overtimeAfter),
+          rawOnDayOff: Number(ot.overtimeOnDayOff),
           approvedMinutes,
           previousStatus: ot.status,
         });

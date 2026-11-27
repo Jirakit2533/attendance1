@@ -64,6 +64,27 @@
       "when": 1795611697455,
       "tag": "0008_furry_captain_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795770033373,
+      "tag": "0009_futuristic_blazing_skull",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795771035334,
+      "tag": "0010_clammy_tony_stark",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795771551660,
+      "tag": "0011_tiny_doctor_octopus",
+      "breakpoints": true
     }
   ]
 }

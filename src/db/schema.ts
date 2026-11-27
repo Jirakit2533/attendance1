@@ -134,8 +134,8 @@ export const overtimeTable = pgTable("overtime", {
   cronProcessedAt: timestamp("cron_processed_at"),
   overtimeBefore: integer("overtime_before").notNull().default(0),
   overtimeAfter: integer("overtime_after").notNull().default(0),
+  overtimeOnDayOff: integer("overtime_on_day_off").notNull().default(0),
   overtimeApproved: integer("overtime_approved").notNull().default(0),
-  overtimeRejected: integer("overtime_rejected").notNull().default(0),
   otRoundingOption: varchar("ot_rounding_option", { length: 30 }).notNull(),
 });
 
@@ -151,6 +151,7 @@ export const overtimeRequestsTable = pgTable("overtime_requests", {
   timeStart: time("time_start").notNull(),
   timeEnd: time("time_end").notNull(),
   date: date("date").notNull(),
+  isDayOffOt: boolean("is_day_off_ot").default(false),
   isAfterMidnight: boolean("is_after_midnight").default(false).notNull(),
   requestedWorkers: jsonb("requested_workers").$type<string[]>().default([]),
   reason: text("reason").notNull(),
@@ -216,6 +217,7 @@ export const attendanceTable = pgTable("attendance", {
   shiftStartTimeSnapshot: time("shift_start_time_snapshot"),
   shiftEndTimeSnapshot: time("shift_end_time_snapshot"),
   departmentNameSnapshot: varchar("department_name_snapshot", { length: 255 }),
+  dayOffSnapshot: dayOffEnum("day_off_snapshot"),
   date: date("date").notNull(),
   checkIn: time("check_in"),
   imageIn: text("image_in").notNull(),

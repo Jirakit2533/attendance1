@@ -1,0 +1,1 @@
+ALTER TABLE "attendance" ADD COLUMN "day_off_snapshot" "day_off";

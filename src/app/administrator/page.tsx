@@ -580,16 +580,6 @@ export default async function AdminDashboardPage() {
     const attendance =
       (rawAttendance || []).map(
         (at) => {
-
-          // DEBUG: ตรวจสอบความสัมพันธ์ Attendance กับ Shift
-          console.log("ATTENDANCE SHIFT DEBUG:", {
-            attendanceId: at.id,
-            date: at.date,
-            userId: at.user_id,
-            shiftId: at.shiftId,
-            dayOff: at.dayOff,
-          });
-
           let isLate =
             at.isLateFromDb ?? 0;
 

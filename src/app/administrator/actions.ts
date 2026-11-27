@@ -197,10 +197,14 @@ export async function saveStaffAction(data: any) {
       };
     }
 
-    // ตรวจสอบรูปแบบเวลา HH:mm
+    // ตรวจสอบรูปแบบเวลา HH:mm หรือ HH:mm:ss
+    const isValidTime = (value: unknown) =>
+      typeof value === "string" &&
+      /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(value);
+
     if (
-      (hasStartTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(data.startTime)) ||
-      (hasEndTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(data.endTime))
+      (hasStartTime && !isValidTime(data.startTime)) ||
+      (hasEndTime && !isValidTime(data.endTime))
     ) {
       return {
         success: false,

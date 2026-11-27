@@ -1,0 +1,1 @@
+ALTER TABLE "overtime_requests" ADD COLUMN "is_day_off_ot" boolean DEFAULT false;

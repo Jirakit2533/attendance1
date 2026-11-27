@@ -922,7 +922,7 @@ export default function EmployeeClientPage({
   }, [leaveStart, leaveEnd]);
 
 
-
+  // ---------------- OVERTIME HANDLERS ----------------
   const handleOTSubmit = async () => {
     if (!userProfile?.id) {
       return setOtError("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่");
@@ -940,7 +940,6 @@ export default function EmployeeClientPage({
       return setOtError("กรุณาระบุเหตุผลหรือลักษณะงาน");
     }
 
-    // แปลงเวลาเป็นนาที
     // แปลงเวลาเป็นนาที
     const [startHour, startMinute] = otData.startTime.split(":").map(Number);
     const [endHour, endMinute] = otData.endTime.split(":").map(Number);
@@ -980,21 +979,12 @@ export default function EmployeeClientPage({
       setIsProcessingOT(true);
       setOtError("");
 
-      // คำนวณวันที่อ้างอิงสำหรับบันทึกใน DB
-      const [year, month, day] = otData.date.split("-").map(Number);
-
-      const dbDate = new Date(
-        Date.UTC(year, month - 1, day)
-      );
-
-      if (otData.isAfterMidnight) {
-        dbDate.setUTCDate(dbDate.getUTCDate() - 1);
-      }
-
+      // ส่งวันที่ตามที่ผู้ใช้เลือก
+      // Action จะจัดการ dbDate และการย้อนหลัง 1 วันเอง
       const payload = {
         userId: userProfile.id,
         userName: userProfile.name,
-        date: dbDate.toISOString().slice(0, 10),
+        date: otData.date,
         startTime: otData.startTime,
         endTime: otData.endTime,
         reason: otData.reason.trim(),
@@ -1029,6 +1019,7 @@ export default function EmployeeClientPage({
       setIsProcessingOT(false);
     }
   };
+
 
 
 
@@ -1071,6 +1062,30 @@ export default function EmployeeClientPage({
     return `${d}/${m}/${y}`;
   })();
 
+  const isDayOffRecord = (date: string) => {
+    if (!date || !userProfile?.dayOff) return false;
+
+    const [year, month, day] = date.split("-").map(Number);
+
+    if (!year || !month || !day) return false;
+
+    const dayOfWeek = new Date(
+      Date.UTC(year, month - 1, day)
+    ).getUTCDay();
+
+    const dayOffMap: Record<string, number[]> = {
+      sunday: [0],
+      monday: [1],
+      tuesday: [2],
+      wednesday: [3],
+      thursday: [4],
+      friday: [5],
+      saturday: [6],
+      saturday_sunday: [6, 0],
+    };
+
+    return dayOffMap[userProfile.dayOff]?.includes(dayOfWeek) ?? false;
+  };
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
@@ -1179,11 +1194,27 @@ export default function EmployeeClientPage({
               <p className="text-gray-500 font-bold text-sm sm:text-lg tracking-tight">
                 รอบเข้างาน :{" "}
                 {userProfile.startTime && userProfile.endTime
-                  ? `${userProfile.startTime.slice(
-                    0,
-                    5
-                  )} - ${userProfile.endTime.slice(0, 5)}`
+                  ? `${userProfile.startTime.slice(0, 5)} - ${userProfile.endTime.slice(0, 5)}`
                   : "ยังไม่ระบุ"}
+
+                <span className="block text-orange-500 text-xs sm:text-sm mt-1">
+                  {userProfile.dayOff ?? "ไม่มีข้อมูลวันหยุด"}
+                </span>
+              </p>
+              <p className="text-gray-500 font-bold text-sm sm:text-lg tracking-tight">
+                วันหยุด :{" "}
+                <span className="text-gray-700">
+                  {{
+                    sunday: "วันอาทิตย์",
+                    monday: "วันจันทร์",
+                    tuesday: "วันอังคาร",
+                    wednesday: "วันพุธ",
+                    thursday: "วันพฤหัสบดี",
+                    friday: "วันศุกร์",
+                    saturday: "วันเสาร์",
+                    saturday_sunday: "วันเสาร์ - วันอาทิตย์",
+                  }[userProfile.dayOff] || "-"}
+                </span>
               </p>
             </div>
 
@@ -1413,10 +1444,28 @@ export default function EmployeeClientPage({
                           .map((r, i) => (
                             <tr
                               key={i}
-                              className="hover:bg-blue-50/10 transition-colors"
+                              className={`transition-colors ${isDayOffRecord(r.date)
+                                ? "bg-orange-200 hover:bg-orange-100"
+                                : "hover:bg-blue-50/10"
+                                }`}
                             >
                               <td className="p-4 font-bold text-gray-800 whitespace-nowrap">
                                 {r.date}
+
+                                {isDayOffRecord(r.date) && (
+                                  <span className="block text-orange-500 text-xs mt-1">
+                                    ทำงานวันหยุด : {{
+                                      sunday: "วันอาทิตย์",
+                                      monday: "วันจันทร์",
+                                      tuesday: "วันอังคาร",
+                                      wednesday: "วันพุธ",
+                                      thursday: "วันพฤหัสบดี",
+                                      friday: "วันศุกร์",
+                                      saturday: "วันเสาร์",
+                                      saturday_sunday: "วันเสาร์ - วันอาทิตย์",
+                                    }[userProfile.dayOff] || "-"}
+                                  </span>
+                                )}
                               </td>
                               <td className="p-4 font-bold text-gray-600">
                                 <div className="flex flex-col gap-1 whitespace-nowrap">

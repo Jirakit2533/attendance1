@@ -42,6 +42,7 @@ export default async function Page() {
       // ✅ เพิ่ม: ดึงเวลาจาก shiftsTable
       startTime: shiftsTable.startTime,
       endTime: shiftsTable.endTime,
+      dayOff: shiftsTable.dayOff, 
       // ✅ เพิ่มการดึงข้อมูลบริษัท
       companyName: companyTable.name,
       companyLogo: companyTable.logoUrl,
@@ -71,6 +72,11 @@ export default async function Page() {
   }
 
   const user = userExists[0];
+  console.log("EMPLOYEE SHIFT:", {
+  startTime: user.startTime,
+  endTime: user.endTime,
+  dayOff: user.dayOff,
+});
 
   // 2. ดึงข้อมูลประวัติการเข้างานโดยตรงเพื่อให้มั่นใจว่าได้ฟิลด์ Snapshot
   const dbRecords = await db
@@ -276,6 +282,7 @@ export default async function Page() {
     // ✅ ส่งเวลาเข้า-ออกงานไปที่หน้า Client
     startTime: user.startTime,
     endTime: user.endTime,
+    dayOff: user.dayOff,
   };
 
   // สร้างชื่อคีย์สำหรับข้อมูลบริษัทเพื่อนำไปใช้ใน UI

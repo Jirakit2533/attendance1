@@ -1,4 +1,4 @@
-//path: src/features/over-time/otExecutionActions.ts
+//path: src/app/api/cron/cleanup/route.ts
 
 import { cleanupExpiredOvertime } from "@/features/over-time/overtime-status-actions";
 import { executeOTAction } from "@/features/over-time/otExecutionActions";
