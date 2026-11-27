@@ -1,20 +1,37 @@
+
 "use server";
 
 import { db } from "@/db/db";
-import { attendanceTable, leaveTable, usersTable, shiftsTable, temporaryShiftsTable, overtimeTable, departmentsTable, companyTable, overtimeRequestsTable, companyFeatureSelectedTable } from "@/db/schema";
-import { eq, and, sql, isNull, desc } from "drizzle-orm";
+import {
+  attendanceTable,
+  leaveTable,
+  usersTable,
+  shiftsTable,
+  temporaryShiftsTable,
+  overtimeTable,
+  departmentsTable,
+  companyTable,
+  overtimeRequestsTable,
+} from "@/db/schema";
+import { eq, and, isNull, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { uploadToDrive } from "@/lib/uploadthing-server";
-import { validateAndGetSite, isInsideBound, validateCheckOutLocation } from "@/lib/location-service";
+import {
+  validateAndGetSite,
+  validateCheckOutLocation,
+} from "@/lib/location-service";
 import { calculateOvertime } from "@/features/over-time/ot-calculate";
 import { FeatureService } from "@/features/feature-service";
 import * as bcrypt from "bcryptjs";
 
-
-
 /* -------------------------------------------------------------------------- */
-/* DAY OFF HELPERS                                                            */
+/* TYPES                                                                      */
 /* -------------------------------------------------------------------------- */
+
+type OTRoundingOption =
+  | "EVERY_30_MINS"
+  | "EVERY_1_HOUR"
+  | "ACTUAL";
 
 type DayOffOption =
   | "sunday"
@@ -25,6 +42,10 @@ type DayOffOption =
   | "friday"
   | "saturday"
   | "saturday_sunday";
+
+/* -------------------------------------------------------------------------- */
+/* DAY OFF HELPERS                                                            */
+/* -------------------------------------------------------------------------- */
 
 /**
  * ตรวจสอบว่าวันที่ SQL DATE ตรงกับวันหยุดประจำสัปดาห์หรือไม่
@@ -79,7 +100,8 @@ function calculateDayOffMinutes(
   checkOut: string
 ): number {
   const toSeconds = (time: string): number => {
-    const match = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(time);
+    const match =
+      /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(time);
 
     if (!match) {
       throw new Error(`รูปแบบเวลาไม่ถูกต้อง: ${time}`);
@@ -119,7 +141,6 @@ function getPreviousDate(date: string): string {
   ].join("-");
 }
 
-
 /* -------------------------------------------------------------------------- */
 /* CHECKIN ACTION (การเข้างาน)                                                */
 /* -------------------------------------------------------------------------- */
@@ -152,7 +173,11 @@ export async function checkInAction(
       lookupDate = getPreviousDate(dateStr);
     }
 
-    if (!location || typeof location !== "string" || !location.includes(",")) {
+    if (
+      !location ||
+      typeof location !== "string" ||
+      !location.includes(",")
+    ) {
       throw new Error("พิกัดตำแหน่งไม่ถูกต้องหรือไม่ได้เปิด GPS");
     }
 
@@ -283,10 +308,7 @@ export async function checkInAction(
     const activeDayOff = user.dayOff || null;
 
     // ตรวจสอบว่าวันที่ Check-in เป็นวันหยุดหรือไม่
-    const isDayOff = isDayOffDate(
-      dateStr,
-      activeDayOff
-    );
+    const isDayOff = isDayOffDate(dateStr, activeDayOff);
 
     const toMin = (t: string | null) => {
       if (!t) return 0;
@@ -386,17 +408,17 @@ export async function checkInAction(
         lateMinutes:
           currentWorkingStatus === "normal" && activeStartTime
             ? (() => {
-              let nowM = toMin(currentTimeStr);
-              const startM = toMin(activeStartTime);
+                let nowM = toMin(currentTimeStr);
+                const startM = toMin(activeStartTime);
 
-              if (nowM < 300 && startM > 1000) {
-                nowM += 1440;
-              }
+                if (nowM < 300 && startM > 1000) {
+                  nowM += 1440;
+                }
 
-              const diff = nowM - startM;
+                const diff = nowM - startM;
 
-              return diff > 0 ? diff : 0;
-            })()
+                return diff > 0 ? diff : 0;
+              })()
             : 0,
       })
       .returning({
@@ -457,7 +479,6 @@ export async function checkInAction(
   }
 }
 
-
 /* -------------------------------------------------------------------------- */
 /* CHECKOUT ACTION (การออกงาน)                                                */
 /* -------------------------------------------------------------------------- */
@@ -476,14 +497,18 @@ export async function checkOutAction(
       hour12: false,
     });
 
-    if (!location || typeof location !== "string" || !location.includes(",")) {
+    if (
+      !location ||
+      typeof location !== "string" ||
+      !location.includes(",")
+    ) {
       throw new Error("พิกัดตำแหน่งไม่ถูกต้องหรือไม่ได้เปิด GPS");
     }
 
     const [lat, lon] = location.split(",").map(Number);
 
     if (isNaN(lat) || isNaN(lon)) {
-      throw new Error("ข้อมูลพิกัดไม่ถูกต้อง");
+      throw new Error("พิกัดตำแหน่งไม่ถูกต้อง");
     }
 
     const lastCheckIn = await db
@@ -600,10 +625,17 @@ export async function checkOutAction(
     let earlyExitMinutes = 0;
 
     // คง Logic ตรวจสอบออกก่อนเวลาเดิม
-    if (activeEndTime && currentRecord.workingStatusEnum !== "extra") {
+    if (
+      activeEndTime &&
+      currentRecord.workingStatusEnum !== "extra"
+    ) {
       const [currH, currM] = currentTimeStr.split(":").map(Number);
-      const [endH, endM] = (activeEndTime || "00:00").split(":").map(Number);
-      const [inH, inM] = (currentRecord.checkIn || "00:00").split(":").map(Number);
+      const [endH, endM] = (activeEndTime || "00:00")
+        .split(":")
+        .map(Number);
+      const [inH, inM] = (currentRecord.checkIn || "00:00")
+        .split(":")
+        .map(Number);
 
       let currentTotalMinutes = currH * 60 + currM;
       let endTotalMinutes = endH * 60 + endM;
@@ -728,8 +760,8 @@ export async function createLeaveRequest(data: {
   type: string;
   start: string;
   end: string;
-  startTime?: string | null; // เพิ่มรองรับเวลาเริ่มต้น
-  endTime?: string | null;   // เพิ่มรองรับเวลาสิ้นสุด
+  startTime?: string | null;
+  endTime?: string | null;
   reason: string;
   base64File?: string;
   fileName?: string;
@@ -737,43 +769,73 @@ export async function createLeaveRequest(data: {
   try {
     const user = await db.query.usersTable.findFirst({
       where: eq(usersTable.id, data.userId),
-      columns: { departmentId: true, site_id: true },
+      columns: {
+        departmentId: true,
+        site_id: true,
+      },
     });
 
-    if (!user) throw new Error("ไม่พบข้อมูลผู้ใช้");
+    if (!user) {
+      throw new Error("ไม่พบข้อมูลผู้ใช้");
+    }
 
-    // --- 💡 Logic การคำนวณ Total Hours ---
+    // คำนวณ Total Hours
     let totalHoursResult = 0;
 
-    if (data.type === "ลาเป็นชั่วโมง" && data.startTime && data.endTime) {
-      // กรณีลาเป็นชั่วโมง: คำนวณส่วนต่างชั่วโมงจากเวลาเริ่มต้น-สิ้นสุด
-      const startDateTime = new Date(`${data.start}T${data.startTime}`);
-      const endDateTime = new Date(`${data.end}T${data.endTime}`);
+    if (
+      data.type === "ลาเป็นชั่วโมง" &&
+      data.startTime &&
+      data.endTime
+    ) {
+      const startDateTime = new Date(
+        `${data.start}T${data.startTime}`
+      );
+      const endDateTime = new Date(
+        `${data.end}T${data.endTime}`
+      );
 
-      const diffMs = endDateTime.getTime() - startDateTime.getTime();
-      totalHoursResult = Math.floor(diffMs / (1000 * 60 * 60)); // ใส่ตัวเลขชั่วโมงเข้าไปเลย
+      const diffMs =
+        endDateTime.getTime() - startDateTime.getTime();
+
+      totalHoursResult = Math.floor(
+        diffMs / (1000 * 60 * 60)
+      );
     } else {
-      // กรณีลาปกติ: คำนวณจำนวนวัน (สิ้นสุด - เริ่มต้น + 1) แล้วคูณด้วย 24
       const start = new Date(data.start);
       const end = new Date(data.end);
 
-      const diffTime = Math.abs(end.getTime() - start.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      const diffTime = Math.abs(
+        end.getTime() - start.getTime()
+      );
 
-      totalHoursResult = diffDays * 24; // จำนวนวันคูณ 24
+      const diffDays =
+        Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+      totalHoursResult = diffDays * 24;
     }
 
-    // ป้องกันค่าที่ผิดพลาด
-    if (totalHoursResult <= 0) throw new Error("ช่วงเวลาการลาไม่ถูกต้อง");
-    // --------------------------------------------------
+    if (totalHoursResult <= 0) {
+      throw new Error("ช่วงเวลาการลาไม่ถูกต้อง");
+    }
 
     let fileUrl = null;
     let fileId = null;
 
     if (data.base64File) {
-      const base64Data = data.base64File.replace(/^data:.*?;base64,/, "");
+      const base64Data = data.base64File.replace(
+        /^data:.*?;base64,/,
+        ""
+      );
+
       const buffer = Buffer.from(base64Data, "base64");
-      const uploadRes = await uploadToDrive(buffer, data.fileName || `leave_${data.userId}_${Date.now()}.png`, "image/png");
+
+      const uploadRes = await uploadToDrive(
+        buffer,
+        data.fileName ||
+          `leave_${data.userId}_${Date.now()}.png`,
+        "image/png"
+      );
+
       fileUrl = uploadRes.url;
       fileId = uploadRes.fileId;
     }
@@ -785,9 +847,9 @@ export async function createLeaveRequest(data: {
       type: data.type,
       startDate: data.start,
       endDate: data.end,
-      startTime: data.startTime || null, // บันทึกเวลาเริ่มต้น
-      endTime: data.endTime || null,     // บันทึกเวลาสิ้นสุด
-      totalHours: totalHoursResult,      // ✅ บันทึกค่าชั่วโมงที่คำนวณได้
+      startTime: data.startTime || null,
+      endTime: data.endTime || null,
+      totalHours: totalHoursResult,
       reason: data.reason,
       status: "pending",
       fileUrl: fileUrl,
@@ -797,15 +859,20 @@ export async function createLeaveRequest(data: {
 
     revalidatePath("/employee");
     revalidatePath("/leader");
+
     return { success: true };
   } catch (error: any) {
     console.error("Leave error:", error);
-    return { success: false, error: "ส่งคำขอลางานล้มเหลว: " + error.message };
+
+    return {
+      success: false,
+      error: "ส่งคำขอลางานล้มเหลว: " + error.message,
+    };
   }
 }
 
 /* -------------------------------------------------------------------------- */
-/* CHANGE PASSWORD (เปลี่ยนรหัสผ่าน)                                            */
+/* CHANGE PASSWORD (เปลี่ยนรหัสผ่าน)                                          */
 /* -------------------------------------------------------------------------- */
 
 export async function changePasswordAction(data: {
@@ -814,81 +881,81 @@ export async function changePasswordAction(data: {
   newPassword: string;
 }) {
   try {
-    if (!data.userId || !data.oldPassword || !data.newPassword) return { success: false, error: "ข้อมูลไม่ครบถ้วน" };
+    if (
+      !data.userId ||
+      !data.oldPassword ||
+      !data.newPassword
+    ) {
+      return {
+        success: false,
+        error: "ข้อมูลไม่ครบถ้วน",
+      };
+    }
 
-    const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, data.userId) });
-    if (!user || !user.passwordHash) return { success: false, error: "ไม่พบข้อมูลรหัสผ่านในระบบ" };
-    if (!user.passwordHash.startsWith('$')) return { success: false, error: "รหัสผ่านในระบบอยู่ในรูปแบบที่ไม่รองรับ" };
+    const user = await db.query.usersTable.findFirst({
+      where: eq(usersTable.id, data.userId),
+    });
 
-    const isMatch = await bcrypt.compare(data.oldPassword, user.passwordHash);
-    if (!isMatch) return { success: false, error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
-    if (data.oldPassword === data.newPassword) return { success: false, error: "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม" };
+    if (!user || !user.passwordHash) {
+      return {
+        success: false,
+        error: "ไม่พบข้อมูลรหัสผ่านในระบบ",
+      };
+    }
 
-    const hashedNewPassword = await bcrypt.hash(data.newPassword, 10);
-    await db.update(usersTable).set({ passwordHash: hashedNewPassword }).where(eq(usersTable.id, data.userId));
+    if (!user.passwordHash.startsWith("$")) {
+      return {
+        success: false,
+        error: "รหัสผ่านในระบบอยู่ในรูปแบบที่ไม่รองรับ",
+      };
+    }
+
+    const isMatch = await bcrypt.compare(
+      data.oldPassword,
+      user.passwordHash
+    );
+
+    if (!isMatch) {
+      return {
+        success: false,
+        error: "รหัสผ่านปัจจุบันไม่ถูกต้อง",
+      };
+    }
+
+    if (data.oldPassword === data.newPassword) {
+      return {
+        success: false,
+        error: "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม",
+      };
+    }
+
+    const hashedNewPassword = await bcrypt.hash(
+      data.newPassword,
+      10
+    );
+
+    await db
+      .update(usersTable)
+      .set({ passwordHash: hashedNewPassword })
+      .where(eq(usersTable.id, data.userId));
 
     revalidatePath("/employee");
     revalidatePath("/leader");
+
     return { success: true };
   } catch (error: any) {
     console.error("Change password critical error:", error);
-    return { success: false, error: `เกิดข้อผิดพลาด: ${error.message || "ทางระบบ"}` };
+
+    return {
+      success: false,
+      error: `เกิดข้อผิดพลาด: ${error.message || "ทางระบบ"}`,
+    };
   }
 }
-
 
 /* -------------------------------------------------------------------------- */
 /* PERSONAL OT ACTIONS (OT ส่วนตัว)                                           */
 /* -------------------------------------------------------------------------- */
-
-type DayOffOption =
-  | "sunday"
-  | "monday"
-  | "tuesday"
-  | "wednesday"
-  | "thursday"
-  | "friday"
-  | "saturday"
-  | "saturday_sunday";
-
-function isWeeklyDayOff(
-  date: string,
-  dayOff: DayOffOption | null
-): boolean {
-  if (!dayOff) return false;
-
-  const [year, month, day] = date.split("-").map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-
-  if (
-    !Number.isInteger(year) ||
-    !Number.isInteger(month) ||
-    !Number.isInteger(day) ||
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month - 1 ||
-    parsed.getUTCDate() !== day
-  ) {
-    throw new Error("วันที่สำหรับตรวจสอบวันหยุดไม่ถูกต้อง");
-  }
-
-  const weekdays: DayOffOption[] = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ];
-
-  const weekday = weekdays[parsed.getUTCDay()];
-
-  if (dayOff === "saturday_sunday") {
-    return weekday === "saturday" || weekday === "sunday";
-  }
-
-  return weekday === dayOff;
-}
 
 export async function createPersonalOTAction(payload: {
   userId: string;
@@ -921,17 +988,23 @@ export async function createPersonalOTAction(payload: {
     });
 
     if (!user) {
-      throw new Error(`ไม่พบข้อมูลพนักงานในระบบ (ID: ${payload.userId})`);
+      throw new Error(
+        `ไม่พบข้อมูลพนักงานในระบบ (ID: ${payload.userId})`
+      );
     }
 
     // ดึงกะล่าสุดของพนักงานจาก DB
     const latestShift = await db.query.shiftsTable.findFirst({
       where: eq(shiftsTable.userId, user.id),
-      orderBy: (shifts, { desc }) => [desc(shifts.createdAt)],
+      orderBy: (shifts, { desc }) => [
+        desc(shifts.createdAt),
+      ],
     });
 
     if (!latestShift) {
-      throw new Error("ไม่พบข้อมูลกะพนักงานสำหรับตรวจสอบวันหยุด");
+      throw new Error(
+        "ไม่พบข้อมูลกะพนักงานสำหรับตรวจสอบวันหยุด"
+      );
     }
 
     // ตรวจสอบรูปแบบเวลา
@@ -945,49 +1018,76 @@ export async function createPersonalOTAction(payload: {
     }
 
     // คำนวณระยะเวลา OT
-    const [startH, startM] = payload.startTime.split(":").map(Number);
-    const [endH, endM] = payload.endTime.split(":").map(Number);
+    const [startH, startM] = payload.startTime
+      .split(":")
+      .map(Number);
+
+    const [endH, endM] = payload.endTime
+      .split(":")
+      .map(Number);
 
     const startMinutes = startH * 60 + startM;
     const endMinutes = endH * 60 + endM;
 
     if (startMinutes === endMinutes) {
-      throw new Error("เวลาเริ่มต้นและสิ้นสุดต้องไม่ตรงกัน");
+      throw new Error(
+        "เวลาเริ่มต้นและสิ้นสุดต้องไม่ตรงกัน"
+      );
     }
 
-    // ตรวจสอบประเภท OT หลังเที่ยงคืนฝั่ง Server อีกครั้ง
+    // ตรวจสอบประเภท OT
     if (payload.isAfterMidnight) {
-      const isStartAfterMidnight =
-        startMinutes >= 0 && startMinutes <= 360;
-
-      const isEndAfterMidnight =
-        endMinutes >= 0 && endMinutes <= 360;
+      // OT หลังเที่ยงคืน: เวลาเริ่มและสิ้นสุดต้องอยู่ในช่วง 00:00–06:00
+      const isStartAfterMidnight = startMinutes <= 360;
+      const isEndAfterMidnight = endMinutes <= 360;
 
       if (
         !isStartAfterMidnight ||
         !isEndAfterMidnight ||
         endMinutes <= startMinutes
       ) {
-        throw new Error("ช่วงเวลา OT หลังเที่ยงคืนไม่ถูกต้อง");
+        throw new Error(
+          "ช่วงเวลา OT หลังเที่ยงคืนไม่ถูกต้อง"
+        );
       }
-    } else if (endMinutes < startMinutes) {
-      throw new Error("เวลา OT ไม่ถูกต้อง กรุณาตรวจสอบประเภท OT หลังเที่ยงคืน");
+    } else {
+      // OT ปกติ: อนุญาตให้สิ้นสุดตรง 00:00 ได้
+      if (
+        endMinutes < startMinutes &&
+        payload.endTime !== "00:00"
+      ) {
+        throw new Error(
+          "เวลา OT ไม่ถูกต้อง กรุณาตรวจสอบประเภท OT หลังเที่ยงคืน"
+        );
+      }
     }
 
     let totalMinutes = endMinutes - startMinutes;
 
-    if (totalMinutes < 0) {
+    if (
+      !payload.isAfterMidnight &&
+      payload.endTime === "00:00"
+    ) {
+      totalMinutes = 1440 - startMinutes;
+    } else if (totalMinutes < 0) {
       totalMinutes += 1440;
     }
 
-    if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) {
+    if (
+      !Number.isFinite(totalMinutes) ||
+      totalMinutes <= 0
+    ) {
       throw new Error("ช่วงเวลา OT ไม่ถูกต้อง");
     }
 
     // วันที่ที่ผู้ใช้เลือกจาก UI
-    const [year, month, day] = payload.date.split("-").map(Number);
+    const [year, month, day] = payload.date
+      .split("-")
+      .map(Number);
 
-    const selectedDate = new Date(Date.UTC(year, month - 1, day));
+    const selectedDate = new Date(
+      Date.UTC(year, month - 1, day)
+    );
 
     if (
       !Number.isInteger(year) ||
@@ -1001,7 +1101,7 @@ export async function createPersonalOTAction(payload: {
     }
 
     // วันที่สำหรับบันทึกใน DB
-    // ถ้าเป็น OT ข้ามเที่ยงคืน ให้ย้อนหลัง 1 วัน
+    // ถ้าเป็น OT หลังเที่ยงคืน ให้ย้อนหลัง 1 วัน
     const dbDate = new Date(selectedDate);
 
     if (payload.isAfterMidnight === true) {
@@ -1016,7 +1116,7 @@ export async function createPersonalOTAction(payload: {
 
     // ตรวจสอบวันหยุดประจำสัปดาห์จาก DB
     // ใช้วันที่ dbDateString เป็นวันที่อ้างอิง
-    const isOtDayOff = isWeeklyDayOff(
+    const isOtDayOff = isDayOffDate(
       dbDateString,
       latestShift.dayOff
     );
@@ -1073,7 +1173,6 @@ export async function createPersonalOTAction(payload: {
       message: "ส่งคำขอ OT รายบุคคลเรียบร้อยแล้ว",
       data: newRequest[0],
     };
-
   } catch (error: any) {
     console.error("PERSONAL_OT_ERROR_DETAIL:", error);
 
