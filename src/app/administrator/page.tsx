@@ -80,6 +80,8 @@ export default async function AdminDashboardPage() {
             shiftsTable.startTime,
           endTime:
             shiftsTable.endTime,
+          dayOff:
+            shiftsTable.dayOff,
         })
         .from(usersTable)
         .leftJoin(
@@ -142,6 +144,8 @@ export default async function AdminDashboardPage() {
         .select({
           id: attendanceTable.id,
           date: attendanceTable.date,
+          shiftId:
+            attendanceTable.shift_id,
           checkIn:
             attendanceTable.checkIn,
           checkOut:
@@ -178,6 +182,8 @@ export default async function AdminDashboardPage() {
             attendanceTable.isEarlyExit,
           isLateFromDb:
             attendanceTable.isLate,
+          dayOff:
+            shiftsTable.dayOff,
         })
         .from(attendanceTable)
         .innerJoin(
@@ -526,6 +532,9 @@ export default async function AdminDashboardPage() {
             departmentName:
               emp?.departmentName ||
               "ไม่ระบุแผนก",
+            dayOff:
+              emp?.dayOff ||
+              "ไม่ระบุวันหยุด",
             positionId:
               emp?.positionId
                 ? String(
@@ -571,6 +580,16 @@ export default async function AdminDashboardPage() {
     const attendance =
       (rawAttendance || []).map(
         (at) => {
+
+          // DEBUG: ตรวจสอบความสัมพันธ์ Attendance กับ Shift
+          console.log("ATTENDANCE SHIFT DEBUG:", {
+            attendanceId: at.id,
+            date: at.date,
+            userId: at.user_id,
+            shiftId: at.shiftId,
+            dayOff: at.dayOff,
+          });
+
           let isLate =
             at.isLateFromDb ?? 0;
 
@@ -639,6 +658,9 @@ export default async function AdminDashboardPage() {
             siteName:
               at?.siteName ||
               "ทั่วไป (ไม่มีไซต์)",
+            dayOff:
+              at?.dayOff ||
+              "-",
             locationIn:
               String(
                 at?.locationIn ||

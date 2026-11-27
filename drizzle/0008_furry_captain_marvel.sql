@@ -1,0 +1,1 @@
+ALTER TABLE "shifts" ADD COLUMN "day_off" "day_off" NOT NULL;

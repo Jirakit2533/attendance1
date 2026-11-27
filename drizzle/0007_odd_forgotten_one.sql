@@ -1,0 +1,1 @@
+CREATE TYPE "public"."day_off" AS ENUM('sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday');

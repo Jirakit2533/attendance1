@@ -5,7 +5,7 @@ export const roleEnum = pgEnum("role", ["super_admin", "admin", "leader", "emplo
 export const leaveStatusEnum = pgEnum("leave_status", ["pending", "approved", "rejected", "expired"]);
 export const workingStatusEnum = pgEnum("working_status", ["normal", "extra"]);
 export const otStatusEnum = pgEnum("ot_status", ["pending", "approved", "rejected", "expired", "executed"]);
-export const dayOffEnum = pgEnum("day_off", ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]);
+export const dayOffEnum = pgEnum("day_off", ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "saturday_sunday"]);
 
 export const superAdminTable = pgTable("super_admins", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -111,11 +111,7 @@ export const shiftsTable = pgTable("shifts", {
   userId: uuid("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
-  
-  //Dayoff enum for shifts  note: To Develop at later stage 
-  // dayOff: dayOffEnum("day_off").notNull(),
-
-
+  dayOff: dayOffEnum("day_off").default("sunday").notNull(),
   companyId: uuid("company_id").references(() => companyTable.id, { onDelete: "cascade" }),
   siteId: uuid("site_id").references(() => sitesTable.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow(),

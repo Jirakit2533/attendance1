@@ -50,6 +50,20 @@
       "when": 1795447119018,
       "tag": "0006_odd_moonstone",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795611639304,
+      "tag": "0007_odd_forgotten_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795611697455,
+      "tag": "0008_furry_captain_marvel",
+      "breakpoints": true
     }
   ]
 }

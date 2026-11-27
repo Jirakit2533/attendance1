@@ -207,6 +207,25 @@ export async function saveStaffAction(data: any) {
         error: "รูปแบบเวลาไม่ถูกต้อง",
       };
     }
+    const allowedDayOffs = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "saturday_sunday",
+    ] as const;
+
+    if (
+      !allowedDayOffs.includes(data.dayOff)
+    ) {
+      return {
+        success: false,
+        error: "กรุณาเลือกวันหยุดให้ถูกต้อง",
+      };
+    }
     // --- 1. จัดการ Username ---
     let inputUsername = data.userName || data.username;
 
@@ -214,33 +233,69 @@ export async function saveStaffAction(data: any) {
       return { success: false, error: "กรุณาระบุชื่อผู้ใช้งาน (Username)" };
     }
 
-    // 2. จัดการ Password (เพิ่ม Logic ตรวจสอบรหัสผ่านเดิมกรณีแก้ไข)
-    let passwordHash = undefined;
-    if (data.password && data.password.trim() !== "") {
 
-      // ✅ เพิ่มการตรวจสอบรหัสผ่านเดิมกรณีที่เป็นการแก้ไข (data.id มีค่า)
+    // 2. จัดการ Password
+    let passwordHash = undefined;
+
+    const hasNewPassword =
+      typeof data.password === "string" &&
+      data.password.trim() !== "";
+
+    if (hasNewPassword) {
+
+      // กรณีแก้ไขพนักงาน
       if (data.id) {
-        // 🛡️ เช็ค Flag สำหรับการ Bypass รหัสผ่านเดิม (Reset โดย Admin)
-        const isForceReset = data.oldPassword === "BYPASS_OLD_PASSWORD";
+
+        // ตรวจสอบ Flag สำหรับ Admin Reset Password
+        const isForceReset =
+          data.oldPassword === "BYPASS_OLD_PASSWORD";
 
         if (!isForceReset) {
-          const userForAuth = await db.select({ passwordHash: usersTable.passwordHash })
+
+          // ต้องมีรหัสผ่านเดิม
+          if (!data.oldPassword || data.oldPassword.trim() === "") {
+            return {
+              success: false,
+              error: "กรุณากรอกรหัสผ่านเดิมเพื่อยืนยันการเปลี่ยนแปลง",
+            };
+          }
+
+          const userForAuth = await db.select({
+            passwordHash: usersTable.passwordHash,
+          })
             .from(usersTable)
-            .where(eq(usersTable.id, data.id))
+            .where(
+              and(
+                eq(usersTable.id, data.id),
+                eq(usersTable.companyId, admin.companyId)
+              )
+            )
             .limit(1);
 
-          if (userForAuth.length > 0 && userForAuth[0].passwordHash) {
-            const isOldPasswordCorrect = await bcrypt.compare(data.oldPassword || "", userForAuth[0].passwordHash);
-            if (!isOldPasswordCorrect) {
-              return { success: false, error: "รหัสผ่านเดิมไม่ถูกต้อง ไม่สามารถเปลี่ยนรหัสผ่านใหม่ได้" };
-            }
+          if (!userForAuth.length || !userForAuth[0].passwordHash) {
+            return {
+              success: false,
+              error: "ไม่พบข้อมูลบัญชีผู้ใช้งาน",
+            };
+          }
+
+          const isOldPasswordCorrect = await bcrypt.compare(
+            data.oldPassword,
+            userForAuth[0].passwordHash
+          );
+
+          if (!isOldPasswordCorrect) {
+            return {
+              success: false,
+              error: "รหัสผ่านเดิมไม่ถูกต้อง ไม่สามารถเปลี่ยนรหัสผ่านใหม่ได้",
+            };
           }
         }
-        // ถ้าเป็น isForceReset จะข้ามการเช็ค comparePassword มาที่นี่ทันที
       }
 
       passwordHash = await bcrypt.hash(data.password, 10);
     }
+
 
     // 3. จัดการรูปภาพ (Avatar)
     let finalAvatarUrl = data.avatarUrl || null;
@@ -322,11 +377,12 @@ export async function saveStaffAction(data: any) {
 
       const shiftPayload = {
         userId: targetUserId,
-        name: "-", // เพิ่มเพื่อให้ผ่านเงื่อนไข notNull ใน schema
+        name: "-",
         startTime: data.startTime,
         endTime: data.endTime,
+        dayOff: data.dayOff,
         companyId: admin.companyId,
-        siteId: (data.siteId === "all_sites" || !data.siteId) ? null : data.siteId, // เพิ่มความเชื่อมโยงไซต์งาน
+        siteId: (data.siteId === "all_sites" || !data.siteId) ? null : data.siteId,
         updatedAt: new Date(),
       };
 
@@ -341,10 +397,18 @@ export async function saveStaffAction(data: any) {
 
     revalidatePath("/administrator");
     return { success: true, message: "บันทึกข้อมูลพนักงานสำเร็จ" };
-  } catch (error: any) {
-    console.error("DEBUG - FULL ERROR:", error);
 
-    const fullErrorString = JSON.stringify(error) || String(error);
+  } catch (error: any) {
+    console.error("========== SAVE STAFF ERROR ==========");
+    console.error("Error:", error);
+    console.error("Message:", error?.message);
+    console.error("Code:", error?.code);
+    console.error("Detail:", error?.detail);
+    console.error("Constraint:", error?.constraint);
+    console.error("Cause:", error?.cause);
+    console.error("=======================================");
+
+    const fullErrorString = JSON.stringify(error, Object.getOwnPropertyNames(error)) || String(error);
 
     const isDuplicate =
       error.code === "23505" ||
@@ -354,10 +418,16 @@ export async function saveStaffAction(data: any) {
       fullErrorString.toLowerCase().includes("duplicate");
 
     if (isDuplicate) {
-      return { success: false, error: "ชื่อผู้ใช้งานนี้มีอยู่ในระบบแล้ว" };
+      return {
+        success: false,
+        error: "ชื่อผู้ใช้งานนี้มีอยู่ในระบบแล้ว",
+      };
     }
 
-    return { success: false, error: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" };
+    return {
+      success: false,
+      error: `เกิดข้อผิดพลาด: ${error?.message || String(error)}`,
+    };
   }
 }
 /* ==========================================================================

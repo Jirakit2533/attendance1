@@ -10,7 +10,6 @@ import {
   savePositionAction,
   createDepartmentAction,
   updateLeaveStatusAction,
-  handleRemarkChangeAction,
   saveStaffAction,
   deleteStaffAction,
   deleteSiteAction,
@@ -226,8 +225,64 @@ export default function AdminClientPage({
 
   const allSite = "";
 
-  // --- 3. Component Logo ---
-  // --- ส่วนฟังก์ชันจัดการการบันทึกข้อมูลบริษัท ---
+  const isEmployeeDayOff = (
+    date: string | null | undefined,
+    dayOff: string | null | undefined
+  ): boolean => {
+    if (!date || !dayOff || dayOff === "-") return false;
+
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+
+    if (!match) return false;
+
+    const [, year, month, day] = match;
+
+    const dateObj = new Date(
+      Date.UTC(
+        Number(year),
+        Number(month) - 1,
+        Number(day)
+      )
+    );
+
+    // ป้องกันวันที่ไม่มีอยู่จริง เช่น 2026-02-30
+    if (
+      dateObj.getUTCFullYear() !== Number(year) ||
+      dateObj.getUTCMonth() !== Number(month) - 1 ||
+      dateObj.getUTCDate() !== Number(day)
+    ) {
+      return false;
+    }
+
+    const weekdays = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+
+    const weekday = weekdays[dateObj.getUTCDay()];
+
+    if (dayOff === "saturday_sunday") {
+      return weekday === "saturday" || weekday === "sunday";
+    }
+
+    return weekday === dayOff;
+  };
+
+  const dayOffLabels: Record<string, string> = {
+    sunday: "วันอาทิตย์",
+    monday: "วันจันทร์",
+    tuesday: "วันอังคาร",
+    wednesday: "วันพุธ",
+    thursday: "วันพฤหัสบดี",
+    friday: "วันศุกร์",
+    saturday: "วันเสาร์",
+    saturday_sunday: "วันเสาร์ - วันอาทิตย์",
+  };
 
   // --- ส่วน Component Logo ---
   const Logo = () => (
@@ -1793,21 +1848,25 @@ export default function AdminClientPage({
         firstName: data.firstName,
         lastName: data.lastName,
         userName: data.userName,
-        // ✅ เพิ่ม logic: ส่ง password และ oldPassword เฉพาะเมื่อมีการกรอกรหัสผ่านใหม่ในโหมดแก้ไข
+
+        // การจัดการ Password
         ...(editingEmployee
           ? passwordToSave
             ? { password: passwordToSave, oldPassword: oldPassword }
             : {}
           : { password: passwordToSave }),
+
         role: data.role,
         avatarUrl: finalAvatarUrl,
         positionId: data.positionId,
         siteId:
           siteInput === "all_sites" || siteInput === "" ? null : siteInput,
         departmentId: data.departmentId,
-        // ✅ ข้อมูลเวลาทำงาน (คงเดิม)
+
+        // ข้อมูลเวลาทำงาน
         startTime: data.startTime,
         endTime: data.endTime,
+        dayOff: data.dayOff,
       };
 
       const result = await saveStaffAction(payload);
@@ -1900,6 +1959,7 @@ export default function AdminClientPage({
       totalPages,
     ];
   };
+
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 overflow-x-hidden">
@@ -2549,6 +2609,9 @@ export default function AdminClientPage({
                             รอบเข้างาน
                           </th>
                           <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
+                            วันหยุด
+                          </th>
+                          <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
                             ไซต์งาน
                           </th>
                           <th className="py-5 px-6 text-left bg-white border-b border-gray-100">
@@ -2610,6 +2673,9 @@ export default function AdminClientPage({
                                     </span>
                                   )}
                                 </div>
+                              </td>
+                              <td className="py-4 px-6 font-bold text-gray-600">
+                                {dayOffLabels[e.dayOff] || "ไม่ระบุวันหยุด"}
                               </td>
                               <td className="py-4 px-6">
                                 <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-full font-bold text-[11px] uppercase tracking-wider">
@@ -2737,31 +2803,50 @@ export default function AdminClientPage({
                         </th>
                       </tr>
                     </thead>
+
                     <tbody className="divide-y divide-slate-50">
                       {filteredAttendance.length > 0 ? (
                         filteredAttendance.map((a, index) => {
-                          // Logic สำหรับแสดงตัวคั่นวันที่ (เหมือน Line)
+                          // วันที่จาก PostgreSQL DATE: YYYY-MM-DD
                           const currentDate = a.date
-                            ? new Date(a.date).toLocaleDateString("th-TH", {
+                            ? new Date(`${a.date}T00:00:00Z`).toLocaleDateString("th-TH", {
                               day: "2-digit",
                               month: "long",
                               year: "numeric",
+                              timeZone: "UTC",
                             })
                             : "";
+
                           const prevDate =
                             index > 0 && filteredAttendance[index - 1].date
                               ? new Date(
-                                filteredAttendance[index - 1].date
+                                `${filteredAttendance[index - 1].date}T00:00:00Z`
                               ).toLocaleDateString("th-TH", {
                                 day: "2-digit",
                                 month: "long",
                                 year: "numeric",
+                                timeZone: "UTC",
                               })
                               : null;
+
                           const showDivider = currentDate !== prevDate;
 
+                          const isDayOff = isEmployeeDayOff(a.date, a.dayOff);
+
+                          console.log("DAY OFF CHECK:", {
+                            id: a.id,
+                            date: a.date,
+                            dayOff: a.dayOff,
+                            isDayOff,
+                          });
+
+                          // กำหนดสีที่ระดับ td เพื่อให้แสดงผลแน่นอน
+                          const cellBg = isDayOff
+                            ? "bg-orange-200 group-hover:!bg-orange-100"
+                            : "group-hover:bg-blue-50/30";
+
                           return (
-                            <React.Fragment key={index}>
+                            <React.Fragment key={a.id || index}>
                               {showDivider && (
                                 <tr className="sticky top-[61px] z-20">
                                   <td
@@ -2777,8 +2862,9 @@ export default function AdminClientPage({
                                   </td>
                                 </tr>
                               )}
-                              <tr className="group hover:bg-blue-50/30 transition-colors">
-                                <td className="py-4 px-6">
+
+                              <tr className="group transition-colors">
+                                <td className={`py-4 px-6 ${cellBg}`}>
                                   <div className="w-12 h-12 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-slate-100 group-hover:scale-105 transition-transform">
                                     <Image
                                       src={
@@ -2791,7 +2877,8 @@ export default function AdminClientPage({
                                     />
                                   </div>
                                 </td>
-                                <td className="py-4 px-6">
+
+                                <td className={`py-4 px-6 ${cellBg}`}>
                                   <div className="font-black text-slate-800 text-base">
                                     {a.employeeName || "ไม่ระบุชื่อ"}
                                   </div>
@@ -2799,39 +2886,49 @@ export default function AdminClientPage({
                                     @{a.userName || "user"}
                                   </div>
                                 </td>
-                                <td className="py-4 px-6 font-bold text-slate-500 italic">
+
+                                <td className={`py-4 px-6 font-bold text-slate-500 italic ${cellBg}`}>
                                   {a.date
-                                    ? new Date(a.date).toLocaleDateString(
+                                    ? new Date(`${a.date}T00:00:00Z`).toLocaleDateString(
                                       "th-TH",
                                       {
                                         day: "2-digit",
                                         month: "short",
                                         year: "2-digit",
+                                        timeZone: "UTC",
                                       }
                                     )
                                     : "-"}
                                 </td>
-                                <td className="py-4 px-6">
+
+                                <td className={`py-4 px-6 ${cellBg}`}>
                                   <div className="font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-lg inline-block">
                                     {a.siteSnapName || "ไม่ระบุไซต์"}
                                   </div>
                                 </td>
-                                <td className="py-4 px-6 font-bold text-slate-600">
-                                  <div className="flex flex-col">
+
+                                <td className={`py-4 px-6 font-bold text-slate-600 ${cellBg}`}>
+                                  <div className="flex flex-col gap-1">
                                     {a.startTime && a.endTime ? (
                                       <span className="text-[14px] bg-white border border-slate-100 px-2 py-1 rounded shadow-sm w-fit">
-                                        {a.startTime.slice(0, 5)} -{" "}
-                                        {a.endTime.slice(0, 5)}
+                                        {a.startTime.slice(0, 5)} - {a.endTime.slice(0, 5)}
                                       </span>
                                     ) : (
                                       "-"
                                     )}
+
+                                    {isDayOff && (
+                                      <span className="text-xs font-semibold text-orange-600">
+                                        ทำงานวันหยุด
+                                      </span>
+                                    )}
                                   </div>
                                 </td>
-                                <td className="p-6 text-center">
+
+                                <td className={`p-6 text-center ${cellBg}`}>
                                   {a.isLate === 1 ? (
                                     <span className="text-red-600 bg-red-50 px-3 py-2 rounded-xl border border-red-100 font-black text-xs shadow-sm inline-flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>{" "}
+                                      <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                                       สาย
                                     </span>
                                   ) : (
@@ -2840,7 +2937,8 @@ export default function AdminClientPage({
                                     </span>
                                   )}
                                 </td>
-                                <td className="p-6 text-center">
+
+                                <td className={`p-6 text-center ${cellBg}`}>
                                   {a.isEarlyExit === "1" ? (
                                     <span className="text-amber-600 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 font-black text-xs shadow-sm">
                                       ⚠️ ออกก่อน
@@ -2853,20 +2951,20 @@ export default function AdminClientPage({
                                     <span className="text-slate-300">-</span>
                                   )}
                                 </td>
-                                <td className="py-4 px-6 text-center font-black text-emerald-600 text-lg">
+
+                                <td className={`py-4 px-6 text-center font-black text-emerald-600 text-lg ${cellBg}`}>
                                   {a.checkIn
                                     ? a.checkIn.split(":").slice(0, 2).join(":")
                                     : "-"}
                                 </td>
-                                <td className="py-4 px-6 text-center font-black text-rose-600 text-lg">
+
+                                <td className={`py-4 px-6 text-center font-black text-rose-600 text-lg ${cellBg}`}>
                                   {a.checkOut
-                                    ? a.checkOut
-                                      .split(":")
-                                      .slice(0, 2)
-                                      .join(":")
+                                    ? a.checkOut.split(":").slice(0, 2).join(":")
                                     : "-"}
                                 </td>
-                                <td className="py-4 px-6">
+
+                                <td className={`py-4 px-6 ${cellBg}`}>
                                   <div className="flex justify-center">
                                     {a.imageIn ? (
                                       <a
@@ -2890,7 +2988,8 @@ export default function AdminClientPage({
                                     )}
                                   </div>
                                 </td>
-                                <td className="py-4 px-6">
+
+                                <td className={`py-4 px-6 ${cellBg}`}>
                                   <div className="flex justify-center">
                                     {a.imageOut ? (
                                       <a
@@ -2914,7 +3013,8 @@ export default function AdminClientPage({
                                     )}
                                   </div>
                                 </td>
-                                <td className="py-4 px-6 text-center">
+
+                                <td className={`py-4 px-6 text-center ${cellBg}`}>
                                   {a.locationIn ? (
                                     <a
                                       href={`https://www.google.com/maps?q=${a.locationIn}`}
@@ -2930,7 +3030,8 @@ export default function AdminClientPage({
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-4 px-6 text-center">
+
+                                <td className={`py-4 px-6 text-center ${cellBg}`}>
                                   {a.locationOut ? (
                                     <a
                                       href={`https://www.google.com/maps?q=${a.locationOut}`}
@@ -2965,6 +3066,7 @@ export default function AdminClientPage({
                         </tr>
                       )}
                     </tbody>
+
                   </table>
                 </div>
               </div>
@@ -4751,6 +4853,7 @@ export default function AdminClientPage({
       )}
 
       {/* --- 👤 MODAL: REGISTRATION & EDIT --- */}
+
       {showRegister && (
         <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[500] p-4 backdrop-blur-md animate-in fade-in duration-300">
           <form
@@ -4762,12 +4865,12 @@ export default function AdminClientPage({
               const confirmPwd = formData.get("confirmPassword") as string;
               const oldPwd = formData.get("oldPassword") as string;
 
-              if (editingEmployee && pwd && !oldPwd) {
+              if (editingEmployee && pwd.trim() !== "" && oldPwd.trim() === "") {
                 alert("กรุณากรอกรหัสผ่านเดิมเพื่อยืนยันการเปลี่ยนแปลง");
                 return;
               }
 
-              if ((!editingEmployee || pwd) && pwd !== confirmPwd) {
+              if ((!editingEmployee || pwd.trim() !== "") && pwd !== confirmPwd) {
                 alert("รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน");
                 return;
               }
@@ -4789,10 +4892,11 @@ export default function AdminClientPage({
                   ? "✏️ แก้ไขข้อมูลพนักงาน"
                   : "👤 ลงทะเบียนพนักงานใหม่"}
               </span>
+
               {editingEmployee && (
                 <button
                   type="button"
-                  disabled={isResetting} // ป้องกันการกดซ้ำขณะกำลังทำงาน
+                  disabled={isResetting}
                   onClick={() => handleDirectReset(editingEmployee.id)}
                   className={`text-[10px] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors ${isResetting
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed"
@@ -4806,12 +4910,16 @@ export default function AdminClientPage({
               )}
             </h2>
 
-            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${!editingEmployee && registrationStep === 2 ? "hidden" : ""}`}>
+            <div
+              className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${!editingEmployee && registrationStep === 2 ? "hidden" : ""
+                }`}
+            >
               {/* รูปโปรไฟล์ */}
               <div className="col-span-1 sm:col-span-2 space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
                   รูปโปรไฟล์
                 </label>
+
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
                   <div className="w-16 h-16 rounded-full bg-slate-200 overflow-hidden flex-shrink-0 border-2 border-white shadow-sm relative">
                     <img
@@ -4824,6 +4932,7 @@ export default function AdminClientPage({
                       alt="Preview"
                     />
                   </div>
+
                   <div className="flex-1">
                     <input
                       type="file"
@@ -4841,6 +4950,7 @@ export default function AdminClientPage({
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
                   Username {editingEmployee && "(แก้ไขไม่ได้)"}
                 </label>
+
                 <input
                   name="userName"
                   defaultValue={editingEmployee?.userName}
@@ -4848,8 +4958,6 @@ export default function AdminClientPage({
                   required
                   disabled={!!editingEmployee}
                   onInput={(e) => {
-                    // 1. กรองเอาเฉพาะ a-z, A-Z และ 0-9
-                    // 2. แปลงเป็นตัวพิมพ์เล็กทั้งหมดด้วย .toLowerCase()
                     e.currentTarget.value = e.currentTarget.value
                       .replace(/[^a-zA-Z0-9]/g, "")
                       .toLowerCase();
@@ -4861,12 +4969,13 @@ export default function AdminClientPage({
                 />
               </div>
 
-              {/* ช่องรหัสผ่านเดิม (แสดงเฉพาะตอนแก้ไข) */}
+              {/* รหัสผ่านเดิม */}
               {editingEmployee && (
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-red-500 uppercase ml-2">
                     รหัสผ่านเดิม (เพื่อยืนยันการเปลี่ยน)
                   </label>
+
                   <div className="relative">
                     <input
                       name="oldPassword"
@@ -4874,6 +4983,7 @@ export default function AdminClientPage({
                       placeholder="ระบุรหัสผ่านปัจจุบัน..."
                       className="w-full p-4 pr-12 bg-red-50 border-transparent focus:border-red-500 focus:bg-white rounded-2xl font-bold border outline-none transition-all"
                     />
+
                     <button
                       type="button"
                       onClick={() => setShowOldPass(!showOldPass)}
@@ -4892,6 +5002,7 @@ export default function AdminClientPage({
                     ? "รหัสผ่านใหม่ (ว่างไว้ถ้าไม่เปลี่ยน)"
                     : "Password"}
                 </label>
+
                 <div className="relative">
                   <input
                     id="reg-password"
@@ -4903,6 +5014,7 @@ export default function AdminClientPage({
                     required={!editingEmployee}
                     className="w-full p-4 pr-12 bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl font-bold border outline-none transition-all"
                   />
+
                   <button
                     type="button"
                     onClick={() => setShowPass(!showPass)}
@@ -4913,11 +5025,12 @@ export default function AdminClientPage({
                 </div>
               </div>
 
-              {/* Confirm Password ใหม่ */}
+              {/* Confirm Password */}
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
                   Confirm Password
                 </label>
+
                 <div className="relative">
                   <input
                     id="reg-confirm"
@@ -4927,6 +5040,7 @@ export default function AdminClientPage({
                     required={!editingEmployee}
                     className="w-full p-4 pr-12 bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl font-bold border outline-none transition-all"
                   />
+
                   <button
                     type="button"
                     onClick={() => setShowConfirmPass(!showConfirmPass)}
@@ -4937,11 +5051,12 @@ export default function AdminClientPage({
                 </div>
               </div>
 
-              {/* ชื่อ-นามสกุล */}
+              {/* ชื่อจริง */}
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
                   ชื่อจริง
                 </label>
+
                 <input
                   name="firstName"
                   defaultValue={editingEmployee?.firstName}
@@ -4949,10 +5064,13 @@ export default function AdminClientPage({
                   className="w-full bg-slate-50 p-4 rounded-2xl font-bold border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all"
                 />
               </div>
+
+              {/* นามสกุล */}
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
                   นามสกุล
                 </label>
+
                 <input
                   name="lastName"
                   defaultValue={editingEmployee?.lastName}
@@ -4961,13 +5079,15 @@ export default function AdminClientPage({
                 />
               </div>
 
-              {/* --- ✨ ส่วนแก้ไขข้อมูลเพิ่มเติม ✨ --- */}
+              {/* ข้อมูลเพิ่มเติม: เฉพาะตอนแก้ไข */}
               {editingEmployee && (
                 <>
+                  {/* เวลาเข้างาน */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-blue-500 uppercase ml-2">
                       เวลาเข้างาน
                     </label>
+
                     <input
                       type="time"
                       name="startTime"
@@ -4975,10 +5095,13 @@ export default function AdminClientPage({
                       className="w-full bg-blue-50/50 p-4 rounded-2xl font-bold border border-blue-100 focus:border-blue-500 outline-none transition-all"
                     />
                   </div>
+
+                  {/* เวลาเลิกงาน */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-blue-500 uppercase ml-2">
                       เวลาเลิกงาน
                     </label>
+
                     <input
                       type="time"
                       name="endTime"
@@ -4986,14 +5109,60 @@ export default function AdminClientPage({
                       className="w-full bg-blue-50/50 p-4 rounded-2xl font-bold border border-blue-100 focus:border-blue-500 outline-none transition-all"
                     />
                   </div>
+
+                  {/* วันหยุด: Edit */}
+                  <div className="col-span-1 sm:col-span-2">
+                    <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-2xl p-5 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600">
+                          <span className="text-xl">📅</span>
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-black text-slate-800">
+                            กำหนดวันหยุดประจำสัปดาห์
+                          </p>
+                          <p className="text-[10px] font-medium text-slate-500">
+                            WEEKLY DAY OFF
+                          </p>
+                        </div>
+                      </div>
+
+                      <select
+                        name="dayOff"
+                        defaultValue={editingEmployee?.dayOff || ""}
+                        required
+                        className="w-full bg-white p-4 rounded-xl font-bold text-sm text-slate-700 border border-indigo-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition-all appearance-none cursor-pointer"
+                      >
+                        <option value="" disabled>
+                          เลือกวันหยุดประจำสัปดาห์
+                        </option>
+                        <option value="sunday">วันอาทิตย์</option>
+                        <option value="monday">วันจันทร์</option>
+                        <option value="tuesday">วันอังคาร</option>
+                        <option value="wednesday">วันพุธ</option>
+                        <option value="thursday">วันพฤหัสบดี</option>
+                        <option value="friday">วันศุกร์</option>
+                        <option value="saturday">วันเสาร์</option>
+                        <option value="saturday_sunday">
+                          วันเสาร์และวันอาทิตย์
+                        </option>
+                      </select>
+
+                      <p className="text-[10px] text-indigo-500 font-medium">
+                        ระบบจะใช้วันหยุดนี้ประกอบการคำนวณเวลาทำงานของพนักงาน
+                      </p>
+                    </div>
+                  </div>
                 </>
               )}
 
-              {/* ระดับสิทธิ์ (Role) */}
+              {/* Role */}
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
                   ระดับสิทธิ์ (Role)
                 </label>
+
                 <select
                   name="role"
                   value={selectedRole}
@@ -5005,11 +5174,12 @@ export default function AdminClientPage({
                 </select>
               </div>
 
-              {/* แผนก (Department) */}
+              {/* Department */}
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
                   แผนก (Department)
                 </label>
+
                 <select
                   name="departmentId"
                   key={
@@ -5030,11 +5200,12 @@ export default function AdminClientPage({
                 </select>
               </div>
 
-              {/* ตำแหน่งงาน (Position) */}
+              {/* Position */}
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
                   ตำแหน่งงาน (Position)
                 </label>
+
                 <select
                   name="positionId"
                   key={
@@ -5055,11 +5226,12 @@ export default function AdminClientPage({
                 </select>
               </div>
 
-              {/* ไซต์งาน */}
+              {/* Site */}
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2">
                   ไซต์งาน
                 </label>
+
                 <select
                   name="site_id"
                   key={
@@ -5081,6 +5253,7 @@ export default function AdminClientPage({
               </div>
             </div>
 
+            {/* STEP 02: ลงทะเบียนใหม่ */}
             {!editingEmployee && registrationStep === 2 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
 
@@ -5090,6 +5263,7 @@ export default function AdminClientPage({
                     <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-black">
                       STEP 02 / 02
                     </span>
+
                     <span className="text-xs font-bold text-slate-400">
                       WORK SHIFT CONFIGURATION
                     </span>
@@ -5100,7 +5274,7 @@ export default function AdminClientPage({
                   </h3>
 
                   <p className="text-sm text-slate-500">
-                    กำหนดเวลาเข้างานและเวลาเลิกงานของพนักงาน
+                    กำหนดเวลาเข้างาน เวลาเลิกงาน และวันหยุดประจำสัปดาห์ของพนักงาน
                     ข้อมูลนี้จะใช้ในการคำนวณเวลาทำงานและ OT
                   </p>
                 </div>
@@ -5108,36 +5282,88 @@ export default function AdminClientPage({
                 {/* Shift Inputs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
+                  {/* เวลาเข้างาน */}
                   <div className="space-y-2">
                     <label className="text-xs font-black text-slate-500 ml-1">
                       เวลาเข้างาน
                     </label>
 
-                    <div className="relative">
-                      <input
-                        type="time"
-                        name="startTime"
-                        defaultValue="08:00"
-                        required
-                        className="w-full p-5 bg-blue-50 border-2 border-blue-100 focus:border-blue-500 rounded-2xl font-black text-2xl text-slate-800 outline-none transition-all"
-                      />
-                    </div>
+                    <input
+                      type="time"
+                      name="startTime"
+                      defaultValue="08:00"
+                      required
+                      className="w-full p-5 bg-blue-50 border-2 border-blue-100 focus:border-blue-500 rounded-2xl font-black text-2xl text-slate-800 outline-none transition-all"
+                    />
                   </div>
 
+                  {/* เวลาเลิกงาน */}
                   <div className="space-y-2">
                     <label className="text-xs font-black text-slate-500 ml-1">
                       เวลาเลิกงาน
                     </label>
 
-                    <div className="relative">
-                      <input
-                        type="time"
-                        name="endTime"
-                        defaultValue="17:00"
-                        required
-                        className="w-full p-5 bg-blue-50 border-2 border-blue-100 focus:border-blue-500 rounded-2xl font-black text-2xl text-slate-800 outline-none transition-all"
-                      />
+                    <input
+                      type="time"
+                      name="endTime"
+                      defaultValue="17:00"
+                      required
+                      className="w-full p-5 bg-blue-50 border-2 border-blue-100 focus:border-blue-500 rounded-2xl font-black text-2xl text-slate-800 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* วันหยุดประจำสัปดาห์ */}
+                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-3xl p-5 sm:p-6 space-y-4">
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center">
+                      <span className="text-2xl">📅</span>
                     </div>
+
+                    <div>
+                      <h4 className="font-black text-slate-800">
+                        วันหยุดประจำสัปดาห์
+                      </h4>
+                      <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
+                        Weekly Day Off
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-600 ml-1">
+                      เลือกวันหยุดของพนักงาน
+                    </label>
+
+                    <select
+                      name="dayOff"
+                      defaultValue=""
+                      required
+                      className="w-full p-5 bg-white border-2 border-indigo-100 focus:border-indigo-500 rounded-2xl font-bold text-slate-700 outline-none transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="" disabled>
+                        เลือกวันหยุดประจำสัปดาห์
+                      </option>
+                      <option value="sunday">วันอาทิตย์</option>
+                      <option value="monday">วันจันทร์</option>
+                      <option value="tuesday">วันอังคาร</option>
+                      <option value="wednesday">วันพุธ</option>
+                      <option value="thursday">วันพฤหัสบดี</option>
+                      <option value="friday">วันศุกร์</option>
+                      <option value="saturday">วันเสาร์</option>
+                      <option value="saturday_sunday">
+                        วันเสาร์และวันอาทิตย์
+                      </option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-start gap-2 bg-white/70 rounded-xl p-3">
+                    <span className="text-indigo-500 text-sm">ⓘ</span>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      วันหยุดที่เลือกจะถูกนำไปใช้เป็นข้อมูลประจำของพนักงาน
+                      สำหรับระบบคำนวณวันทำงานและ OT
+                    </p>
                   </div>
                 </div>
 
@@ -5147,19 +5373,21 @@ export default function AdminClientPage({
                     <p className="font-black text-xs">
                       ข้อมูลสำคัญ
                     </p>
+
                     <p className="text-xs mt-1 leading-relaxed">
-                      กรุณาตรวจสอบเวลาทำงานให้ถูกต้อง
+                      กรุณาตรวจสอบเวลาทำงานและวันหยุดให้ถูกต้อง
                       เนื่องจากระบบจะนำข้อมูล Shift ไปใช้เป็นฐานในการคำนวณ
                       การมาสาย ชั่วโมงทำงาน และ OT ของพนักงาน
                     </p>
                   </div>
                 </div>
-
               </div>
             )}
 
+            {/* Footer */}
             <div className="flex justify-between items-center gap-3 pt-6 border-t mt-4">
-              {/* ปุ่มย้อนกลับ: แสดงเฉพาะลงทะเบียนใหม่ Step 2 */}
+
+              {/* ปุ่มย้อนกลับ */}
               {!editingEmployee && registrationStep === 2 && (
                 <button
                   type="button"
@@ -5172,7 +5400,8 @@ export default function AdminClientPage({
               )}
 
               <div className="flex gap-3 ml-auto">
-                {/* ปุ่มยกเลิก */}
+
+                {/* ยกเลิก */}
                 <button
                   type="button"
                   disabled={isProcessing}
@@ -5188,13 +5417,13 @@ export default function AdminClientPage({
                   ยกเลิก
                 </button>
 
-                {/* ปุ่มถัดไป / บันทึก */}
+                {/* ถัดไป / บันทึก */}
                 <button
                   type="submit"
                   disabled={isProcessing}
                   className={`px-10 py-4 text-white rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all disabled:bg-slate-300 flex items-center gap-2 ${!editingEmployee && registrationStep === 1
-                      ? "bg-slate-900 hover:bg-slate-800"
-                      : "bg-emerald-600 hover:bg-emerald-700"
+                    ? "bg-slate-900 hover:bg-slate-800"
+                    : "bg-emerald-600 hover:bg-emerald-700"
                     }`}
                 >
                   {isProcessing
@@ -5210,6 +5439,7 @@ export default function AdminClientPage({
           </form>
         </div>
       )}
+
 
       {/* --- 📊 MODAL (Report Generator) --- */}
       {showFilterModal && (
