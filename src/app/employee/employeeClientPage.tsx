@@ -1196,10 +1196,6 @@ export default function EmployeeClientPage({
                 {userProfile.startTime && userProfile.endTime
                   ? `${userProfile.startTime.slice(0, 5)} - ${userProfile.endTime.slice(0, 5)}`
                   : "ยังไม่ระบุ"}
-
-                <span className="block text-orange-500 text-xs sm:text-sm mt-1">
-                  {userProfile.dayOff ?? "ไม่มีข้อมูลวันหยุด"}
-                </span>
               </p>
               <p className="text-gray-500 font-bold text-sm sm:text-lg tracking-tight">
                 วันหยุด :{" "}
